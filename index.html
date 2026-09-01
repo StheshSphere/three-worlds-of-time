@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Three Worlds of Time — The Broken Hourglass</title>
+  <link rel="stylesheet" href="./src/style.css" />
+
+  <!-- Import map: lets the browser resolve "three" with NO bundler at all.
+       This is the "plain files" path described in the project brief (section 6.3) —
+       swap this for a Vite build later if the team prefers, but this already
+       satisfies "no absolute paths" and "no build step required to run". -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <!-- Loading screen: also earns Polish marks and stops a slow first load
+       looking like a crash (brief, section 6.1). -->
+  <div id="loading-screen">
+    <div class="loading-box">
+      <h1>THE BROKEN HOURGLASS</h1>
+      <p id="loading-text">Loading assets…</p>
+      <div class="progress-bar"><div id="progress-fill"></div></div>
+    </div>
+  </div>
+
+  <!-- Click-to-play overlay (needed before Pointer Lock will engage) -->
+  <div id="start-screen" class="hidden">
+    <div class="start-box">
+      <h1>THE THREE WORLDS OF TIME</h1>
+      <h2>The Broken Hourglass — ALPHA BUILD</h2>
+      <p>Past: Solve. Present: Investigate. Future: Survive.</p>
+      <button id="start-button">Click to Play</button>
+      <p class="controls-hint">
+        WASD move&nbsp;·&nbsp;Mouse look&nbsp;·&nbsp;Space jump&nbsp;·&nbsp;Shift sprint&nbsp;·&nbsp;E interact&nbsp;·&nbsp;Esc release mouse
+      </p>
+    </div>
+  </div>
+
+  <!-- In-game HUD -->
+  <div id="hud" class="hidden">
+    <div id="objective">Objective: Explore the ruins and find the Ancient Core</div>
+    <div id="crosshair">+</div>
+    <div id="interact-prompt" class="hidden">[E] Interact</div>
+    <button id="restart-button">Restart</button>
+    <button id="credits-button">Credits</button>
+  </div>
+
+  <div id="credits-screen" class="hidden">
+    <div class="credits-box">
+      <h2>Credits</h2>
+      <ul id="credits-list">
+        <li>Three.js — MIT Licence — https://threejs.org</li>
+        <li>PointerLockControls (three/examples) — MIT Licence</li>
+        <li>-- Add every model, texture, sound, font and tutorial your team uses here --</li>
+      </ul>
+      <button id="close-credits">Close</button>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
