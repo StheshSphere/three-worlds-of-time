@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createTimeMachine } from './timeMachine.js';
-import { buildAncientRuinsLevel } from './world.js';
+import { createLevelManager } from './levelManager.js';
 import { Player } from './player.js';
 
 /* -------------------------------------------------------------------- */
@@ -42,20 +42,23 @@ const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerH
 camera.position.set(0, 1.7, 10);
 
 /* -------------------------------------------------------------------- */
-/* Build Level 1 (Ancient Ruins) + the Time Machine hierarchy            */
+/* Time Machine — persistent across all levels (never disposed by the     */
+/* level manager). Created once, stays in the scene for the whole game.  */
 /* -------------------------------------------------------------------- */
-const { interactables } = buildAncientRuinsLevel(scene);
-
 const timeMachine = createTimeMachine();
 timeMachine.position.set(0, 0, 0);
 scene.add(timeMachine);
 
 /* -------------------------------------------------------------------- */
-/* Player controller                                                     */
+/* Player controller — created first so the level manager can wire its   */
+/* interactables array. Level 0 is loaded right after.                   */
 /* -------------------------------------------------------------------- */
-const player = new Player(camera, renderer.domElement, interactables);
+const player = new Player(camera, renderer.domElement, []);
 scene.add(player.object);
 player.object.position.set(0, 1.7, 12);
+
+const levelManager = createLevelManager(scene, player);
+levelManager.loadLevel(scene, 0);
 
 const objectiveEl = document.getElementById('objective');
 const interactPrompt = document.getElementById('interact-prompt');
@@ -76,13 +79,8 @@ player.controls.addEventListener('unlock', () => {
 /* Restart / Credits buttons                                             */
 /* -------------------------------------------------------------------- */
 document.getElementById('restart-button').addEventListener('click', () => {
-  // Alpha-level restart: reload the module state without a full page refresh
-  // would require a proper game-state manager. For now this satisfies the
-  // "restart without refreshing the page" checklist item at a basic level —
-  // replace with a real state reset once level/puzzle state exists.
-  player.object.position.set(0, 1.7, 12);
-  player.velocity.set(0, 0, 0);
-  objectiveEl.textContent = 'Objective: Explore the ruins and find the Ancient Core';
+  levelManager.restart();
+  objectiveEl.textContent = levelManager.getObjectiveText();
 });
 
 const creditsScreen = document.getElementById('credits-screen');
