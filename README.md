@@ -1,9 +1,8 @@
 # The Three Worlds of Time — The Broken Hourglass
-### Alpha build
 
-This is a **preliminary, playable Three.js scaffold** for the CGV group project — enough to walk your mentor through what the game will ultimately look like, per brief §8.1 ("You should have Three.js up and running, with a preliminary implementation").
+### Beta-track build
 
-It is *not* the finished Level 1. It's a small vertical slice that proves the architecture: a controllable player, a lit and shadowed 3D environment, one interactable object, and the hierarchical Time Machine that anchors all three levels.
+A playable Three.js game for the CGV group project: **three complete levels** — Past (Solve), Present (Investigate) and Future (Survive) — chained by a level manager, with a win state, restart-without-refresh, and a custom shader. All three cores recovered triggers the Time Machine's restoration sequence and the win screen.
 
 ## Running it locally
 
@@ -22,37 +21,42 @@ If your team later wants a bundler (Vite, etc.) for asset pipelines, GLTF/Draco 
 
 ```
 three-worlds-of-time/
-├── index.html          Entry point, import map, loading/start/HUD/credits screens
+├── index.html            Entry point, import map, loading/start/HUD/pause/win/credits screens
 ├── README.md
 └── src/
-    ├── style.css        HUD, menus, loading bar
-    ├── main.js           Boot sequence, renderer/scene/camera, render loop
-    ├── player.js         PointerLockControls wrapper: WASD, sprint, jump, interact raycast
-    ├── world.js           Level 1 (Ancient Ruins) geometry, lighting, one interactable puzzle block
-    └── timeMachine.js      The hierarchical Time Machine model (the game's visual anchor)
+    ├── style.css          HUD, banners, pause/win/transition overlays
+    ├── main.js            Boot sequence, renderer/scene/camera, render loop, game-state flow
+    ├── player.js          First/third-person controller: WASD, sprint, jump, ground raycast,
+    │                      wall collision, moving-platform carry, camera modes (C), flashlight (F)
+    ├── levelManager.js    Level lifecycle: mount/dispose per era, level chaining, transitions
+    ├── timeMachine.js     The hierarchical Time Machine model + socket lighting + win sequence
+    └── levels/
+        ├── ancientRuins.js   Level 1 (Past) — SOLVE: plates, rotating bridge, hidden runes, altar
+        ├── modernLab.js      Level 2 (Present) — INVESTIGATE: keycard, flashlight, breaker sequence
+        └── neonFuture.js     Level 3 (Future) — SURVIVE: moving platforms, GLSL energy barriers
 ```
 
-## What this alpha already demonstrates against the rubric
+## What this build demonstrates against the rubric
 
-- **Viewing** — a lit, shadowed 3D scene with fog, a moving/rotating hierarchical object (the Time Machine), and a first-person camera that moves through the world.
-- **Control & Playability** — working keyboard (WASD, Shift, Space, E) and mouse (pointer-lock look) controls, movement in all three dimensions (jump/gravity included), and a simple objective the player can advance (push the block onto the pressure plate).
-- **Hierarchical modelling** — `timeMachine.js` nests rings inside rings inside a base, each rotating independently but carrying its children, so you can *explain in the demo* why each mesh is parented where it is.
-- **3D Effects (partial)** — directional + hemisphere lighting, shadow mapping, fog, emissive materials on the core. Antialiasing, skyboxes, reflections/refractions, bump/height maps and multiple light sources beyond this are still to add.
-- **Polish (partial)** — loading screen, start/pause menu, in-HUD objective text, a Credits screen stub, and a restart button.
+- **Viewing** — first-person _and_ third-person camera (press **C**), a lit, shadowed, fogged 3D scene in three distinct art identities, and an animated environment (rings, platforms, barriers, screens).
+- **Control & Playability** — keyboard (WASD, Shift, Space, E, C, F) + mouse (pointer-lock look); clear objectives and win state; 3D movement with gravity, jumping, step-climb, wall collision and moving-platform carry.
+- **Hierarchical modelling** — `timeMachine.js` nests rings inside rings inside a base; `player.js` rigs a visible third-person body under a head anchor; levels parent rims/lights onto platform decks.
+- **3D Effects** — era-specific lighting (warm sun / cool indoor / neon void), shadow mapping, fog, emissive materials, transparent glass, additive light beams.
+- **Shaders** — `neonFuture.js` builds its energy barriers from a custom `THREE.ShaderMaterial`: a pass-through vertex shader exporting `vUv`, and a fragment shader driven by a `uTime` uniform (scrolling scanlines + a slow pulse). The same pulse computed in JS decides when the barrier is solid, so visuals and gameplay share one formula. Every member should read the comment block above `barrierVertexShader` — it is written to be explained out loud in the demo.
+- **Gameplay & Experience** — three levels with three different verbs (SOLVE / INVESTIGATE / SURVIVE), full puzzle chains, timed hazards, respawn on falling into the void, message banner guidance.
+- **Polish** — loading screen, start screen, pause menu (Esc), win screen, era-transition overlay, restart-without-refresh that resets levels, sockets, player and UI.
 
-## What is deliberately NOT in the alpha (and should come next)
+## What is deliberately NOT built yet (post-Beta backlog)
 
-These are placeholders on purpose — the brief only expects a **preliminary** implementation at this stage:
+1. **Real assets.** All geometry is still primitive Three.js shapes. Swap in GLTF models or better procedural detail if time allows (Innovation, not required).
+2. **Sound/music and SFX** — nothing audible yet; brief marks sound under Gameplay & Experience.
+3. **Bump/height maps, reflections, skybox** — the 3D Effects category rewards "several advanced effects"; these are the next candidates.
+4. **Second custom shader** (e.g. a `uTime` ripple around the Time Machine during transitions, per pitch doc §9) and a minimap if time allows.
+5. **Credits list** — `#credits-list` still only lists Three.js + PointerLockControls. Keep it current as assets land (mandatory per brief §3).
+6. **Trailer + devlog** — post-Beta deliverables; start capturing footage now that all levels are playable.
 
-1. **Real assets.** Every stone block, pillar and rubble piece is primitive Three.js geometry (`BoxGeometry`, `CylinderGeometry`, `DodecahedronGeometry`). Swap these for real models (GLTF via Blender) or better procedural detail before the beta.
-2. **Full puzzle chain.** Only one interactable block exists. Level 1's design calls for pushing blocks, rotating a bridge, finding symbols, and a final mechanism (pitch doc §4).
-3. **Levels 2 and 3.** The Modern Laboratory and Neon Future aren't built yet — `world.js` currently only exports `buildAncientRuinsLevel`. Plan a `LevelManager` that can tear down one level's scene/lights/interactables and load the next, calling `.dispose()` on old geometries/materials/textures as you go (brief §6.1) so memory doesn't climb across a three-level playthrough.
-4. **Custom shaders.** Everything currently uses built-in `MeshStandardMaterial`. The Shaders category (10%) is marked separately from built-in effects — you'll want at least one custom vertex/fragment shader (e.g. a time-distortion effect around the Time Machine, per pitch doc §9) before the beta.
-5. **Sound/music**, a proper physics/collision system (current collision is a flat-plane assumption plus world-bounds clamping — fine for a ruins courtyard, not for real platforming), and the multi-view/minimap options mentioned under Viewing.
-6. **Credits list.** `#credits-list` in `index.html` only has two placeholder entries — fill it in as you add third-party assets, code or tutorials (brief §3, mandatory).
+## Design notes
 
-## Design notes for your mentor conversation
-
-- The Time Machine is deliberately the *first* thing built because it's the one object that has to survive across all three levels and demonstrates hierarchical modelling cleanly — good to lead with in the alpha walkthrough.
-- `player.js` and `world.js` are separated so that when Level 2/3 are added, only `world.js`-equivalents change; the player controller and Time Machine stay the same across levels, which keeps "genuinely different levels" (brief §1) about environment and mechanic, not about re-plumbing controls each time.
+- The Time Machine sits at the world origin in every era — the one object that survives across levels and demonstrates hierarchical modelling cleanly.
+- `player.js`, `timeMachine.js` and `levelManager.js` are level-agnostic; each level file only builds its own world and returns it. "Genuinely different levels" (brief §1) comes from environment and mechanic, not re-plumbed controls.
 - All asset and script paths are relative (`./src/...`), never absolute (`/src/...`), per brief §6.2 — this avoids the most common cause of a game that works locally but shows a blank canvas once hosted on the LAMP server.

@@ -78,30 +78,72 @@ export function createTimeMachine() {
   }
 
   group.userData.recoveredCores = [false, false, false];
+  group.userData.isRestoring = false;
 
   /** Call when the player recovers a core for world index i (0,1,2). */
   group.lightSocket = function (i) {
     if (i < 0 || i > 2) return;
+    if (group.userData.recoveredCores[i]) return; // already lit
     group.userData.recoveredCores[i] = true;
     const socket = sockets[i];
     socket.material.color.setHex(socket.userData.litColor);
     socket.material.emissive.setHex(socket.userData.litColor);
     socket.material.emissiveIntensity = 1.5;
+    if (group.userData.recoveredCores.every(Boolean)) group.beginRestoration();
+  };
+
+  /** Unlight all sockets and cancel any running restoration (restart). */
+  group.reset = function () {
+    group.userData.recoveredCores = [false, false, false];
+    group.userData.isRestoring = false;
+    restoreT = 0;
+    for (const socket of sockets) {
+      socket.material.color.setHex(0x222222);
+      socket.material.emissive.setHex(0x000000);
+      socket.material.emissiveIntensity = 1;
+    }
+    core.scale.setScalar(1);
+    coreLight.intensity = 2.2;
+  };
+
+  /** Win sequence: the machine spins up and re-fuses the timeline. */
+  group.beginRestoration = function () {
+    if (group.userData.isRestoring) return;
+    group.userData.isRestoring = true;
+    restoreT = 0;
   };
 
   /** Advance the animation each frame. delta = seconds since last frame. */
-  group.update = function (delta) {
-    ringOuter.rotation.z += delta * 0.25;
-    ringMiddle.rotation.y += delta * 0.4;
-    ringInner.rotation.z -= delta * 0.6;
-    core.rotation.y += delta * 0.8;
+  let restoreT = 0; // seconds elapsed in the win sequence
 
-    // subtle pulse so the core reads as "alive" even before uniforms/shaders
-    // are wired in — swap this for a custom vertex/fragment shader later
-    // to score under the Shaders category.
-    const pulse = 1.4 + Math.sin(performance.now() * 0.003) * 0.4;
-    coreMat.emissiveIntensity = pulse;
-    coreLight.intensity = pulse * 1.2;
+  group.update = function (delta) {
+    const restoring = group.userData.isRestoring;
+    const spin = restoring ? Math.min(restoreT * 0.8, 6) : 1;
+
+    ringOuter.rotation.z += delta * 0.25 * spin;
+    ringMiddle.rotation.y += delta * 0.4 * spin;
+    ringInner.rotation.z -= delta * 0.6 * spin;
+    core.rotation.y += delta * 0.8 * spin;
+
+    if (restoring) {
+      // Restoration: rings accelerate, the core swells and burns brighter —
+      // the whole hierarchy visibly powers up together.
+      restoreT += delta;
+      const t = Math.min(restoreT / 4, 1);
+      core.scale.setScalar(1 + t * 1.6);
+      coreLight.intensity = 2.2 + t * 14;
+      coreMat.emissiveIntensity = 1.4 + t * 4 + Math.sin(restoreT * 10) * 0.4;
+      for (const socket of sockets) {
+        socket.material.emissiveIntensity = 1.5 + Math.sin(restoreT * 6) * 0.6;
+      }
+    } else {
+      // subtle pulse so the core reads as "alive" even before uniforms/shaders
+      // are wired in — swap this for a custom vertex/fragment shader later
+      // to score under the Shaders category.
+      const pulse = 1.4 + Math.sin(performance.now() * 0.003) * 0.4;
+      coreMat.emissiveIntensity = pulse;
+      coreLight.intensity = pulse * 1.2;
+    }
   };
 
   return group;

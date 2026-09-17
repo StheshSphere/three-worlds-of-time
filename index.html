@@ -38,18 +38,45 @@
       <p>Past: Solve. Present: Investigate. Future: Survive.</p>
       <button id="start-button">Click to Play</button>
       <p class="controls-hint">
-        WASD move&nbsp;·&nbsp;Mouse look&nbsp;·&nbsp;Space jump&nbsp;·&nbsp;Shift sprint&nbsp;·&nbsp;E interact&nbsp;·&nbsp;Esc release mouse
+        WASD move&nbsp;·&nbsp;Mouse look&nbsp;·&nbsp;Space jump&nbsp;·&nbsp;Shift sprint&nbsp;·&nbsp;E interact&nbsp;·&nbsp;C camera&nbsp;·&nbsp;F flashlight&nbsp;·&nbsp;Esc pause
       </p>
     </div>
   </div>
 
   <!-- In-game HUD -->
   <div id="hud" class="hidden">
-    <div id="objective">Objective: Explore the ruins and find the Ancient Core</div>
+    <div id="objective">Objective: Recover the three cores</div>
     <div id="crosshair">+</div>
     <div id="interact-prompt" class="hidden">[E] Interact</div>
-    <button id="restart-button">Restart</button>
-    <button id="credits-button">Credits</button>
+    <div id="message-banner"></div>
+    <div id="camera-mode">First-person (C)</div>
+  </div>
+
+  <!-- Time-distortion overlay: the game's visual signature between eras -->
+  <div id="transition-overlay"></div>
+
+  <!-- Pause menu (Esc) -->
+  <div id="pause-screen" class="hidden">
+    <div class="pause-box">
+      <h1>PAUSED</h1>
+      <p id="pause-level">The timeline is holding its breath…</p>
+      <button id="resume-button">Resume</button>
+      <button id="pause-restart-button">Restart Game</button>
+      <button id="pause-credits-button">Credits</button>
+      <p class="controls-hint">
+        WASD move&nbsp;·&nbsp;Space jump&nbsp;·&nbsp;Shift sprint&nbsp;·&nbsp;E interact&nbsp;·&nbsp;C camera&nbsp;·&nbsp;F flashlight
+      </p>
+    </div>
+  </div>
+
+  <!-- Win screen: all three cores restored -->
+  <div id="win-screen" class="hidden">
+    <div class="win-box">
+      <h1>TIMELINE RESTORED</h1>
+      <p>The Broken Hourglass is whole again. Past, present and future
+         hum in harmony around the Time Machine.</p>
+      <button id="win-restart-button">Play Again</button>
+    </div>
   </div>
 
   <div id="credits-screen" class="hidden">

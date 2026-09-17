@@ -11,17 +11,20 @@ A 3D browser game for a university CGV group project, built with Three.js, no bu
 ```bash
 python3 -m http.server 8000
 ```
+
 Open `http://localhost:8000`. **Never** open `index.html` via `file://` — module scripts are blocked and you'll get a blank screen. There is no build step, no `npm install`, no test suite. Three.js loads from a CDN via the import map in `index.html`.
 
 ## File map
 
 ```
-index.html            import map, loading/start/HUD/credits screens
-src/main.js            renderer/scene/camera setup, render loop
-src/player.js           PointerLockControls wrapper: WASD, sprint, jump, interact raycast
+index.html            import map, loading/start/HUD/pause/win/credits screens
+src/main.js            renderer/scene/camera setup, render loop, game-state flow (menu/play/pause/win)
+src/player.js           first/third-person controller: WASD, sprint, jump, ground raycast, wall collision,
+                       platform carry, camera modes (C), flashlight (F)
 src/timeMachine.js       hierarchical Time Machine model — DO NOT flatten the hierarchy
+src/levelManager.js     level lifecycle: mount/dispose per era, chaining, transitions, banner hints
 src/levels/*.js          one file per era: ancientRuins.js / modernLab.js / neonFuture.js
-src/style.css           HUD, menus, loading bar
+src/style.css           HUD, banners, pause/win/transition overlays
 ```
 
 Ownership (avoid stepping on someone else's file without asking in the group chat first):
@@ -31,8 +34,8 @@ Person 1 → `levels/ancientRuins.js` · Person 2 → `levels/modernLab.js` · P
 
 - **Relative paths only.** Never write an absolute path (`/src/...`) in HTML, JS, or asset loaders — the game is hosted in a subdirectory on the department LAMP server, not at domain root.
 - **Lowercase, hyphenated filenames**, no spaces — the server is case-sensitive.
-- **Level module contract.** Every file in `src/levels/` exports a `build(scene)` function returning `{ interactables }`, matching `ancientRuins.js`. Keep new levels to this shape so `main.js`/`levelManager.js` doesn't need per-level special cases.
-- **Dispose GPU resources.** Any geometry/material/texture created when a level loads must be disposed when that level unloads. Don't allocate new `THREE.Vector3`/objects inside the animation loop.
+- **Level module contract.** Every file in `src/levels/` exports `build(scene, api)` returning `{ interactables, objects, lights, disposables, colliders?, walkables?, update?, spawn? }`, matching `ancientRuins.js`. The `api` object (from `levelManager.js`) provides `completeLevel()`, `showMessage(text)`, `setHint(fn)`, `grantFlashlight()` and `isFlashlightOn()` — use those instead of importing main.js/player.js. Meshes/lights go into the returned arrays, NEVER directly into `scene`. `update(delta)` runs each frame BEFORE player physics (this is how moving platforms publish `userData.carryDelta`). Call `api.completeLevel()` when the level's core is recovered.
+- **Dispose GPU resources.** Any geometry/material/texture created when a level loads must be disposed when that level unloads — the level manager handles this from the returned `objects`/`lights`/`disposables` arrays, so just make sure everything you create is in one of them. Don't allocate new `THREE.Vector3`/objects inside the animation loop.
 - **Credit everything.** Any third-party model, texture, sound, font, code snippet, or tutorial goes in `#credits-list` in `index.html` with source and licence, same commit as the asset.
 - **Levels must differ**, not reskin each other — a new mechanic, new lighting identity, or new kind of challenge each time.
 
