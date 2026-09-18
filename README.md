@@ -26,8 +26,8 @@ three-worlds-of-time/
 └── src/
     ├── style.css          HUD, banners, pause/win/transition overlays
     ├── main.js            Boot sequence, renderer/scene/camera, render loop, game-state flow
-    ├── player.js          First/third-person controller: WASD, sprint, jump, ground raycast,
-    │                      wall collision, moving-platform carry, camera modes (C), flashlight (F)
+    ├── player.js          First/third-person controller: WASD, sprint, jump, ground raycast, wall collision,
+    │                      moving-platform carry, camera modes (V), flashlight (F)
     ├── levelManager.js    Level lifecycle: mount/dispose per era, level chaining, transitions
     ├── timeMachine.js     The hierarchical Time Machine model + socket lighting + win sequence
     └── levels/
@@ -38,8 +38,8 @@ three-worlds-of-time/
 
 ## What this build demonstrates against the rubric
 
-- **Viewing** — first-person _and_ third-person camera (press **C**), a lit, shadowed, fogged 3D scene in three distinct art identities, and an animated environment (rings, platforms, barriers, screens).
-- **Control & Playability** — keyboard (WASD, Shift, Space, E, C, F) + mouse (pointer-lock look); clear objectives and win state; 3D movement with gravity, jumping, step-climb, wall collision and moving-platform carry.
+- **Viewing** — first-person _and_ third-person camera (press **V**), a lit, shadowed, fogged 3D scene in three distinct art identities, and an animated environment (rings, platforms, barriers, screens).
+- **Control & Playability** — keyboard (WASD, Shift, Space, E, V, F) + mouse (pointer-lock look); camera-relative movement in both view modes (W always walks toward where you look); clear objectives and win state; 3D movement with gravity, jumping, step-climb, wall collision and moving-platform carry.
 - **Hierarchical modelling** — `timeMachine.js` nests rings inside rings inside a base; `player.js` rigs a visible third-person body under a head anchor; levels parent rims/lights onto platform decks.
 - **3D Effects** — era-specific lighting (warm sun / cool indoor / neon void), shadow mapping, fog, emissive materials, transparent glass, additive light beams.
 - **Shaders** — `neonFuture.js` builds its energy barriers from a custom `THREE.ShaderMaterial`: a pass-through vertex shader exporting `vUv`, and a fragment shader driven by a `uTime` uniform (scrolling scanlines + a slow pulse). The same pulse computed in JS decides when the barrier is solid, so visuals and gameplay share one formula. Every member should read the comment block above `barrierVertexShader` — it is written to be explained out loud in the demo.

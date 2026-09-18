@@ -20,7 +20,7 @@ Open `http://localhost:8000`. **Never** open `index.html` via `file://` — modu
 index.html            import map, loading/start/HUD/pause/win/credits screens
 src/main.js            renderer/scene/camera setup, render loop, game-state flow (menu/play/pause/win)
 src/player.js           first/third-person controller: WASD, sprint, jump, ground raycast, wall collision,
-                       platform carry, camera modes (C), flashlight (F)
+                       platform carry, camera modes (V), flashlight (F)
 src/timeMachine.js       hierarchical Time Machine model — DO NOT flatten the hierarchy
 src/levelManager.js     level lifecycle: mount/dispose per era, chaining, transitions, banner hints
 src/levels/*.js          one file per era: ancientRuins.js / modernLab.js / neonFuture.js

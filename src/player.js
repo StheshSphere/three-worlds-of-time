@@ -13,6 +13,8 @@ const GROUND_RAY_FAR = 1.2;  // how far below the feet we probe for ground
 const KILL_Y = -12;          // falling below this triggers player.onFall
 const THIRD_PERSON_DIST = 4.4;
 const THIRD_PERSON_RISE = 1.0;
+const THIRD_PERSON_MIN = 0.6;  // camera never pulled closer than this to the head
+const THIRD_PERSON_PAD = 0.25; // gap kept between the camera and blocking geometry
 
 // Scratch objects reused every frame — never allocate inside the loop.
 const _origin = new THREE.Vector3();
@@ -20,28 +22,47 @@ const _down = new THREE.Vector3(0, -1, 0);
 const _look = new THREE.Vector3();
 const _head = new THREE.Vector3();
 const _up = new THREE.Vector3(0, THIRD_PERSON_RISE, 0);
+const _camForward = new THREE.Vector3(0, 0, -1); // flattened look dir (persists between frames)
+const _camRight = new THREE.Vector3(1, 0, 0);
+const _moveDir = new THREE.Vector3();
+const _camPos = new THREE.Vector3();
+const _camDir = new THREE.Vector3();
 
 /**
  * First/third-person player controller.
  *
- * PointerLockControls only owns mouse-look (it rotates the camera); this
- * class owns everything else: the movement rig, gravity + a downward ground
- * raycast (so we can stand on platforms and terrain, not just y = EYE_HEIGHT),
- * circle-vs-AABB wall collision, moving-platform carry, the interact raycast
- * and the optional flashlight (Level 2 picks it up, any level could reuse it).
+ * Movement is camera-relative in BOTH view modes by construction, because
+ * three concerns are kept strictly separate every frame:
  *
- * Camera placement happens at the END of update(): in first-person the camera
- * sits at the head anchor, in third-person it orbits behind the rig along the
- * look direction. The rig mesh is only visible in third-person.
+ *   INPUT — which keys are held (this.keys). Nothing else touches it.
+ *   CAMERA ORIENTATION — mouse-look only: PointerLockControls rotates the
+ *     camera. The camera is never parented to the rig and the controls never
+ *     move it through the world.
+ *   RIG POSITION — where the player physically is (this.rig.position).
+ *     Only update() moves it, using a basis derived each frame from the
+ *     camera's CURRENT world orientation, flattened onto the ground plane.
+ *
+ * Because the basis is recomputed from camera orientation every frame,
+ * toggling the view (V) changes nothing about how WASD behaves: W always
+ * walks toward wherever the camera currently looks. The camera itself is
+ * only ever PLACED relative to the rig's head anchor (step 8 of update):
+ * at the head in first-person, or on a collision-safe orbit behind/above
+ * it in third-person.
+ *
+ * Why getWorldDirection() instead of camera.rotation.y: the controls
+ * compose the view from a YXZ-order euler, so reading .rotation (XYZ
+ * order) gives a yaw skewed by pitch. The world direction is exact.
  */
 export class Player {
   constructor(camera, domElement, interactables) {
     this.camera = camera;
     this.interactables = interactables;
-    this.mode = 'first';          // 'first' | 'third' — C toggles
+    this.mode = 'first';          // 'first' | 'third' — V toggles (C also works)
     this.onFall = null;           // wired by main.js
 
     this.controls = new PointerLockControls(camera, domElement);
+    // Releasing the pointer (Esc → pause) must not leave keys stuck down.
+    this.controls.addEventListener('unlock', () => this._clearKeys());
 
     // --- third-person rig: a simple explorer body, hidden in first-person ---
     this.rig = new THREE.Group();
@@ -84,6 +105,7 @@ export class Player {
     this.raycaster.far = 3.5;
     this._groundRay = new THREE.Raycaster();
     this._groundRay.far = GROUND_RAY_FAR;
+    this._occluderRay = new THREE.Raycaster(); // third-person camera pull-in
   }
 
   get object() { return this.rig; }
@@ -91,6 +113,14 @@ export class Player {
   _bindKeys() {
     window.addEventListener('keydown', (e) => this._setKey(e.code, true));
     window.addEventListener('keyup', (e) => this._setKey(e.code, false));
+  }
+
+  _clearKeys() {
+    this.keys.forward = false;
+    this.keys.back = false;
+    this.keys.left = false;
+    this.keys.right = false;
+    this.keys.sprint = false;
   }
 
   _setKey(code, pressed) {
@@ -109,7 +139,7 @@ export class Player {
       case 'KeyE':
         if (pressed && this.controls.isLocked) this.tryInteract();
         break;
-      case 'KeyC':
+      case 'KeyV': case 'KeyC':
         if (pressed && this.controls.isLocked) {
           this.mode = this.mode === 'first' ? 'third' : 'first';
         }
@@ -144,9 +174,9 @@ export class Player {
   addFlashlight() {
     if (this.flashlight) return;
     const spot = new THREE.SpotLight(0xfff2cf, 90, 24, Math.PI / 5.2, 0.45, 1.3);
-    spot.position.set(0.14, 1.5, 0.1);
+    spot.position.set(0.14, 1.5, 0.3);   // forward of the chest, slightly right
     const target = new THREE.Object3D();
-    target.position.set(0, 1.4, -6);
+    target.position.set(0, 1.45, 6);     // ahead of the rig (+Z = look direction)
     this.rig.add(spot, target);
     spot.target = target;
     this.flashlight = spot;
@@ -173,6 +203,7 @@ export class Player {
     this.velocity.set(0, 0, 0);
     this.onGround = false;
     this._groundObject = null;
+    this._walkPhase = 0;
     this._fell = false;
   }
 
@@ -239,19 +270,32 @@ export class Player {
       this._groundObject = null;
     }
 
-    // 4. Horizontal movement relative to look direction
-    const yaw = this.camera.rotation.y;
-    const f = Number(this.keys.forward) - Number(this.keys.back);
-    const r = Number(this.keys.right) - Number(this.keys.left);
-    let dx = -Math.sin(yaw) * f + Math.cos(yaw) * r;
-    let dz = -Math.cos(yaw) * f - Math.sin(yaw) * r;
-    const len = Math.hypot(dx, dz);
-    if (len > 1e-4) { dx /= len; dz /= len; }
+    // 4. Horizontal movement — always camera-relative.
+    //    The basis comes from the camera's CURRENT world orientation (which
+    //    already reflects this frame's mouse input), flattened onto the
+    //    ground plane so looking up/down never flies you or slows you down.
+    //    The RIG is the thing that moves through the world; the camera only
+    //    gets PLACED relative to the rig (step 8).
+    this.camera.getWorldDirection(_look);
+    _camForward.copy(_look);
+    _camForward.y = 0;
+    if (_camForward.lengthSq() > 1e-8) {
+      _camForward.normalize();
+      _camRight.set(-_camForward.z, 0, _camForward.x); // camera-space right, on the ground plane
+    }
+    // else: looking ~straight up/down — keep last frame's heading.
+
+    const inputZ = Number(this.keys.forward) - Number(this.keys.back); // W/S
+    const inputX = Number(this.keys.right) - Number(this.keys.left);   // A/D
+    _moveDir.set(0, 0, 0)
+      .addScaledVector(_camForward, inputZ)
+      .addScaledVector(_camRight, inputX);
+    const moving = _moveDir.lengthSq() > 1e-8;
+    if (moving) _moveDir.normalize();
     const speed = this.keys.sprint ? SPRINT_SPEED : WALK_SPEED;
-    this.rig.position.x += dx * speed * delta;
-    this.rig.position.z += dz * speed * delta;
-    if (len > 1e-4) this._walkPhase += speed * delta * 2.2;
-    this._body.position.y = 0.95 + (len > 1e-4 ? Math.sin(this._walkPhase) * 0.045 : 0);
+    this.rig.position.addScaledVector(_moveDir, speed * delta);
+    if (moving) this._walkPhase += speed * delta * 2.2;
+    this._body.position.y = 0.95 + (moving ? Math.sin(this._walkPhase) * 0.045 : 0);
 
     // 5. Wall collisions + world bounds
     this._resolveCollisions();
@@ -264,27 +308,44 @@ export class Player {
       if (this.onFall) this.onFall();
     }
 
-    // 7. Interact raycast: from the head along the look direction (works in
-    //    both camera modes; in first-person the head IS the camera).
+    // 7. Interact raycast: from the head along the current look direction
+    //    (works in both camera modes; in first-person the head IS the camera).
     this.head.getWorldPosition(_head);
-    this.camera.getWorldDirection(_look);
     this.raycaster.set(_head, _look);
     const hits = this.raycaster.intersectObjects(this.interactables, true);
     this.nearbyInteractable = hits.length > 0 ? this._findInteractable(hits[0].object) : null;
 
-    // 8. Camera placement + rig facing
-    this.rig.rotation.y = yaw;
+    // 8. Rig facing + camera placement.
+    //    The model's +Z is rotated onto the flattened look direction, so in
+    //    third-person the character visibly faces where you look and walk.
+    //    Facing is tracked even in first-person (rig hidden) so toggling the
+    //    view never back-flips the model.
+    this.rig.rotation.y = Math.atan2(_camForward.x, _camForward.z);
     if (this.flashlight) {
-      const pitch = this.camera.rotation.x;
-      this.flashlight.target.position.set(0, 1.45 - pitch * 4, -6);
+      // Pitch from the look direction itself (asin of its y) — reading
+      // camera.rotation.x directly is skewed once yaw and pitch combine.
+      const pitch = Math.asin(THREE.MathUtils.clamp(_look.y, -1, 1));
+      this.flashlight.target.position.set(0, 1.45 + pitch * 4, 6);
     }
     if (this.mode === 'first') {
       this.rig.visible = false;
       this.camera.position.copy(_head);
     } else {
       this.rig.visible = true;
-      this.camera.position.copy(_head).addScaledVector(_look, -THIRD_PERSON_DIST).add(_up);
-      if (this.camera.position.y < 0.55) this.camera.position.y = 0.55;
+      // Desired orbit point: behind the head along the look direction, raised.
+      _camPos.copy(_head).addScaledVector(_look, -THIRD_PERSON_DIST).add(_up);
+      _camDir.subVectors(_camPos, _head);
+      const desired = _camDir.length();
+      // Collision-safe distance: ray from the head toward the desired camera
+      // position; if level geometry blocks the orbit, pull the camera in.
+      this._occluderRay.set(_head, _camDir.normalize());
+      this._occluderRay.far = desired;
+      let dist = desired - THIRD_PERSON_PAD;
+      const hitA = this._occluderRay.intersectObjects(this.colliders, true)[0];
+      const hitB = this._occluderRay.intersectObjects(this.walkables, true)[0];
+      const block = hitA && hitB ? (hitA.distance < hitB.distance ? hitA : hitB) : (hitA || hitB);
+      if (block) dist = Math.min(dist, block.distance - THIRD_PERSON_PAD);
+      this.camera.position.copy(_head).addScaledVector(_camDir, Math.max(dist, THIRD_PERSON_MIN));
     }
   }
 }

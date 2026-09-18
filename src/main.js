@@ -188,7 +188,7 @@ function animate() {
       lastPromptText = prompt;
     }
 
-    const modeLabel = player.mode === 'first' ? 'First-person (C)' : 'Third-person (C)';
+    const modeLabel = player.mode === 'first' ? 'First-person (V)' : 'Third-person (V)';
     if (modeLabel !== lastCameraMode) {
       cameraModeEl.textContent = modeLabel;
       lastCameraMode = modeLabel;
