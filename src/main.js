@@ -62,7 +62,7 @@ scene.add(timeMachine);
 const player = new Player(camera, renderer.domElement, []);
 scene.add(player.object);
 
-const levelManager = createLevelManager(scene, player);
+const levelManager = createLevelManager(scene, player, renderer);
 levelManager.registerTimeMachine(timeMachine);
 levelManager.loadLevel(0);
 

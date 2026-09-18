@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createLevelTextures } from '../textures.js';
 
 /**
  * LEVEL 3 — THE NEON FUTURE (pitch doc §6)
@@ -67,18 +68,22 @@ export function build(scene, api) {
   scene.background = new THREE.Color(0x050510);
   scene.fog = new THREE.FogExp2(0x050510, 0.014);
 
-  // ---- shared materials -----------------------------------------------------
-  const deckMat = new THREE.MeshStandardMaterial({ color: 0x14151f, roughness: 0.6, metalness: 0.55 });
+  // ---- shared materials (stylised PBR set from textures.js) -------------
+  // The deck map is a dark carbon grid; the neon identity still comes from
+  // the emissive rims/cores — the map adds material, not brightness.
+  const tex = createLevelTextures('neon-future', { anisotropy: api.getMaxAnisotropy() });
+  const deckMat = tex.material('deck', { repeat: [2, 2], params: { roughness: 0.6, metalness: 0.55 } });
   const rimMatCyan = new THREE.MeshStandardMaterial({
     color: 0x0a2a33, emissive: 0x27e0ff, emissiveIntensity: 2.4, roughness: 0.3,
   });
   const rimMatMagenta = new THREE.MeshStandardMaterial({
     color: 0x33102a, emissive: 0xff4fd8, emissiveIntensity: 2.4, roughness: 0.3,
   });
-  const cityMat = new THREE.MeshStandardMaterial({
-    color: 0x0b0b18, emissive: 0x1a3a5e, emissiveIntensity: 0.7, roughness: 0.8,
+  const cityMat = tex.material('deck', {
+    repeat: [2, 6],
+    params: { color: 0xc8d4e8, emissive: 0x1a3a5e, emissiveIntensity: 0.7, roughness: 0.8 },
   });
-  disposables.push(deckMat, rimMatCyan, rimMatMagenta, cityMat);
+  disposables.push(tex, rimMatCyan, rimMatMagenta);
 
   function solid(mesh) {
     mesh.userData.solidBox = new THREE.Box3().setFromObject(mesh);

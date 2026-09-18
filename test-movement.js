@@ -44,6 +44,7 @@ scene.add(player.object);
 const api = {
   completeLevel() {}, showMessage() {}, setHint() {},
   grantFlashlight() {}, isFlashlightOn() { return false; },
+  getMaxAnisotropy() { return 8; },
 };
 const level = build(scene, api);
 level.objects.forEach((o) => levelGroup.add(o));

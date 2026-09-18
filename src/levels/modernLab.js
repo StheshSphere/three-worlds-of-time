@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createLevelTextures } from '../textures.js';
 
 /**
  * LEVEL 2 — THE MODERN LABORATORY (pitch doc §5)
@@ -65,17 +66,20 @@ export function build(scene, api) {
   scene.background = new THREE.Color(0x0d0f16);
   scene.fog = new THREE.FogExp2(0x0d0f16, 0.02);
 
-  // ---- shared materials ----------------------------------------------------
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x39404d, roughness: 0.7, metalness: 0.3 });
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0x2b2f3a, roughness: 0.35, metalness: 0.4 });
-  const steelMat = new THREE.MeshStandardMaterial({ color: 0x8b95a3, roughness: 0.3, metalness: 0.8 });
+  // ---- shared materials (stylised PBR sets from textures.js) ------------
+  // Tile/panel/steel maps are baked in the lab palette; colour multipliers
+  // recover the old darker tones (map base is one step brighter).
+  const tex = createLevelTextures('modern-lab', { anisotropy: api.getMaxAnisotropy() });
+  const wallMat = tex.material('wall', { repeat: [12, 2], params: { color: 0xa6adb8, roughness: 0.7, metalness: 0.3 } });
+  const floorMat = tex.material('floor', { repeat: [12, 12], params: { roughness: 0.4, metalness: 0.35 } });
+  const steelMat = tex.material('metal', { repeat: [2, 2], params: { roughness: 0.35, metalness: 0.85 } });
   const glassMat = new THREE.MeshStandardMaterial({
     color: 0x9fd8e8, transparent: true, opacity: 0.22, roughness: 0.08, metalness: 0.1,
   });
   const screenMat = new THREE.MeshStandardMaterial({
     color: 0x0d1420, emissive: 0x2f9e5f, emissiveIntensity: 1.1, roughness: 0.4,
   });
-  disposables.push(wallMat, floorMat, steelMat, glassMat, screenMat);
+  disposables.push(tex, glassMat, screenMat);
 
   function solid(mesh) {
     mesh.userData.solidBox = new THREE.Box3().setFromObject(mesh);
@@ -135,10 +139,11 @@ export function build(scene, api) {
 
   // Sliding door — retracts upward when the keycard reader accepts you.
   const doorGeo = new THREE.BoxGeometry(0.3, 3.2, 3.6);
-  const doorMatS = new THREE.MeshStandardMaterial({
-    color: 0x4d5566, roughness: 0.4, metalness: 0.7, emissive: 0x101820,
+  const doorMatS = tex.material('wall', {
+    repeat: 1,
+    params: { color: 0x99a3b2, roughness: 0.4, metalness: 0.7, emissive: 0x101820 },
   });
-  disposables.push(doorGeo, doorMatS);
+  disposables.push(doorGeo);
   const door = new THREE.Mesh(doorGeo, doorMatS);
   door.position.set(8, 1.6, -13);
   objects.push(door);
@@ -255,8 +260,8 @@ export function build(scene, api) {
 
   // ---- workbench + flashlight pickup (step 1) ----------------------------------
   const benchGeo = new THREE.BoxGeometry(4, 0.9, 1.4);
-  const benchMat = new THREE.MeshStandardMaterial({ color: 0x4d5566, roughness: 0.5, metalness: 0.6 });
-  disposables.push(benchGeo, benchMat);
+  const benchMat = tex.material('metal', { repeat: [2, 1], params: { color: 0x99a2b0, roughness: 0.5, metalness: 0.6 } });
+  disposables.push(benchGeo);
   const bench = new THREE.Mesh(benchGeo, benchMat);
   bench.position.set(-12, 0.45, 12);
   bench.castShadow = true;
@@ -285,8 +290,8 @@ export function build(scene, api) {
 
   // ---- office desk + keycard (step 2) ------------------------------------------
   const deskGeo = new THREE.BoxGeometry(2.4, 0.8, 1.2);
-  const deskMatW = new THREE.MeshStandardMaterial({ color: 0x5a6270, roughness: 0.6, metalness: 0.4 });
-  disposables.push(deskGeo, deskMatW);
+  const deskMatW = tex.material('metal', { repeat: 1, params: { color: 0xa8adb6, roughness: 0.6, metalness: 0.4 } });
+  disposables.push(deskGeo);
   const desk = new THREE.Mesh(deskGeo, deskMatW);
   desk.position.set(-17, 0.4, -16);
   desk.castShadow = true;
@@ -318,8 +323,8 @@ export function build(scene, api) {
   objects.push(caseGlass);
 
   const pedestalGeo = new THREE.CylinderGeometry(0.9, 1.1, 0.5, 24);
-  const pedestalMat = new THREE.MeshStandardMaterial({ color: 0x39404d, metalness: 0.7, roughness: 0.35 });
-  disposables.push(caseGeo, pedestalGeo, pedestalMat);
+  const pedestalMat = tex.material('metal', { repeat: 1, params: { color: 0x6b7078, metalness: 0.7, roughness: 0.35 } });
+  disposables.push(pedestalGeo, caseGeo);
   const pedestal = new THREE.Mesh(pedestalGeo, pedestalMat);
   pedestal.position.set(0, 0.25, -8);
   pedestal.castShadow = true;
@@ -356,8 +361,8 @@ export function build(scene, api) {
 
   // A couple of flavour terminals so the hall feels like a working lab.
   const termGeo = new THREE.BoxGeometry(1.3, 0.9, 0.7);
-  const termMat = new THREE.MeshStandardMaterial({ color: 0x333a46, roughness: 0.5, metalness: 0.5 });
-  disposables.push(termGeo, termMat);
+  const termMat = tex.material('wall', { repeat: 1, params: { color: 0x8f98a6, roughness: 0.5, metalness: 0.5 } });
+  disposables.push(termGeo);
   [[8, 6], [8, 10]].forEach(([x, z]) => {
     const term = new THREE.Mesh(termGeo, termMat);
     term.position.set(x, 0.45, z);

@@ -30,6 +30,8 @@ three-worlds-of-time/
     │                      moving-platform carry, camera modes (V), flashlight (F)
     ├── character.js       Player character model: articulated procedural body with idle/walk/run/jump poses;
     │                      auto-replaced by assets/models/player/character.glb when present (GLTF + AnimationMixer)
+    ├── textures.js        Stylised PBR texture library: procedural canvas sets per era (colour/normal/roughness)
+    │                      with hot-swap drop-in files under assets/textures/<level>/
     ├── levelManager.js    Level lifecycle: mount/dispose per era, level chaining, transitions
     ├── timeMachine.js     The hierarchical Time Machine model + socket lighting + win sequence
     └── levels/
@@ -43,14 +45,14 @@ three-worlds-of-time/
 - **Viewing** — first-person _and_ third-person camera (press **V**), a lit, shadowed, fogged 3D scene in three distinct art identities, and an animated environment (rings, platforms, barriers, screens).
 - **Control & Playability** — keyboard (WASD, Shift, Space, E, V, F) + mouse (pointer-lock look); camera-relative movement in both view modes (W always walks toward where you look); clear objectives and win state; 3D movement with gravity, jumping, step-climb, wall collision and moving-platform carry.
 - **Hierarchical modelling** — `timeMachine.js` nests rings inside rings inside a base; `player.js` rigs a visible third-person body under a head anchor; levels parent rims/lights onto platform decks.
-- **3D Effects** — era-specific lighting (warm sun / cool indoor / neon void), shadow mapping, fog, emissive materials, transparent glass, additive light beams.
+- **3D Effects** — era-specific lighting (warm sun / cool indoor / neon void), shadow mapping, fog, textured PBR materials (procedural colour/normal/roughness sets per era, drop-in slots for real texture files), emissive materials, transparent glass, additive light beams.
 - **Shaders** — `neonFuture.js` builds its energy barriers from a custom `THREE.ShaderMaterial`: a pass-through vertex shader exporting `vUv`, and a fragment shader driven by a `uTime` uniform (scrolling scanlines + a slow pulse). The same pulse computed in JS decides when the barrier is solid, so visuals and gameplay share one formula. Every member should read the comment block above `barrierVertexShader` — it is written to be explained out loud in the demo.
 - **Gameplay & Experience** — three levels with three different verbs (SOLVE / INVESTIGATE / SURVIVE), full puzzle chains, timed hazards, respawn on falling into the void, message banner guidance.
 - **Polish** — loading screen, start screen, pause menu (Esc), win screen, era-transition overlay, restart-without-refresh that resets levels, sockets, player and UI.
 
 ## What is deliberately NOT built yet (post-Beta backlog)
 
-1. **Real assets.** All geometry is still primitive Three.js shapes. Swap in GLTF models or better procedural detail if time allows (Innovation, not required).
+1. **Downloaded CC0 assets.** The look is currently carried by procedural assets made in-repo (textures in `src/textures.js`, character in `src/character.js`). Drop-in slots exist at `assets/textures/<level-name>/<slot>.jpg` (+ `-normal`/`-roughness` companions) and `assets/models/player/character.glb` — files from ambientCG, Poly Haven, Kenney or Quaternius hot-swap in with zero code changes; credit them in `#credits-list` when added. Swapping primitive set-dressing for full CC0 scene kits is the remaining step.
 2. **Sound/music and SFX** — nothing audible yet; brief marks sound under Gameplay & Experience.
 3. **Bump/height maps, reflections, skybox** — the 3D Effects category rewards "several advanced effects"; these are the next candidates.
 4. **Second custom shader** (e.g. a `uTime` ripple around the Time Machine during transitions, per pitch doc §9) and a minimap if time allows.

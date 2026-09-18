@@ -25,11 +25,12 @@ const LEVEL_NAMES = ['the Ancient Ruins', 'the Modern Laboratory', 'the Neon Fut
  *   api.completeLevel()  — light this level's socket, then advance
  *   api.showMessage(t)   — timed HUD banner
  *   api.setHint(fn)      — per-level hint text provider for the [E] prompt
+ *   api.getMaxAnisotropy() — renderer's max anisotropy (textures.js tiling)
  *
  * Objects flagged userData.persistent = true survive disposal and are only
  * detached (levels reuse shared assets that way if they want to).
  */
-export function createLevelManager(scene, player) {
+export function createLevelManager(scene, player, renderer) {
   let currentLevelIndex = -1;
   let currentLevelData = null;
   let timeMachine = null;
@@ -90,8 +91,12 @@ export function createLevelManager(scene, player) {
   // Flashlight bridge — Level 2 grants it, any level could reuse it.
   function grantFlashlight() { player.addFlashlight(); }
   function isFlashlightOn() { return !!player.flashlight && player.flashlightOn; }
+  // Texture tiling quality — textures.js sets this on every tiled map.
+  function getMaxAnisotropy() {
+    return renderer ? renderer.capabilities.getMaxAnisotropy() : 4;
+  }
 
-  const api = { completeLevel, showMessage, setHint, grantFlashlight, isFlashlightOn };
+  const api = { completeLevel, showMessage, setHint, grantFlashlight, isFlashlightOn, getMaxAnisotropy };
 
   function getHint() {
     if (!hintProvider) return null;

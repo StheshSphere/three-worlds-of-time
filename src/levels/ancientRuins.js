@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createLevelTextures } from '../textures.js';
 
 /**
  * LEVEL 1 — THE ANCIENT RUINS (pitch doc §4)
@@ -44,15 +45,18 @@ export function build(scene, api) {
   scene.background = new THREE.Color(0xcfa670);
   scene.fog = new THREE.FogExp2(0xcfa670, 0.016);
 
-  // ---- shared materials --------------------------------------------------
-  const stoneMat = new THREE.MeshStandardMaterial({ color: 0xa89579, roughness: 0.9 });
-  const mossMat = new THREE.MeshStandardMaterial({ color: 0x5c7a4a, roughness: 1 });
-  const darkStoneMat = new THREE.MeshStandardMaterial({ color: 0x6b5d49, roughness: 0.95 });
+  // ---- shared materials (stylised PBR sets from textures.js) ------------
+  // Sandstone/flagstone maps are baked in the era palette; colour multipliers
+  // tint variants (mossy, dark) so one painter serves the whole level.
+  const tex = createLevelTextures('ancient-ruins', { anisotropy: api.getMaxAnisotropy() });
+  const stoneMat = tex.material('stone', { repeat: 2, params: { roughness: 0.9 } });
+  const mossMat = tex.material('stone', { repeat: 2, params: { color: 0x8fa87c, roughness: 1 } });
+  const darkStoneMat = tex.material('stone', { repeat: 2, params: { color: 0x8a8074, roughness: 0.95 } });
   const runeMat = new THREE.MeshStandardMaterial({ color: 0x8f7f5f, roughness: 0.6, emissive: 0x000000 });
   const glowMat = new THREE.MeshStandardMaterial({
     color: 0xffc94d, emissive: 0xe89b2f, emissiveIntensity: 1.6, roughness: 0.3,
   });
-  disposables.push(stoneMat, mossMat, darkStoneMat, runeMat, glowMat);
+  disposables.push(tex, runeMat, glowMat);
 
   function solid(mesh, pad = 0) {
     mesh.userData.solidBox = new THREE.Box3().setFromObject(mesh);
@@ -66,8 +70,8 @@ export function build(scene, api) {
   // bridge and the ground raycast finds nothing — you fall and respawn.
   const arenaGeo = new THREE.BoxGeometry(60, 0.2, 30);
   const islandGeo = new THREE.BoxGeometry(22, 0.2, 18);
-  const groundMat = new THREE.MeshStandardMaterial({ color: 0x8a7654, roughness: 1 });
-  disposables.push(arenaGeo, islandGeo, groundMat);
+  const groundMat = tex.material('ground', { repeat: [12, 6], params: { roughness: 1 } });
+  disposables.push(arenaGeo, islandGeo);
 
   const arena = new THREE.Mesh(arenaGeo, groundMat);
   arena.position.set(0, -0.1, 10); // top surface at y = 0, spans z -5..25
@@ -135,8 +139,8 @@ export function build(scene, api) {
   const plateMatA = new THREE.MeshStandardMaterial({ color: 0x3d3020, emissive: 0x000000 });
   const plateMatB = plateMatA.clone();
   const blockGeo = new THREE.BoxGeometry(1.2, 1.2, 1.2);
-  const blockMat = new THREE.MeshStandardMaterial({ color: 0xb2a37f, roughness: 0.8 });
-  disposables.push(plateGeo, plateMatA, plateMatB, blockGeo, blockMat);
+  const blockMat = tex.material('stone', { repeat: 1, params: { color: 0xcfc4a8, roughness: 0.8 } });
+  disposables.push(plateGeo, plateMatA, plateMatB, blockGeo);
 
   const plates = [];
   const blocks = [];
@@ -182,8 +186,8 @@ export function build(scene, api) {
 
   // ---- rotating bridge (puzzle step 2) -----------------------------------
   const deckGeo = new THREE.BoxGeometry(3, 0.4, 12);
-  const deckMat = new THREE.MeshStandardMaterial({ color: 0x9d8c6d, roughness: 0.85 });
-  disposables.push(deckGeo, deckMat);
+  const deckMat = tex.material('stone', { repeat: [1, 3], params: { color: 0xbfae8e, roughness: 0.85 } });
+  disposables.push(deckGeo);
 
   const bridge = new THREE.Group();
   bridge.position.set(0, 0, -5); // pivot at the arena's chasm edge
@@ -232,8 +236,8 @@ export function build(scene, api) {
 
   // ---- altar + core (puzzle steps 4-5) ------------------------------------
   const altarBaseGeo = new THREE.CylinderGeometry(2.2, 2.6, 0.9, 8);
-  const altarMat = new THREE.MeshStandardMaterial({ color: 0x7d6c52, roughness: 0.9 });
-  disposables.push(altarBaseGeo, altarMat);
+  const altarMat = tex.material('stone', { repeat: [2, 1], params: { color: 0x96866c, roughness: 0.9 } });
+  disposables.push(altarBaseGeo);
   const altar = new THREE.Mesh(altarBaseGeo, altarMat);
   altar.position.set(0, 0.45, -26);
   altar.castShadow = true;
