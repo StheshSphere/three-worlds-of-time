@@ -21,6 +21,8 @@ index.html            import map, loading/start/HUD/pause/win/credits screens
 src/main.js            renderer/scene/camera setup, render loop, game-state flow (menu/play/pause/win)
 src/player.js           first/third-person controller: WASD, sprint, jump, ground raycast, wall collision,
                        platform carry, camera modes (V), flashlight (F)
+src/character.js        player character: articulated procedural body with idle/walk/run/jump poses,
+                       auto-replaced by assets/models/player/character.glb (GLTFLoader + AnimationMixer)
 src/timeMachine.js       hierarchical Time Machine model — DO NOT flatten the hierarchy
 src/levelManager.js     level lifecycle: mount/dispose per era, chaining, transitions, banner hints
 src/levels/*.js          one file per era: ancientRuins.js / modernLab.js / neonFuture.js
@@ -28,7 +30,7 @@ src/style.css           HUD, banners, pause/win/transition overlays
 ```
 
 Ownership (avoid stepping on someone else's file without asking in the group chat first):
-Person 1 → `levels/ancientRuins.js` · Person 2 → `levels/modernLab.js` · Person 3 → `levels/neonFuture.js` · Person 4 → `player.js`, `timeMachine.js`, `levelManager.js` · Person 5 → `style.css`, `index.html`, shaders.
+Person 1 → `levels/ancientRuins.js` · Person 2 → `levels/modernLab.js` · Person 3 → `levels/neonFuture.js` · Person 4 → `player.js`, `character.js`, `timeMachine.js`, `levelManager.js` · Person 5 → `style.css`, `index.html`, shaders.
 
 ## Conventions an agent must follow
 

@@ -253,3 +253,59 @@ summary.textContent = failures === 0
 resultsEl.appendChild(summary);
 console.log(rows);
 window.__movementTest = { rows, failures };
+
+/* --------------------------------------------------------------------------
+ * Character showcase: cycles IDLE → WALK → RUN → JUMP continuously in
+ * third-person so each animation state can be screenshotted with its label.
+ * (isLocked is just a flag here — jump requires it, no pointer is involved.)
+ * ------------------------------------------------------------------------ */
+player.controls.isLocked = true;
+const showcaseEl = document.createElement('div');
+showcaseEl.id = 'showcase';
+showcaseEl.textContent = 'Character pose: IDLE';
+resultsEl.appendChild(showcaseEl);
+
+const PHASES = [
+  ['IDLE', [], 2.2],
+  ['WALK', ['KeyW'], 2.2],
+  ['RUN', ['KeyW', 'ShiftLeft'], 2.2],
+  ['JUMP', ['KeyW', 'Space'], 1.6],
+];
+let phaseIdx = 0;
+let phaseT = 0;
+let held = [];
+
+function releaseHeld() {
+  held.forEach((c) => key(c, false));
+  held = [];
+}
+
+let last = performance.now();
+let showcaseYaw = -Math.PI / 4;
+function showcaseLoop(now) {
+  requestAnimationFrame(showcaseLoop);
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+
+  phaseT += dt;
+  const [name, keysDown, dur] = PHASES[phaseIdx];
+  if (phaseT >= dur) {
+    releaseHeld();
+    phaseT = 0;
+    phaseIdx = (phaseIdx + 1) % PHASES.length;
+    const [nextName, nextKeys] = PHASES[phaseIdx];
+    nextKeys.forEach((c) => key(c, true));
+    held = [...nextKeys];
+    showcaseEl.textContent = `Character pose: ${nextName} (speed ${player._actualSpeed.toFixed(1)})`;
+  } else {
+    showcaseEl.textContent = `Character pose: ${name} (speed ${player._actualSpeed.toFixed(1)})`;
+  }
+
+  // Slow orbit so the walk direction curves visibly through the arena.
+  showcaseYaw += dt * 0.35;
+  setLook(showcaseYaw, -0.12);
+
+  player.update(dt);
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(showcaseLoop);

@@ -28,6 +28,8 @@ three-worlds-of-time/
     ├── main.js            Boot sequence, renderer/scene/camera, render loop, game-state flow
     ├── player.js          First/third-person controller: WASD, sprint, jump, ground raycast, wall collision,
     │                      moving-platform carry, camera modes (V), flashlight (F)
+    ├── character.js       Player character model: articulated procedural body with idle/walk/run/jump poses;
+    │                      auto-replaced by assets/models/player/character.glb when present (GLTF + AnimationMixer)
     ├── levelManager.js    Level lifecycle: mount/dispose per era, level chaining, transitions
     ├── timeMachine.js     The hierarchical Time Machine model + socket lighting + win sequence
     └── levels/

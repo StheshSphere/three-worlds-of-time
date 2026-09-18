@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+import { createPlayerCharacter } from './character.js';
 
 const GRAVITY = 22;
 const WALK_SPEED = 5.5;
@@ -27,6 +28,7 @@ const _camRight = new THREE.Vector3(1, 0, 0);
 const _moveDir = new THREE.Vector3();
 const _camPos = new THREE.Vector3();
 const _camDir = new THREE.Vector3();
+const _prevPos = new THREE.Vector3();
 
 /**
  * First/third-person player controller.
@@ -64,22 +66,14 @@ export class Player {
     // Releasing the pointer (Esc → pause) must not leave keys stuck down.
     this.controls.addEventListener('unlock', () => this._clearKeys());
 
-    // --- third-person rig: a simple explorer body, hidden in first-person ---
+    // --- movement rig: owns position/rotation; the character model and
+    //     the head anchor hang off it (the model itself is built in
+    //     character.js — procedural by default, auto-replaced by a
+    //     dropped-in GLTF at assets/models/player/character.glb) ---
     this.rig = new THREE.Group();
     this.rig.name = 'PlayerRig';
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0xc9b48a, roughness: 0.7 });
-    const visorMat = new THREE.MeshStandardMaterial({
-      color: 0x14333d, emissive: 0x4fd0e8, emissiveIntensity: 1.4,
-    });
-    this._body = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 0.85, 6, 12), bodyMat);
-    this._body.position.y = 0.95;
-    this._body.castShadow = true;
-    const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 12), bodyMat);
-    headMesh.position.y = 1.55;
-    headMesh.castShadow = true;
-    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.06), visorMat);
-    visor.position.set(0, 1.56, 0.2);
-    this.rig.add(this._body, headMesh, visor);
+    this.character = createPlayerCharacter();
+    this.rig.add(this.character.group);
 
     // Camera anchor: the first-person eye and the third-person orbit target.
     this.head = new THREE.Object3D();
@@ -97,8 +91,8 @@ export class Player {
     this.flashlight = null;
     this.flashlightOn = false;
     this._groundObject = null;
-    this._walkPhase = 0;
     this._fell = false;
+    this._actualSpeed = 0;   // horizontal speed actually achieved this frame
 
     this._bindKeys();
     this.raycaster = new THREE.Raycaster();
@@ -203,8 +197,8 @@ export class Player {
     this.velocity.set(0, 0, 0);
     this.onGround = false;
     this._groundObject = null;
-    this._walkPhase = 0;
     this._fell = false;
+    this.character.reset();
   }
 
   _resolveCollisions() {
@@ -293,14 +287,21 @@ export class Player {
     const moving = _moveDir.lengthSq() > 1e-8;
     if (moving) _moveDir.normalize();
     const speed = this.keys.sprint ? SPRINT_SPEED : WALK_SPEED;
+    _prevPos.copy(this.rig.position); // for the character's animation speed
     this.rig.position.addScaledVector(_moveDir, speed * delta);
-    if (moving) this._walkPhase += speed * delta * 2.2;
-    this._body.position.y = 0.95 + (moving ? Math.sin(this._walkPhase) * 0.045 : 0);
 
     // 5. Wall collisions + world bounds
     this._resolveCollisions();
     this.rig.position.x = THREE.MathUtils.clamp(this.rig.position.x, -55, 55);
     this.rig.position.z = THREE.MathUtils.clamp(this.rig.position.z, -55, 55);
+
+    // Actual horizontal speed achieved (post-collision, post-clamp) — this
+    // is what the character animates against, so grinding into a wall does
+    // not play a walking animation. Platform carry is deliberately excluded.
+    this._actualSpeed = Math.hypot(
+      this.rig.position.x - _prevPos.x,
+      this.rig.position.z - _prevPos.z,
+    ) / delta;
 
     // 6. Fell out of the world (Level 3 void, Level 1 chasm)?
     if (!this._fell && this.rig.position.y < KILL_Y) {
@@ -321,6 +322,11 @@ export class Player {
     //    Facing is tracked even in first-person (rig hidden) so toggling the
     //    view never back-flips the model.
     this.rig.rotation.y = Math.atan2(_camForward.x, _camForward.z);
+    this.character.update(delta, {
+      speed: this._actualSpeed,
+      grounded: this.onGround,
+      sprint: this.keys.sprint,
+    });
     if (this.flashlight) {
       // Pitch from the look direction itself (asin of its y) — reading
       // camera.rotation.x directly is skewed once yaw and pitch combine.
