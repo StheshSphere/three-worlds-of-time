@@ -1,0 +1,17 @@
+﻿import {writeFileSync,mkdirSync} from 'node:fs';
+import {join,resolve} from 'node:path';
+const port=9336,out=resolve('movement-test-output'); mkdirSync(out,{recursive:true});
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function getJson(path,opts={}){const r=await fetch(`http://127.0.0.1:${port}${path}`,opts); if(!r.ok) throw Error(path+' '+r.status); return await r.json();}
+async function openPage(url,w=900,h=650){let t=await getJson('/json/new?'+encodeURIComponent(url),{method:'PUT'}); const ws=new WebSocket(t.webSocketDebuggerUrl); let id=0; const pending=new Map(), events=[];
+function send(method,params={}){return new Promise((resolve,reject)=>{const mid=++id; pending.set(mid,{resolve,reject}); ws.send(JSON.stringify({id:mid,method,params})); setTimeout(()=>{if(pending.has(mid)){pending.delete(mid); reject(Error('timeout '+method));}},15000);});}
+ws.onmessage=e=>{const m=JSON.parse(e.data); if(m.id&&pending.has(m.id)){const p=pending.get(m.id); pending.delete(m.id); m.error?p.reject(Error(JSON.stringify(m.error))):p.resolve(m.result);} else if(m.method) events.push(m);};
+await new Promise((res,rej)=>{ws.onopen=res; ws.onerror=rej;}); await send('Page.enable'); await send('Runtime.enable'); await send('Log.enable'); await send('Network.enable'); await send('Emulation.setDeviceMetricsOverride',{width:w,height:h,deviceScaleFactor:1,mobile:false}); await send('Page.navigate',{url}); return {t,ws,send,events};}
+async function evalv(p,expr){return (await p.send('Runtime.evaluate',{expression:expr,returnByValue:true,awaitPromise:true})).result.value;}
+function clip(x,y,w,h){return {x,y,width:w,height:h,scale:1};}
+const tex=await openPage('http://localhost:8000/test-textures.html',900,650); const labels=['LEVEL 1 — THE ANCIENT RUINS','LEVEL 2 — THE MODERN LABORATORY','LEVEL 3 — THE NEON FUTURE']; const shots=[];
+async function state(){return await evalv(tex,`(() => ({label:document.querySelector('#level-label')?.textContent||'', status:document.querySelector('#status')?.textContent||'', errors:document.querySelector('#errors')?.textContent||'', cycles:window.__textureTest?.cycles?.() ?? -1}))()`);} 
+for(const lab of labels){let s; for(let i=0;i<120;i++){s=await state(); if(s.label===lab && (lab!==labels[0] || s.cycles>0) && !s.status.includes('0.0s')) break; await sleep(250);} await sleep(500); s=await state(); let im=await tex.send('Page.captureScreenshot',{format:'png',fromSurface:true,clip:clip(0,0,850,545)}); let file=join(out,`texture-${labels.indexOf(lab)+1}.png`); writeFileSync(file,Buffer.from(im.data,'base64')); shots.push({file,state:s});}
+const texFinal=await state(); await tex.send('Target.closeTarget',{targetId:tex.t.id}).catch(()=>{}); tex.ws.close();
+const mov=await openPage('http://localhost:8000/test-movement.html',900,3000); await sleep(8500); const movData=await evalv(mov,`(() => {const text=document.body.innerText; const lines=text.split(/\n/).map(s=>s.trim()).filter(Boolean); return {summary:lines.find(l=>/ALL .*CHECKS PASS|CHECKS FAIL|FAIL/i.test(l)&&/CHECK|FAIL/.test(l))||lines[lines.length-1]||'', failLines:lines.filter(l=>/^FAIL\b|\bFAIL\b/.test(l)), lines};})()`); let mi=await mov.send('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:true,clip:clip(0,0,900,900)}); writeFileSync(join(out,'movement-agent.png'),Buffer.from(mi.data,'base64')); await mov.send('Target.closeTarget',{targetId:mov.t.id}).catch(()=>{}); mov.ws.close();
+console.log(JSON.stringify({textures:{shots,final:texFinal},movement:movData},null,2)); process.exit(0);
