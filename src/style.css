@@ -65,6 +65,19 @@ kbd {
 .menu-btn.primary { background: linear-gradient(180deg, rgba(242, 200, 121, 0.3), rgba(185, 133, 47, 0.25)); border-color: var(--gold); }
 .panel .menu-btn[data-close] { margin-top: 1.4rem; }
 
+/* ------- Member 2 · quick audio row (title + pause screens) -------- */
+.audio-row { display: flex; align-items: center; gap: 0.7rem; width: min(322px, 100%); margin: 0.9rem auto 0; }
+.audio-mute {
+  min-width: 96px; padding: 0.35rem 0.8rem; border-radius: 999px; cursor: pointer;
+  font: 700 0.9rem 'Rajdhani', sans-serif; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--text); background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line);
+  transition: background 0.2s ease, color 0.2s, box-shadow 0.2s;
+}
+.audio-mute:hover, .audio-mute:focus-visible { background: rgba(242, 200, 121, 0.14); box-shadow: 0 0 18px rgba(242, 200, 121, 0.2); color: #fff; outline: none; }
+.audio-mute.muted { color: var(--gold); border-color: var(--gold); }
+.audio-volume { flex: 1; accent-color: var(--gold); cursor: pointer; }
+.title-wrap .audio-row { margin-left: 0; }   /* align with the title menu */
+
 /* ----------------------------- loading ----------------------------- */
 #loading-screen { background: radial-gradient(ellipse at 50% 40%, #1d1a14, #050505 70%); z-index: 60; }
 .loading-box { text-align: center; width: min(460px, 86vw); }

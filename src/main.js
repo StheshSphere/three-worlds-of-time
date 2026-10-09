@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { settings, records } from './core/settings.js';
+import { settings, records, DEFAULTS } from './core/settings.js';
 import { assets } from './core/assets.js';
 import { AudioManager } from './core/audio.js';
 import { PostFX } from './core/postfx.js';
@@ -210,6 +210,48 @@ document.getElementById('fail-retry-button').addEventListener('click', () => { u
 document.getElementById('fail-quit-button').addEventListener('click', showTitle);
 document.getElementById('win-restart-button').addEventListener('click', () => { ui.hide('win-screen'); ui.show('hud'); ui.resetJournal(); levels.restartRun(); mode = 'playing'; player.lock(); });
 document.getElementById('win-quit-button').addEventListener('click', showTitle);
+
+/* =====================================================================
+   Member 2 — quick master volume / mute (title + pause screens).
+   ONE shared state: settings.masterVolume. Member 1's audio manager
+   already re-applies it live (its own settings listener), and settings
+   persists it through level changes, restarts and reloads. Mute is
+   simply masterVolume 0; the previous value is remembered so unmute
+   restores it. All three sliders (these two plus the Options-screen one)
+   are views synced from that single state — no duplicate audio state.
+   ===================================================================== */
+const quickVolumeSliders = [
+  document.getElementById('title-volume-slider'),
+  document.getElementById('pause-volume-slider'),
+];
+const muteButtons = [
+  document.getElementById('title-mute-button'),
+  document.getElementById('pause-mute-button'),
+];
+const optionsVolumeSlider = document.querySelector('#options-screen input[data-setting="masterVolume"]');
+let preMuteVolume = settings.get('masterVolume') > 0 ? settings.get('masterVolume') : DEFAULTS.masterVolume;
+function syncVolumeUI(value) {
+  for (const s of [...quickVolumeSliders, optionsVolumeSlider]) if (s) s.value = value;
+  const muted = value <= 0;
+  for (const b of muteButtons) {
+    b.textContent = muted ? 'Unmute' : 'Mute';
+    b.classList.toggle('muted', muted);
+    b.title = muted ? 'Sound is muted — click to restore volume' : 'Mute all sound';
+  }
+}
+function toggleMute() {
+  const v = settings.get('masterVolume');
+  if (v > 0) { preMuteVolume = v; settings.set('masterVolume', 0); }
+  else settings.set('masterVolume', preMuteVolume || DEFAULTS.masterVolume);
+}
+for (const s of quickVolumeSliders) s.addEventListener('input', () => settings.set('masterVolume', Number(s.value)));
+for (const b of muteButtons) b.addEventListener('click', toggleMute);
+settings.onChange((key, value) => { if (key === 'masterVolume') syncVolumeUI(value); });
+syncVolumeUI(settings.get('masterVolume'));
+// Focusing the slider can never leave movement keys stuck: keys are cleared
+// whenever pointer lock is lost, and focus is dropped the moment play
+// resumes so arrow keys never nudge the volume mid-game.
+player.addEventListener('lock', () => { for (const el of [...muteButtons, ...quickVolumeSliders]) el.blur(); });
 
 // Closing a level overlay (note, terminal, keypad, journal) returns to play.
 ui.onPanelClosed = () => {

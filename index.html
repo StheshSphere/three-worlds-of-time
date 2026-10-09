@@ -47,6 +47,11 @@
         <button class="menu-btn" data-open="options-screen">Options</button>
         <button class="menu-btn" data-open="credits-screen">Credits</button>
       </nav>
+      <!-- Member 2 · quick master volume + mute (same setting as Options) -->
+      <div class="audio-row">
+        <button id="title-mute-button" class="audio-mute" type="button" title="Mute all sound">Mute</button>
+        <input id="title-volume-slider" class="audio-volume" type="range" min="0" max="1" step="0.05" aria-label="Master volume" />
+      </div>
       <p id="best-time" class="best-time"></p>
     </div>
   </div>
@@ -166,6 +171,11 @@
         <button class="menu-btn" data-open="credits-screen">Credits</button>
         <button id="quit-button" class="menu-btn">Main menu</button>
       </nav>
+      <!-- Member 2 · quick master volume + mute (same setting as Options) -->
+      <div class="audio-row">
+        <button id="pause-mute-button" class="audio-mute" type="button" title="Mute all sound">Mute</button>
+        <input id="pause-volume-slider" class="audio-volume" type="range" min="0" max="1" step="0.05" aria-label="Master volume" />
+      </div>
     </div>
   </div>
 
