@@ -1,0 +1,8 @@
+{ "url": "http://127.0.0.1:8000/index.html", "steps": [
+  { "eval": "__game.settings.set('showFps', true); __game.skipTo(1); __game.player.isLocked = true; null" }, { "wait": 5000 },
+  { "eval": "{ const p=__game.player; p.rig.position.set(-4,0,10); p.yaw=-0.35; p.pitch=-0.12; } null" }, { "wait": 1200 }, { "shot": "m1_dark" },
+  { "eval": "__game.levels.debug.openDoor(); __game.levels.debug.solveGrid(); null" }, { "wait": 4000 },
+  { "eval": "{ const p=__game.player; p.rig.position.set(-4,0,10); p.yaw=-0.35; p.pitch=-0.12; } null" }, { "wait": 1200 }, { "shot": "m2_lit" },
+  { "eval": "{ const p=__game.player; p.rig.position.set(0,0,-33); p.yaw=0; p.pitch=-0.1; } null" }, { "wait": 1200 }, { "shot": "m3_powerroom" },
+  { "eval": "document.getElementById('fps').textContent" }
+]}

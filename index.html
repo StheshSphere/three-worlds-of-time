@@ -5,65 +5,287 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>The Three Worlds of Time — The Broken Hourglass</title>
   <link rel="stylesheet" href="./src/style.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 96'%3E%3Cpath d='M8 4h48M8 92h48M14 4c0 26 36 30 36 44S14 70 14 92M50 4c0 26-36 30-36 44s36 22 36 44' stroke='%23f2c879' stroke-width='6' fill='none'/%3E%3C/svg%3E" />
 
-  <!-- Import map: lets the browser resolve "three" with NO bundler at all.
-       This is the "plain files" path described in the project brief (section 6.3) —
-       swap this for a Vite build later if the team prefers, but this already
-       satisfies "no absolute paths" and "no build step required to run". -->
+  <!-- Import map: the browser resolves "three" with no bundler. Three.js r160 is
+       vendored in ./libs so the hosted game never depends on a CDN being up
+       (brief §5: "everything your game needs at runtime must be inside the
+       archive"). All paths are relative — the game is served from a subfolder. -->
   <script type="importmap">
     {
       "imports": {
-        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        "three": "./libs/three/three.module.js",
+        "three/addons/": "./libs/three/addons/"
       }
     }
   </script>
 </head>
-<body>
-  <!-- Loading screen: also earns Polish marks and stops a slow first load
-       looking like a crash (brief, section 6.1). -->
-  <div id="loading-screen">
+<body data-era="0">
+  <!-- ============================ LOADING ============================ -->
+  <div id="loading-screen" class="screen">
     <div class="loading-box">
-      <h1>THE BROKEN HOURGLASS</h1>
-      <p id="loading-text">Loading assets…</p>
+      <svg class="hourglass-logo" viewBox="0 0 64 96" aria-hidden="true">
+        <path d="M8 4h48M8 92h48M14 4c0 26 36 30 36 44S14 70 14 92M50 4c0 26-36 30-36 44s36 22 36 44" />
+        <path class="sand" d="M22 18h20L32 40zM32 66l14 20H18z" />
+      </svg>
+      <h1 class="title-font">The Broken Hourglass</h1>
       <div class="progress-bar"><div id="progress-fill"></div></div>
+      <p id="loading-text">Gathering fragments of time…</p>
     </div>
   </div>
 
-  <!-- Click-to-play overlay (needed before Pointer Lock will engage) -->
-  <div id="start-screen" class="hidden">
-    <div class="start-box">
-      <h1>THE THREE WORLDS OF TIME</h1>
-      <h2>The Broken Hourglass — ALPHA BUILD</h2>
-      <p>Past: Solve. Present: Investigate. Future: Survive.</p>
-      <button id="start-button">Click to Play</button>
-      <p class="controls-hint">
-        WASD move&nbsp;·&nbsp;Mouse look&nbsp;·&nbsp;Space jump&nbsp;·&nbsp;Shift sprint&nbsp;·&nbsp;E interact&nbsp;·&nbsp;Esc release mouse
-      </p>
+  <!-- ============================ TITLE ============================== -->
+  <div id="title-screen" class="screen hidden">
+    <div class="title-wrap">
+      <p class="kicker">A CGV Three.js adventure</p>
+      <h1 class="game-title title-font">The Three Worlds<br />of Time</h1>
+      <h2 class="game-subtitle title-font">— The Broken Hourglass —</h2>
+      <p class="tagline">Past: <b>Solve</b> · Present: <b>Investigate</b> · Future: <b>Survive</b></p>
+      <nav class="menu">
+        <button id="play-button" class="menu-btn primary">Begin the Journey</button>
+        <button class="menu-btn" data-open="controls-screen">Controls</button>
+        <button class="menu-btn" data-open="options-screen">Options</button>
+        <button class="menu-btn" data-open="credits-screen">Credits</button>
+      </nav>
+      <p id="best-time" class="best-time"></p>
     </div>
   </div>
 
-  <!-- In-game HUD -->
+  <!-- ============================ ERA CARD =========================== -->
+  <div id="era-card" class="hidden" aria-live="polite">
+    <div class="letterbox top"></div>
+    <div class="era-card-text">
+      <p id="era-card-numeral" class="title-font">I</p>
+      <h1 id="era-card-title" class="title-font">The Past</h1>
+      <p id="era-card-sub">Temple of the First Hour</p>
+    </div>
+    <div class="letterbox bottom"></div>
+  </div>
+
+  <!-- ============================ HUD ================================ -->
   <div id="hud" class="hidden">
-    <div id="objective">Objective: Explore the ruins and find the Ancient Core</div>
-    <div id="crosshair">+</div>
-    <div id="interact-prompt" class="hidden">[E] Interact</div>
-    <button id="restart-button">Restart</button>
-    <button id="credits-button">Credits</button>
-  </div>
-
-  <div id="credits-screen" class="hidden">
-    <div class="credits-box">
-      <h2>Credits</h2>
-      <ul id="credits-list">
-        <li>Three.js — MIT Licence — https://threejs.org</li>
-        <li>PointerLockControls (three/examples) — MIT Licence</li>
-        <li>-- Add every model, texture, sound, font and tutorial your team uses here --</li>
-      </ul>
-      <button id="close-credits">Close</button>
+    <div class="hud-top-left">
+      <div id="era-badge" class="title-font">The Past</div>
+      <div id="objective">Recover the Ancient Core</div>
+      <ul id="checklist"></ul>
+      <div id="hint"></div>
+    </div>
+    <div class="hud-top-center">
+      <div class="stability-label">Timeline stability</div>
+      <div class="stability-bar"><div id="stability-fill"></div></div>
+      <div id="stability-time">5:00</div>
+    </div>
+    <div class="hud-top-right">
+      <div class="core-slots">
+        <span class="core-slot" data-core="0" title="Ancient Core"></span>
+        <span class="core-slot" data-core="1" title="Lab Core"></span>
+        <span class="core-slot" data-core="2" title="Neon Core"></span>
+      </div>
+      <div id="fps" class="hidden"></div>
+    </div>
+    <div id="crosshair"></div>
+    <div id="waypoint" class="hidden"><div class="wp-diamond"></div><div class="wp-arrow"></div><div id="wp-dist">0 m</div></div>
+    <div id="tutorial-card" class="hidden">
+      <p class="kicker" id="tut-kicker">How to play</p>
+      <h3 id="tut-title" class="title-font"></h3>
+      <div id="tut-body"></div>
+      <p class="tut-foot"><kbd>H</kbd> show this again</p>
+    </div>
+    <div id="interact-prompt" class="hidden"><kbd>E</kbd><span id="interact-label">Interact</span></div>
+    <div id="message-banner"></div>
+    <div id="dash-meter" class="hidden"><kbd>Q</kbd><div class="dash-fill"></div><span>Chrono-dash</span></div>
+    <div id="minimap-frame"><span class="minimap-n">N</span></div>
+    <div class="hud-keys">
+      <span><kbd>H</kbd> help</span><span><kbd>J</kbd> journal</span><span><kbd>M</kbd> map</span><span><kbd>V</kbd> view</span><span><kbd>Esc</kbd> pause</span>
     </div>
   </div>
 
+  <!-- ============================ CINEMATICS ========================= -->
+  <div id="cinema" class="hidden">
+    <div class="cine-bar top"></div>
+    <div class="cine-bar bottom"></div>
+    <div id="skip-hint"><kbd>Space</kbd> skip</div>
+  </div>
+  <div id="caption" class="hidden" aria-live="polite">
+    <div id="caption-speaker"></div>
+    <div id="caption-text"></div>
+  </div>
+  <div id="end-card" class="hidden">
+    <h1 class="title-font">The Three Worlds of Time</h1>
+    <p class="title-font">— The Broken Hourglass —</p>
+    <p class="thanks">Thank you for playing</p>
+  </div>
+  <div id="credits-roll" class="hidden"><div class="roll-inner"></div></div>
+
+  <!-- ============================ OVERLAYS =========================== -->
+  <div id="damage-flash"></div>
+  <div id="fade-layer"></div>
+
+  <div id="journal-screen" class="screen panel-screen hidden">
+    <div class="panel">
+      <h2 class="title-font">Field Journal</h2>
+      <ul id="journal-list"></ul>
+      <button class="menu-btn" data-close>Close <kbd>J</kbd></button>
+    </div>
+  </div>
+
+  <div id="reader-screen" class="screen panel-screen hidden">
+    <div class="panel reader">
+      <p id="reader-kicker" class="kicker"></p>
+      <h2 id="reader-title" class="title-font"></h2>
+      <div id="reader-body"></div>
+      <button class="menu-btn" data-close>Close <kbd>E</kbd></button>
+    </div>
+  </div>
+
+  <div id="keypad-screen" class="screen panel-screen hidden">
+    <div class="panel keypad">
+      <p class="kicker">Security door · Archive wing</p>
+      <div id="keypad-display">____</div>
+      <div class="keypad-grid">
+        <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
+        <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
+        <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
+        <button data-key="clear">C</button><button data-key="0">0</button><button data-key="enter">⏎</button>
+      </div>
+      <p class="small">Type digits or click. <kbd>Esc</kbd> to step away.</p>
+    </div>
+  </div>
+
+  <!-- ============================ PAUSE ============================== -->
+  <div id="pause-screen" class="screen panel-screen hidden">
+    <div class="panel">
+      <h2 class="title-font">Paused</h2>
+      <p id="pause-level" class="small"></p>
+      <nav class="menu">
+        <button id="resume-button" class="menu-btn primary">Resume</button>
+        <button id="retry-era-button" class="menu-btn">Restart this era</button>
+        <button id="restart-button" class="menu-btn">Restart journey</button>
+        <button class="menu-btn" data-open="options-screen">Options</button>
+        <button class="menu-btn" data-open="controls-screen">Controls</button>
+        <button class="menu-btn" data-open="credits-screen">Credits</button>
+        <button id="quit-button" class="menu-btn">Main menu</button>
+      </nav>
+    </div>
+  </div>
+
+  <!-- ============================ OPTIONS ============================ -->
+  <div id="options-screen" class="screen panel-screen hidden">
+    <div class="panel options">
+      <h2 class="title-font">Options</h2>
+      <label>Master volume <input type="range" min="0" max="1" step="0.05" data-setting="masterVolume" /></label>
+      <label>Music volume <input type="range" min="0" max="1" step="0.05" data-setting="musicVolume" /></label>
+      <label>Effects volume <input type="range" min="0" max="1" step="0.05" data-setting="sfxVolume" /></label>
+      <label>Mouse sensitivity <input type="range" min="0.3" max="2" step="0.05" data-setting="sensitivity" /></label>
+      <label>Field of view <input type="range" min="60" max="95" step="1" data-setting="fov" /></label>
+      <label>Graphics quality
+        <select data-setting="quality">
+          <option value="low">Low — older lab PCs</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" data-setting="invertY" /> Invert mouse Y</label>
+      <label class="check"><input type="checkbox" data-setting="showFps" /> Show frame rate</label>
+      <label class="check"><input type="checkbox" data-setting="minimap" /> Show minimap</label>
+      <label class="check"><input type="checkbox" data-setting="thirdPerson" /> Start in third-person view</label>
+      <button class="menu-btn" data-close>Back</button>
+    </div>
+  </div>
+
+  <!-- ============================ CONTROLS =========================== -->
+  <div id="controls-screen" class="screen panel-screen hidden">
+    <div class="panel controls">
+      <h2 class="title-font">Controls</h2>
+      <dl>
+        <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Move</dd>
+        <dt>Mouse</dt><dd>Look around</dd>
+        <dt><kbd>Shift</kbd></dt><dd>Sprint</dd>
+        <dt><kbd>Space</kbd></dt><dd>Jump</dd>
+        <dt><kbd>E</kbd> / Left click</dt><dd>Interact — push, rotate, read, take</dd>
+        <dt><kbd>F</kbd></dt><dd>Flashlight (once found)</dd>
+        <dt><kbd>Q</kbd> / Right click</dt><dd>Chrono-dash (the Future only)</dd>
+        <dt><kbd>V</kbd></dt><dd>Switch first / third person</dd>
+        <dt><kbd>M</kbd></dt><dd>Toggle minimap</dd>
+        <dt><kbd>J</kbd></dt><dd>Field journal (clues you have found)</dd>
+        <dt><kbd>H</kbd></dt><dd>Help — show the current instructions again</dd>
+        <dt>◆ marker</dt><dd>Your next goal (with distance); the checklist top-left tracks your progress</dd>
+        <dt><kbd>Esc</kbd></dt><dd>Pause</dd>
+      </dl>
+      <button class="menu-btn" data-close>Back</button>
+    </div>
+  </div>
+
+  <!-- ============================ CREDITS ============================ -->
+  <div id="credits-screen" class="screen panel-screen hidden">
+    <div class="panel credits">
+      <h2 class="title-font">Credits</h2>
+      <div class="credits-scroll">
+        <h3>Game</h3>
+        <p>The Three Worlds of Time: The Broken Hourglass — a COMS3006A/COMS3025A Computer Graphics &amp; Visualisation group project, University of the Witwatersrand.</p>
+        <p>Level design, puzzles, gameplay code, custom GLSL shaders (sky, time-warp post-process,
+           force field, energy barriers, phase platforms, reveal-ink, water, grass, holograms, light beam),
+           the Time Machine model, all architecture and the procedural city — built by the team.
+           Built with the assistance of AI tooling (Claude Code, Anthropic, Claude Opus) for code generation and editing.</p>
+        <ul id="credits-list">
+          <li><b>Three.js r160</b> — mrdoob &amp; contributors — MIT Licence — threejs.org (incl. GLTFLoader, PointerLockControls,
+              EffectComposer, UnrealBloomPass, OutputPass, Reflector, RoomEnvironment, SkeletonUtils, BufferGeometryUtils,
+              RoundedBoxGeometry, SimplexNoise, stats.js, meshopt decoder)</li>
+          <li><b>Hero character &amp; animations</b> — based on “Mage” from KayKit Character Pack: Adventurers 1.0 by Kay Lousberg —
+              CC0 — kaylousberg.com · github.com/KayKit-Game-Assets (hat, cape and props removed, robe recoloured into a lab coat;
+              goggles, hourglass pack and chrono-gauntlet modelled by us)</li>
+          <li><b>PBR textures</b> — Poly Haven (polyhaven.com) — CC0: forrest_ground_01, grassy_cobblestone, stone_floor,
+              mossy_sandstone, sandstone_blocks_08, rock_wall_10, floor_tiles_08, rubber_tiles, plastered_wall_04,
+              concrete_panels, metal_plate, metal_plate_02</li>
+          <li><b>3D props</b> — Poly Haven (polyhaven.com) — CC0: rock_moss_set_01/02, fern_02, shrub_02,
+              gothic_statue, lion_head, antique_ceramic_vase_01, large_iron_gate, tree_stump_01, dead_tree_trunk,
+              metal_office_desk, steel_frame_shelves_01, chemistry_set, industrial_microscope, bunsen_burner, circuit_board,
+              classic_laptop, security_camera_01, hanging_industrial_lamp, portable_generator,
+              power_box_01, drawer_cabinet, metal_tool_chest, standing_chalkboard_01, korean_fire_extinguisher_01, clipboard,
+              cardboard_box_01, WetFloorSign_01, vintage_grandfather_clock_01, SchoolChair_01, utility_box_01, modular_pipes
+              (simplified and recompressed by our asset pipeline)</li>
+          <li><b>Sound effects</b> — Kenney (kenney.nl) — CC0: Impact Sounds, Interface Sounds, Sci-Fi Sounds, RPG Audio, Music Jingles</li>
+          <li><b>Music</b> — OpenGameArt.org — CC0:
+              “Mysterious Ambience (song21)” by cynicmusic / pixelsphere.org (title);
+              “Zeal Soul” by Chris Murphy (zesona) (the Past);
+              “Elevator To Reactor (Loop)” by Hazmat Harry (the Present);
+              “Space Synth Wave / Cool 80's Synth Wave” by Pro Sensory (the Future)</li>
+          <li><b>Fonts</b> — Cinzel by Natanael Gama and Rajdhani by Indian Type Foundry — SIL Open Font Licence — Google Fonts</li>
+          <li><b>Asset tooling (not shipped)</b> — glTF-Transform (MIT), meshoptimizer (MIT), sharp (Apache-2.0), ffmpeg (LGPL)</li>
+        </ul>
+      </div>
+      <button class="menu-btn" data-close>Back</button>
+    </div>
+  </div>
+
+  <!-- ============================ FAIL / WIN ========================= -->
+  <div id="fail-screen" class="screen panel-screen hidden">
+    <div class="panel">
+      <p class="kicker">Timeline collapse</p>
+      <h2 class="title-font">The era unravels</h2>
+      <p id="fail-reason"></p>
+      <nav class="menu">
+        <button id="fail-retry-button" class="menu-btn primary">Rewind this era</button>
+        <button id="fail-quit-button" class="menu-btn">Main menu</button>
+      </nav>
+    </div>
+  </div>
+
+  <div id="win-screen" class="screen panel-screen hidden">
+    <div class="panel win">
+      <p class="kicker">All three cores restored</p>
+      <h2 class="title-font">Timeline Restored</h2>
+      <p>The Broken Hourglass is whole again. Past, present and future hum in harmony around the machine.</p>
+      <dl id="win-stats"></dl>
+      <nav class="menu">
+        <button id="win-restart-button" class="menu-btn primary">Play again</button>
+        <button class="menu-btn" data-open="credits-screen">Credits</button>
+        <button id="win-quit-button" class="menu-btn">Main menu</button>
+      </nav>
+    </div>
+  </div>
+
+  <noscript>This game needs JavaScript and WebGL (Chrome recommended).</noscript>
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>

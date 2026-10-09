@@ -1,58 +1,120 @@
 # The Three Worlds of Time — The Broken Hourglass
-### Alpha build
 
-This is a **preliminary, playable Three.js scaffold** for the CGV group project — enough to walk your mentor through what the game will ultimately look like, per brief §8.1 ("You should have Three.js up and running, with a preliminary implementation").
+A 3D browser adventure built with **Three.js r160** for the Wits CGV group project (COMS3006A/COMS3025A).
 
-It is *not* the finished Level 1. It's a small vertical slice that proves the architecture: a controllable player, a lit and shadowed 3D environment, one interactable object, and the hierarchical Time Machine that anchors all three levels.
+**Story.** 03:07 a.m. at the Chronos Research Facility: Ari, Professor Adeyemi's student inventor, runs Field Test 7
+alone. The hourglass drive overloads and the Time Machine's three energy cores are flung across time — into the distant
+past, into that very night, and into a far future. Ari wakes in an ancient temple beside the machine and must recover
+one core from each era of the *same place* — the temple, the lab built on top of it, and the neon city it becomes — to
+put the timeline back together. The game opens with a skippable cutscene (prologue), Ari comments on arriving in each
+era, and it ends with an epilogue in the lab the next morning, an end card and a credits roll.
 
-## Running it locally
+| Era | Verb | What this level does that the others don't |
+|---|---|---|
+| **I · The Past** — Temple of the First Hour | **Solve** | The world itself is the puzzle: you push stone blocks across a grid, rotate bronze mirrors to steer a sunbeam, and decode carved rune tablets. |
+| **II · The Present** — Chronos Research Facility | **Investigate** | You win with information: read logs, find a flashlight whose beam reveals invisible phosphor ink, crack a keypad code and reroute power — which transforms the whole level from emergency red to full light. |
+| **III · The Future** — The Fractured Skyline, 2187 | **Survive** | A new ability (the Chrono-Dash) and a timing gauntlet over a bottomless neon city: moving and phasing platforms, barriers you dash *through*, lasers, and a collapsing bridge chased by a time rift. |
 
-No npm install, no build step — this uses an [import map](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script/type/importmap) to pull Three.js straight from a CDN, exactly like the "plain files" option described in the brief (§6.3). That means:
+## Run it locally
+
+No build step and no `npm install` for the game itself — it's plain files plus an import map, and Three.js is
+vendored in `libs/` (no CDN dependency).
 
 ```bash
-cd three-worlds-of-time
 python3 -m http.server 8000
 ```
 
-Then open `http://localhost:8000` in Chrome. **Do not** open `index.html` directly as a `file://` URL — module scripts are blocked under `file://` and you'll get a blank screen (brief §6.3).
+Open <http://localhost:8000> in Chrome. **Never** open `index.html` as a `file://` URL — module scripts are blocked.
 
-If your team later wants a bundler (Vite, etc.) for asset pipelines, GLTF/Draco loading, or hot reload, that's a fine upgrade — just remember to set `base: './'` in `vite.config.js` so paths stay relative (brief §6.2), since the LAMP server publishes your game inside a subdirectory, not at the domain root.
+## Controls
+
+| Key | Action |
+|---|---|
+| WASD / arrows | Move (camera-relative) |
+| Mouse | Look |
+| Shift | Sprint |
+| Space | Jump (hold for a higher jump) |
+| E / left click | Interact — push, rotate, read, take |
+| Walk into a stone block | Push it one tile (the Past) |
+| F | Flashlight (the Present, once found) |
+| Q / right click | Chrono-Dash (the Future) |
+| V | First / third person |
+| M | Minimap on/off |
+| J | Field journal (clues you've found) |
+| Esc | Pause (options, controls, credits, restart) |
+
+## What's in it (mapped to the rubric)
+
+- **Viewing** — third-person over-the-shoulder camera with wall collision + first-person toggle; orthographic
+  **minimap** (second camera, layer-filtered); animated rigged hero; cinematic title and finale cameras.
+- **Control & Playability** — acceleration-based movement, coyote time + jump buffering, push-blocks, dash, moving
+  platform carry. Clear objectives, hints and a minimap marker. **Fail states**: timeline-stability countdown per era,
+  falls, barrier shocks, lasers, the rift. Checkpoints.
+- **3D Effects** — PBR materials (albedo + normal + AO/roughness/metal maps), image-based lighting from each era's sky,
+  shadow-mapped sun that follows the player, a shadow-casting flashlight, **planar reflections** (temple pool, lab floor),
+  **refraction** (transmission glass on High quality), procedural skybox, fog, bloom, MSAA, instancing.
+- **Shaders** — 17 custom GLSL shaders (16 full ShaderMaterials + 1 PBR injection), each driven by time and/or game state — see [`docs/SHADERS.md`](docs/SHADERS.md).
+- **Gameplay & Experience** — three distinct eras and verbs, a story told through logs, tablets and the setting
+  (the lab's glass floor shows the temple underneath), per-era music + synthesised ambience + 3D positional sound,
+  randomised codes (replay value), best-time record.
+- **Polish** — loading screen with real progress, title / pause / options / controls / credits / journal / fail / win
+  screens, restart without refresh, consistent per-era colour scheme, quality presets with an automatic downgrade on
+  slow machines, FPS counter.
+- **Innovation** — own procedural Time Machine, trees, rock cliffs, procedural city; flashlight-revealed ink;
+  dash-phasing through barriers; one place transformed across three eras.
 
 ## Project structure
 
 ```
-three-worlds-of-time/
-├── index.html          Entry point, import map, loading/start/HUD/credits screens
-├── README.md
-└── src/
-    ├── style.css        HUD, menus, loading bar
-    ├── main.js           Boot sequence, renderer/scene/camera, render loop
-    ├── player.js         PointerLockControls wrapper: WASD, sprint, jump, interact raycast
-    ├── world.js           Level 1 (Ancient Ruins) geometry, lighting, one interactable puzzle block
-    └── timeMachine.js      The hierarchical Time Machine model (the game's visual anchor)
+index.html              import map → ./libs/three, all screens (loading/title/HUD/pause/options/credits/…)
+src/main.js             boot, renderer, game-state flow (title → prologue → play → epilogue → credits), render loop
+src/story.js            the story: prologue, wake-up, era arrival lines, epilogue (cutscene scripts)
+src/player.js           controller: input, physics, camera rig, interaction, dash, hurt/checkpoints
+src/character.js        hero model (KayKit CC0) + our hourglass gear on its bones + animation blending
+src/timeMachine.js      the hierarchical Time Machine (scene graph — do not flatten) + force field
+src/levelManager.js     era lifecycle, level API, stability/fail, transitions, finale, disposal
+src/core/               assets, audio, postfx, kit (level toolkit), minimap, settings, ui, cutscene (camera/caption engine)
+src/shaders/            every custom GLSL shader (see docs/SHADERS.md)
+src/levels/             ancientRuins.js · modernLab.js · neonFuture.js · glyphs.js · prologue.js (cutscene set)
+assets/                 optimised CC0 models/textures/audio + OFL fonts (generated by tools/)
+libs/three/             vendored three.js r160 + the add-ons we use
+tools/                  dev-only: asset pipeline, deploy build, headless test runner (NOT uploaded)
+docs/                   SHADERS.md (explain-the-shaders guide), TEAM-GUIDE.md (levels, solutions, demo notes)
 ```
 
-## What this alpha already demonstrates against the rubric
+## Deploying to the LAMP server
 
-- **Viewing** — a lit, shadowed 3D scene with fog, a moving/rotating hierarchical object (the Time Machine), and a first-person camera that moves through the world.
-- **Control & Playability** — working keyboard (WASD, Shift, Space, E) and mouse (pointer-lock look) controls, movement in all three dimensions (jump/gravity included), and a simple objective the player can advance (push the block onto the pressure plate).
-- **Hierarchical modelling** — `timeMachine.js` nests rings inside rings inside a base, each rotating independently but carrying its children, so you can *explain in the demo* why each mesh is parented where it is.
-- **3D Effects (partial)** — directional + hemisphere lighting, shadow mapping, fog, emissive materials on the core. Antialiasing, skyboxes, reflections/refractions, bump/height maps and multiple light sources beyond this are still to add.
-- **Polish (partial)** — loading screen, start/pause menu, in-HUD objective text, a Credits screen stub, and a restart button.
+```bash
+bash tools/build-deploy.sh
+```
 
-## What is deliberately NOT in the alpha (and should come next)
+Runs the brief's pre-flight checks (no absolute paths, lowercase asset names, every asset present), copies only what
+the browser needs into `dist/`, and zips it as `three-worlds-of-time.zip` **with `index.html` at the top level**.
+Test the build (`cd dist && python3 -m http.server`), upload the zip via Moodle, then play the published URL in Chrome
+and check the console for 404s.
 
-These are placeholders on purpose — the brief only expects a **preliminary** implementation at this stage:
+## Rebuilding assets (only if you change them)
 
-1. **Real assets.** Every stone block, pillar and rubble piece is primitive Three.js geometry (`BoxGeometry`, `CylinderGeometry`, `DodecahedronGeometry`). Swap these for real models (GLTF via Blender) or better procedural detail before the beta.
-2. **Full puzzle chain.** Only one interactable block exists. Level 1's design calls for pushing blocks, rotating a bridge, finding symbols, and a final mechanism (pitch doc §4).
-3. **Levels 2 and 3.** The Modern Laboratory and Neon Future aren't built yet — `world.js` currently only exports `buildAncientRuinsLevel`. Plan a `LevelManager` that can tear down one level's scene/lights/interactables and load the next, calling `.dispose()` on old geometries/materials/textures as you go (brief §6.1) so memory doesn't climb across a three-level playthrough.
-4. **Custom shaders.** Everything currently uses built-in `MeshStandardMaterial`. The Shaders category (10%) is marked separately from built-in effects — you'll want at least one custom vertex/fragment shader (e.g. a time-distortion effect around the Time Machine, per pitch doc §9) before the beta.
-5. **Sound/music**, a proper physics/collision system (current collision is a flat-plane assumption plus world-bounds clamping — fine for a ruins courtyard, not for real platforming), and the multi-view/minimap options mentioned under Viewing.
-6. **Credits list.** `#credits-list` in `index.html` only has two placeholder entries — fill it in as you add third-party assets, code or tutorials (brief §3, mandatory).
+```bash
+cd tools && npm install && node prepare-assets.mjs all
+```
 
-## Design notes for your mentor conversation
+Downloads the CC0 sources (Poly Haven, KayKit, Kenney, OpenGameArt), simplifies meshes to triangle budgets,
+re-encodes textures to WebP, meshopt-compresses geometry and converts audio to Ogg Opus. Credits for every asset are in
+the in-game **Credits** screen.
 
-- The Time Machine is deliberately the *first* thing built because it's the one object that has to survive across all three levels and demonstrates hierarchical modelling cleanly — good to lead with in the alpha walkthrough.
-- `player.js` and `world.js` are separated so that when Level 2/3 are added, only `world.js`-equivalents change; the player controller and Time Machine stay the same across levels, which keeps "genuinely different levels" (brief §1) about environment and mechanic, not about re-plumbing controls each time.
-- All asset and script paths are relative (`./src/...`), never absolute (`/src/...`), per brief §6.2 — this avoids the most common cause of a game that works locally but shows a blank canvas once hosted on the LAMP server.
+## Automated checks (dev only)
+
+`tools/play.mjs` drives the game in headless Chrome from a JSON script (start, teleport, solve puzzles via
+`window.__game.levels.debug`, take screenshots) and fails on any page error — handy before a demo.
+
+## AI assistance
+
+Large parts of this remaster were produced with AI assistance (Claude Code, Anthropic). This is declared in the in-game
+credits; every team member should still be able to explain the code they present.
+
+```bash
+python3 -m http.server 8000 &            # from the repo root
+cd tools && npm install
+node play.mjs tests/full-playthrough.json /tmp/shots   # all three eras → win screen, fails on any page error
+```

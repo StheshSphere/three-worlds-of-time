@@ -1,0 +1,18 @@
+{ "url": "http://127.0.0.1:8000/index.html", "steps": [
+  { "eval": "__game.settings.set('quality','low'); __game.skipTo(1); __game.player.isLocked = true; null" }, { "wait": 4500 },
+  { "eval": "__game.levels.debug.readLogs(); null" }, { "wait": 500 },
+  { "eval": "window.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyE'})); null" }, { "wait": 400 },
+  { "eval": "JSON.stringify({readerOpen: !document.getElementById('reader-screen').classList.contains('hidden'), mode: __game.mode()})" },
+  { "eval": "const code=__game.levels.debug.code; __game.api = null; const kp = __game.scene.getObjectsByProperty ? null : null; window.__code = code; code" },
+  { "eval": "__game.ui.openKeypad((e)=>{ window.__entered = e; return e === window.__code; }); null" },
+  { "eval": "for (const ch of window.__code) window.dispatchEvent(new KeyboardEvent('keydown',{code:'Digit'+ch})); window.dispatchEvent(new KeyboardEvent('keydown',{code:'Enter'})); null" },
+  { "wait": 300 }, { "shot": "ui1_keypad" },
+  { "eval": "JSON.stringify({entered: window.__entered, display: document.getElementById('keypad-display').className})" },
+  { "wait": 900 },
+  { "eval": "__game.ui.openPanel('journal-screen'); null" }, { "wait": 400 }, { "shot": "ui2_journal" },
+  { "eval": "__game.ui.closeAllPanels(); document.getElementById('pause-screen').classList.remove('hidden'); __game.ui.openPanel('options-screen'); null" }, { "wait": 400 }, { "shot": "ui3_options" },
+  { "eval": "__game.ui.closeAllPanels(); document.getElementById('pause-screen').classList.add('hidden'); __game.levels.fail('Test fail'); null" }, { "wait": 2600 }, { "shot": "ui4_fail" },
+  { "eval": "document.getElementById('fail-retry-button').click(); __game.player.isLocked = true; null" }, { "wait": 2000 },
+  { "eval": "JSON.stringify({mode: __game.mode(), state: __game.levels.state, lvl: __game.levels.index, quality: __game.settings.get('quality')})" },
+  { "eval": "__game.settings.set('quality','medium'); null" }
+]}

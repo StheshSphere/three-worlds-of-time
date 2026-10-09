@@ -1,40 +1,481 @@
 import * as THREE from 'three';
+import { createParticles, createBeam } from '../shaders/effects.js';
+import { createBarrierMaterial, createScreenMaterial } from '../shaders/labShaders.js';
+import { createCity, createGridFloor, createTraffic, phaseMaterial } from '../shaders/neonShaders.js';
 
 /**
- * LEVEL 3 — THE NEON FUTURE (pitch doc §6)
- * Theme: movement, timing, instability.
- * Visual identity: futuristic neon structures, glowing energy, floating platforms.
+ * LEVEL 3 — THE FUTURE: "The Fractured Skyline".  Verb: SURVIVE.
  *
- * Stub — Person 3 will build out the full level here.
- * Contract: build(scene) → { interactables, disposables, lights, objects }
+ * What this level does that the others don't: the ENVIRONMENT is the enemy
+ * and timing is everything. You gain a new ability — the Chrono-Dash
+ * (Q / right-click): a burst of speed that also PHASES you through energy
+ * barriers. The course is a gauntlet over a bottomless neon city:
+ *
+ *   1. Dash gap — too wide to jump, the dash is required.            z  −7 … −15
+ *   2. Moving platforms riding sine paths (they carry you).           z −25 … −40
+ *   3. Phase platforms dissolving in and out of time in a wave.        z −52 … −76
+ *   4. Gauntlet: pulsing barriers (dash through!) + sweeping lasers.   z −86 … −104
+ *   5. Collapse run: the bridge crumbles under you while a time-rift
+ *      chases you up to the Neon Core.                                z −110 … −142
+ *
+ * New ways to fail: falling into the city, barrier shocks, laser sweeps,
+ * and being caught by the rift. Checkpoints after every section.
  */
-export function build(scene) {
-  const interactables = [];
-  const disposables = [];
-  const lights = [];
-  const objects = [];
+export const meta = {
+  name: 'The Future',
+  numeral: 'III',
+  title: 'The Future',
+  subtitle: 'The Fractured Skyline · 2187',
+  objective: 'Cross the collapsing skyline to the Neon Core',
+  music: 'neon',
+  ambience: 'neon',
+  sky: 'neon',
+  stability: 360,
+  accent: 0xff5be0,
+  surface: 'metal',
+  sun: { color: 0xa9d8ff, intensity: 1.4, extent: 20 },
+  fallPenalty: 12,
+  introCard: {
+    kicker: 'The Future · Your goal', title: 'Survive the collapsing skyline',
+    html: '<ul><li>New ability — <b>Chrono-Dash</b>: press <kbd>Q</kbd> or <b>right-click</b> (works in mid-air).</li>'
+      + '<li>The first gap is too wide to jump: <b>sprint</b> (<kbd>Shift</kbd>), <b>jump</b> (<kbd>Space</kbd>), then <b>dash</b> in the air.</li>'
+      + '<li>Falling costs stability, but you restart from the last <b>checkpoint</b>. Follow the <b>◆ marker</b> to the Neon Core.</li></ul>',
+  },
+};
 
-  // Neon/emissive lighting — visually distinct from the other two eras
-  const hemi = new THREE.HemisphereLight(0x0a0a2e, 0x000000, 0.2);
-  lights.push(hemi);
+export function build(kit, api) {
+  const scene = api.scene;
+  scene.fog = new THREE.FogExp2(0x1a0726, 0.0085);
+  kit.light(new THREE.HemisphereLight(0x8a5aff, 0x12041e, 0.6));
 
-  scene.background = new THREE.Color(0x050510);
-  scene.fog = new THREE.FogExp2(0x050510, 0.012);
+  const deck = kit.material('metal-plate-02', { metal: true, tint: 0x5a6070, roughness: 0.45 });
+  const deckDark = kit.material('metal-plate', { metal: true, tint: 0x3a3f4c, roughness: 0.5 });
+  const cyan = kit.track(new THREE.MeshStandardMaterial({ color: 0x041418, emissive: 0x27e0ff, emissiveIntensity: 2.6 }));
+  const magenta = kit.track(new THREE.MeshStandardMaterial({ color: 0x1a0414, emissive: 0xff3fd0, emissiveIntensity: 2.6 }));
+  const underGlow = kit.track(new THREE.MeshBasicMaterial({ color: 0x5a1a8a, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
 
-  // Basic ground — Person 3 will replace with floating/unstable surfaces
-  const groundMat = new THREE.MeshStandardMaterial({
-    color: 0x111122, roughness: 0.8, metalness: 0.5,
+  const state = { section: 0, riftActive: false, coreTaken: false, reached: [false, false, false, false, false] };
+  const checkpoints = [
+    new THREE.Vector3(0, 0, 4),
+    new THREE.Vector3(0, 0.5, -18),
+    new THREE.Vector3(0, 1.0, -46),
+    new THREE.Vector3(0, 1.5, -81),
+    new THREE.Vector3(0, 1.5, -107),
+  ];
+
+  /* ===================================================================
+     helpers
+     =================================================================== */
+  /** A floating platform: textured deck + neon edge trims + underglow. */
+  function platform(x, z, w, d, top, trim = cyan, { mat = deck, parent = null } = {}) {
+    const thick = 0.7;
+    const g = new THREE.Group();
+    const body = kit.box({ size: [w, thick, d], pos: [0, -thick / 2, 0], mat, tile: 2, solid: false, walk: false, parent: g, map: false, surface: 'metal' });
+    for (const [px, pz, sw, sd] of [[0, d / 2, w, 0.1], [0, -d / 2, w, 0.1], [w / 2, 0, 0.1, d], [-w / 2, 0, 0.1, d]]) {
+      const strip = new THREE.Mesh(kit.boxGeo(sw + 0.02, 0.08, sd + 0.02, 1), trim);
+      strip.position.set(px, 0.0, pz);
+      g.add(strip);
+    }
+    const glow = new THREE.Mesh(kit.track(new THREE.PlaneGeometry(w * 1.2, d * 1.2)), underGlow);
+    glow.rotation.x = Math.PI / 2;
+    glow.position.y = -thick - 0.05;
+    g.add(glow);
+    g.position.set(x, top, z);
+    if (parent) parent.add(g); else kit.add(g);
+    g.updateMatrixWorld(true);
+    kit.walkables.push(body);
+    kit.mapShape(w, d, x, top, z, trim === cyan ? 0x1d5a66 : 0x6a1d5c);
+    body.userData.surface = 'metal';
+    return { group: g, body };
+  }
+
+  /* ===================================================================
+     The city, the void and the sky traffic
+     =================================================================== */
+  const city = createCity({ count: Math.round(260 * (api.quality.grass > 0.5 ? 1 : 0.6)), inner: 24, outer: 170, avoid: (x, z) => Math.abs(x) < 20 && z < 25 && z > -160 });
+  kit.add(city.mesh);
+  kit.track(city);
+  const grid = createGridFloor();
+  grid.mesh.position.y = -118;
+  kit.add(grid.mesh);
+  kit.track(grid);
+  const traffic = createTraffic({ count: 160, length: 420, zCenter: -70 });
+  kit.add(traffic.mesh);
+  kit.track(traffic);
+  const data = createParticles({ count: 260, center: [0, 2, -70], box: [40, 30, 170], color: 0x6ff0ff, size: 0.07, rise: 0.6 });
+  kit.add(data.mesh);
+  kit.track(data);
+  kit.update((dt, t) => { city.update(t, scene); grid.update(t); traffic.update(t); data.update(t); });
+
+  // Holographic billboards hovering beside the course.
+  const holoTexts = [
+    ['CHRONO-NET', '2187 · LIVE FOREVER', '#ff5be0'],
+    ['WARNING', 'TEMPORAL FRACTURE', '#ffcc33'],
+    ['ADEYEMI DYNAMICS', 'we build tomorrow', '#6ff0ff'],
+    ['THE HOURGLASS', 'IS BREAKING', '#ff5be0'],
+  ];
+  const holos = [];
+  holoTexts.forEach(([a, b, col], i) => {
+    const tex = kit.canvasTexture(512, 256, (g) => {
+      g.clearRect(0, 0, 512, 256);
+      g.strokeStyle = col; g.lineWidth = 6; g.strokeRect(10, 10, 492, 236);
+      g.fillStyle = col; g.font = 'bold 64px sans-serif'; g.textAlign = 'center'; g.fillText(a, 256, 112);
+      g.font = '36px sans-serif'; g.fillText(b, 256, 178);
+      // tiny hourglass icon
+      g.lineWidth = 4; g.beginPath(); g.moveTo(40, 40); g.lineTo(80, 40); g.lineTo(40, 100); g.lineTo(80, 100); g.closePath(); g.stroke();
+    });
+    const mat = kit.track(createScreenMaterial(tex, { color: 0xffffff, power: 1, holo: true }));
+    const m = new THREE.Mesh(kit.track(new THREE.PlaneGeometry(9, 4.5)), mat);
+    const side = i % 2 ? 1 : -1;
+    m.position.set(side * (15 + i), 7 + i * 1.5, -20 - i * 30);
+    m.rotation.y = -side * 0.5;
+    kit.add(m);
+    holos.push(mat);
   });
-  disposables.push(groundMat);
-  const groundGeo = new THREE.PlaneGeometry(120, 120);
-  disposables.push(groundGeo);
-  const ground = new THREE.Mesh(groundGeo, groundMat);
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  objects.push(ground);
+  kit.update((dt, t) => holos.forEach((h) => { h.uniforms.uTime.value = t; }));
 
-  // TODO (Person 3): moving platforms, timed energy barriers, floating structures
-  // On completion call timeMachine.lightSocket(2) then levelManager.nextLevel()
+  /* ===================================================================
+     0. Start plaza (Time Machine) + 1. dash gap
+     =================================================================== */
+  platform(0, 0, 14, 14, 0, cyan, { mat: deckDark });
+  platform(0, -19, 8, 8, 0.5, magenta);
+  // Gap guide arrows (emissive chevrons on the plaza edge).
+  const chevronTex = kit.canvasTexture(256, 128, (g) => { g.clearRect(0, 0, 256, 128); g.strokeStyle = '#6ff0ff'; g.lineWidth = 14; for (let i = 0; i < 3; i++) { g.beginPath(); g.moveTo(40 + i * 70, 20); g.lineTo(80 + i * 70, 64); g.lineTo(40 + i * 70, 108); g.stroke(); } });
+  const chev = new THREE.Mesh(kit.track(new THREE.PlaneGeometry(3, 1.5)), kit.track(new THREE.MeshBasicMaterial({ map: chevronTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })));
+  chev.rotation.set(-Math.PI / 2, 0, Math.PI / 2);
+  chev.position.set(0, 0.02, -5.6);
+  kit.add(chev);
 
-  return { interactables, disposables, lights, objects };
+  /* ===================================================================
+     2. Moving platforms
+     =================================================================== */
+  const movers = [];
+  for (const [z, axis, amp, speed, phase, trim] of [[-27, 'x', 4.5, 0.9, 0, cyan], [-33, 'y', 1.4, 1.1, 1.3, magenta], [-39, 'x', 5, 0.8, 2.6, cyan]]) {
+    const p = platform(0, z, 3.2, 3.2, 0.6, trim);
+    p.body.userData.carryDelta = new THREE.Vector3();
+    movers.push({ ...p, base: p.group.position.clone(), axis, amp, speed, phase });
+  }
+  platform(0, -47, 8, 6, 1.0, magenta);
+  kit.update((dt, t) => {
+    for (const m of movers) {
+      const prev = m.group.position.clone();
+      m.group.position.copy(m.base);
+      m.group.position[m.axis] += Math.sin(t * m.speed + m.phase) * m.amp;
+      m.group.updateMatrixWorld(true);
+      m.body.userData.carryDelta.subVectors(m.group.position, prev);
+    }
+  });
+
+  /* ===================================================================
+     3. Phase platforms (dissolve wave)
+     =================================================================== */
+  const phases = [];
+  const PERIOD = 4.6;
+  for (let i = 0; i < 5; i++) {
+    const mat = phaseMaterial(deck, i % 2 ? 0xff5be0 : 0x6ff0ff);
+    kit.track(mat);
+    const p = platform(0, -53 - i * 5, 3.2, 3.2, 1.0, i % 2 ? magenta : cyan, { mat });
+    phases.push({ ...p, mat, offset: i * 0.85, solid: true });
+  }
+  platform(0, -81, 8, 6, 1.5, cyan);
+  kit.update((dt, t) => {
+    for (const ph of phases) {
+      // 0 → 2.6 s solid, then dissolve, 1.1 s gone, rematerialise.
+      const c = (t + ph.offset) % PERIOD;
+      let v = 1;
+      if (c > 2.6 && c < 3.1) v = 1 - (c - 2.6) / 0.5;
+      else if (c >= 3.1 && c < 4.1) v = 0;
+      else if (c >= 4.1) v = (c - 4.1) / 0.5;
+      ph.mat.userData.phase.uPhase.value = v;
+      ph.group.children.forEach((ch) => { if (ch !== ph.body && ch.material !== underGlow) ch.visible = v > 0.05; });
+      const solid = v > 0.35;
+      if (solid !== ph.solid) {
+        ph.solid = solid;
+        const idx = kit.walkables.indexOf(ph.body);
+        if (solid && idx < 0) kit.walkables.push(ph.body);
+        if (!solid && idx >= 0) kit.walkables.splice(idx, 1);
+      }
+    }
+  });
+
+  /* ===================================================================
+     4. Gauntlet: barriers + laser sweepers
+     =================================================================== */
+  platform(0, -95, 5, 18, 1.5, magenta);
+  platform(0, -108, 8, 6, 1.5, cyan);
+  const barriers = [];
+  for (const [z, offset] of [[-89, 0], [-98.5, 1.3]]) {
+    const mat = kit.track(createBarrierMaterial(0xff4fd8));
+    const wall = new THREE.Mesh(kit.track(new THREE.PlaneGeometry(5.2, 2.9, 40, 10)), mat);
+    wall.position.set(0, 1.5 + 1.45, z);
+    kit.add(wall);
+    const proxy = kit.proxy({ size: [5.2, 2.9, 0.5], pos: [0, 1.5 + 1.45, z] });
+    proxy.userData.onTouch = () => api.hurt({ from: new THREE.Vector3(0, 1.5, z), power: 10, respawn: true, penalty: 8, reason: 'Barrier shock' });
+    for (const sx of [-2.75, 2.75]) {
+      const post = kit.box({ size: [0.35, 3.2, 0.35], pos: [sx, 1.5 + 1.6, z], mat: deckDark, tile: 1, walk: false, map: false });
+      post.material = deckDark;
+    }
+    api.positional('force-field', wall, { volume: 0.4, refDistance: 3 });
+    barriers.push({ wall, mat, proxy, offset, active: true, z });
+  }
+  const lasers = [];
+  for (const [z, dir] of [[-93.5, 1], [-102.5, -1]]) {
+    const post = new THREE.Mesh(kit.cylGeo(0.22, 0.3, 0.9, 12, 1), deckDark);
+    post.position.set(0, 1.5 + 0.45, z);
+    kit.add(post);
+    const beam = createBeam({ radius: 0.07, color: 0xff2a6a });
+    kit.add(beam.mesh);
+    kit.track(beam);
+    lasers.push({ z, dir, beam, y: 1.5 + 0.5, angle: dir > 0 ? 0 : Math.PI });
+  }
+  const _a = new THREE.Vector3();
+  const _b = new THREE.Vector3();
+  const _hitFrom = new THREE.Vector3();
+  kit.update((dt, t) => {
+    const player = api.player;
+    const p = player.position;
+    for (const b of barriers) {
+      // 1.7 s on, 1.1 s off, with a warning flicker before switching on.
+      const c = (t + b.offset) % 2.8;
+      const on = c < 1.7;
+      b.mat.uniforms.uTime.value = t;
+      b.mat.uniforms.uActive.value += ((on ? 1 : 0) - b.mat.uniforms.uActive.value) * Math.min(1, dt * 10);
+      b.mat.uniforms.uDissolve.value = on ? 0 : 0.55;
+      b.mat.uniforms.uWarn.value = !on && c > 2.45 ? 1 : 0;
+      // Dashing phases you through even an active barrier.
+      const solid = on && !player.isDashing;
+      if (solid !== b.active) { b.active = solid; if (solid) kit.addCollider(b.proxy); else kit.removeCollider(b.proxy); }
+    }
+    for (const l of lasers) {
+      l.angle += dt * 1.7 * l.dir;
+      const len = 2.45;
+      _a.set(0, l.y, l.z);
+      _b.set(Math.cos(l.angle) * len, l.y, l.z + Math.sin(l.angle) * len);
+      l.beam.set(_a, _b);
+      l.beam.update(t);
+      // Hit test: distance from the player's feet circle to the beam segment, unless jumping over it.
+      const dx = p.x - _a.x;
+      const dz = p.z - _a.z;
+      const ux = Math.cos(l.angle);
+      const uz = Math.sin(l.angle);
+      const along = THREE.MathUtils.clamp(dx * ux + dz * uz, 0, len);
+      const perp = Math.hypot(dx - ux * along, dz - uz * along);
+      if (perp < 0.4 && p.y < l.y + 0.15 && p.y > l.y - 1.5 && !player.isDashing) {
+        _hitFrom.set(_a.x + ux * along, p.y, _a.z + uz * along);
+        api.hurt({ from: _hitFrom, power: 7, penalty: 6, reason: 'Laser burn' });
+      }
+    }
+  });
+
+  /* ===================================================================
+     5. Collapse run + the rift
+     =================================================================== */
+  const tiles = [];
+  const tileZ = [-112, -114.4, -116.8, -119.2, -122.6, -125.0, -127.4, -129.8, -133.4, -135.8];
+  tileZ.forEach((z, i) => {
+    const top = 1.5 + i * 0.15;
+    const p = platform(0, z, 2.8, 2.2, top, i % 2 ? magenta : cyan);
+    p.body.userData.tileIndex = i;
+    tiles.push({ ...p, home: p.group.position.clone(), timer: -1, vy: 0, fallen: false });
+  });
+  platform(0, -142, 10, 10, 3.0, magenta);
+  const riftMat = kit.track(createBarrierMaterial(0xff7af0));
+  const rift = new THREE.Mesh(kit.track(new THREE.PlaneGeometry(36, 26, 60, 20)), riftMat);
+  rift.position.set(0, 4, -104);
+  rift.visible = false;
+  kit.add(rift);
+  const riftSparks = createParticles({ count: 120, center: [0, 4, 0], box: [30, 18, 2], color: 0xffb8f6, size: 0.12 });
+  rift.add(riftSparks.mesh);
+  riftSparks.mesh.position.set(0, -4, 0);
+  kit.track(riftSparks);
+  let riftZ = -104;
+
+  function resetCollapse() {
+    tiles.forEach((tile) => {
+      tile.group.position.copy(tile.home);
+      tile.group.rotation.set(0, 0, 0);
+      tile.group.updateMatrixWorld(true);
+      tile.timer = -1;
+      tile.vy = 0;
+      tile.fallen = false;
+      tile.group.visible = true;
+      if (!kit.walkables.includes(tile.body)) kit.walkables.push(tile.body);
+      tile.group.children.forEach((c) => { if (c.material === warnMat && tile.trim) c.material = tile.trim; });
+    });
+    state.riftActive = false;
+    riftZ = -104;
+    rift.visible = false;
+  }
+
+  const warnMat = kit.track(new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0xff2a2a, emissiveIntensity: 3 }));
+  kit.update((dt, t) => {
+    const player = api.player;
+    const ground = player.groundObject;
+    riftMat.uniforms.uTime.value = t;
+    riftSparks.update(t);
+    // Back on the pre-bridge platform (respawn after a fall or a rift catch): rebuild the bridge.
+    if (player.position.z > -110.8 && player.position.z < -104 && (state.riftActive || tiles.some((x) => x.fallen || x.timer >= 0))) resetCollapse();
+    // Start the run when the player first steps on the bridge.
+    if (!state.riftActive && ground && ground.userData.tileIndex === 0 && !state.coreTaken) {
+      state.riftActive = true;
+      rift.visible = true;
+      api.sound('crumble', { volume: 0.9 });
+      api.shake(0.35);
+      api.message('The skyline is collapsing behind you — RUN!', 2400);
+    }
+    for (const tile of tiles) {
+      if (tile.fallen) {
+        tile.vy -= 22 * dt;
+        tile.group.position.y += tile.vy * dt;
+        tile.group.rotation.x += dt * 0.6;
+        if (tile.group.position.y < -60) tile.group.visible = false;
+        continue;
+      }
+      if (tile.timer < 0 && ground === tile.body) {
+        tile.timer = 0.42;
+        tile.group.children.forEach((c) => { if (c.material === magenta || c.material === cyan) { tile.trim = c.material; c.material = warnMat; } });
+      }
+      if (tile.timer >= 0) {
+        tile.timer -= dt;
+        tile.group.position.x = tile.home.x + (Math.random() - 0.5) * 0.06;
+        if (tile.timer <= 0) {
+          tile.fallen = true;
+          const idx = kit.walkables.indexOf(tile.body);
+          if (idx >= 0) kit.walkables.splice(idx, 1);
+          api.sound('crumble', { volume: 0.35, rate: 1.3 });
+        }
+      }
+    }
+    if (state.riftActive) {
+      riftZ -= dt * 6.4;
+      rift.position.z = riftZ;
+      riftMat.uniforms.uActive.value = 1;
+      if (riftZ < player.position.z + 0.6 && player.position.z > -138) {
+        api.hurt({ from: new THREE.Vector3(0, player.position.y, riftZ + 3), power: 4, respawn: true, penalty: 10, reason: 'The rift caught you' });
+        setTimeout(resetCollapse, 500);
+        state.riftActive = false;
+      }
+      if (player.position.z < -138) {
+        state.riftActive = false;
+        riftMat.uniforms.uDissolve.value = 0;
+        api.message('You outran the collapse. The Neon Core waits on the spire.', 2600);
+      }
+    } else if (rift.visible && player.position.z < -138) {
+      riftMat.uniforms.uDissolve.value = Math.min(1, riftMat.uniforms.uDissolve.value + dt * 0.8);
+      if (riftMat.uniforms.uDissolve.value >= 1) rift.visible = false;
+    }
+  });
+
+  /* ===================================================================
+     The Neon Core
+     =================================================================== */
+  const pedestal = new THREE.Mesh(kit.cylGeo(0.8, 1.1, 1.0, 6, 1.5), deckDark);
+  pedestal.position.set(0, 3.5, -143);
+  kit.add(pedestal);
+  kit.solidFrom(pedestal);
+  const coreMat = kit.track(new THREE.MeshStandardMaterial({ color: 0xffd0f6, emissive: 0xff3fd0, emissiveIntensity: 4.5, roughness: 0.15 }));
+  const core = new THREE.Mesh(kit.track(new THREE.OctahedronGeometry(0.45, 1)), coreMat);
+  core.position.set(0, 4.7, -143);
+  kit.add(core);
+  const coreBeam = createBeam({ radius: 0.5, color: 0xff7ae6 });
+  coreBeam.set(new THREE.Vector3(0, 5, -143), new THREE.Vector3(0, 60, -143));
+  coreBeam.material.uniforms.uIntensity.value = 0.55;
+  kit.add(coreBeam.mesh);
+  kit.track(coreBeam);
+  const coreLight = kit.pointLight(0xff4fd8, 18, 14, [0, 5.2, -143]);
+  kit.interact(core, () => (state.coreTaken ? null : 'Take the Neon Core'), () => {
+    state.coreTaken = true;
+    core.visible = false;
+    coreBeam.mesh.visible = false;
+    coreLight.intensity = 0;
+    api.completeLevel(core.position);
+    return 'pickup';
+  });
+  kit.update((dt, t) => {
+    core.rotation.y += dt * 1.6;
+    core.position.y = 4.7 + Math.sin(t * 2.2) * 0.15;
+    coreBeam.update(t);
+  });
+
+  /* ===================================================================
+     Checkpoints, hints, marker
+     =================================================================== */
+  const sectionZ = [-15, -45, -79, -105];
+  let markerStep = -1;
+  const _m = new THREE.Vector3();
+  kit.update(() => {
+    const p = api.player.position;
+    for (let i = 0; i < sectionZ.length; i++) {
+      if (!state.reached[i + 1] && p.z < sectionZ[i] && p.y > 0) {
+        state.reached[i + 1] = true;
+        state.section = i + 1;
+        api.checkpoint(checkpoints[i + 1], 0);
+        if (i + 1 === 4) resetCollapse();
+      }
+    }
+    const step = state.coreTaken ? 6 : state.section;
+    if (step !== markerStep) {
+      markerStep = step;
+      const spots = [[0, -19], [0, -47], [0, -81], [0, -108], [0, -142]];
+      api.setMarker(step < 5 ? _m.set(spots[step][0], 0, spots[step][1]) : null, 0xff5be0);
+    }
+  });
+  const CARD = {
+    movers: { kicker: 'Section 2', title: 'Ride the moving platforms', html: '<ul><li>Platforms slide and rise — <b>stand on one and it carries you</b>.</li><li>Jump when the next one lines up with you.</li></ul>' },
+    phase: { kicker: 'Section 3', title: 'Platforms phase out of time', html: '<ul><li>These platforms <b>dissolve and re-form</b> in a wave.</li><li>Wait at the edge, then move <b>as soon as the next one is solid</b>. Don’t stand still on a flickering one.</li></ul>' },
+    gauntlet: { kicker: 'Section 4', title: 'Barriers and lasers', html: '<ul><li>Pink <b>energy barriers</b> pulse on and off — run through when they dim, or <b>DASH through</b> them even when they’re on.</li><li><b>Jump</b> over the red laser sweepers.</li></ul>' },
+    collapse: { kicker: 'Final section', title: 'Outrun the collapse', html: '<ul><li>The bridge <b>falls away</b> just after you step on it, and a time rift is chasing you.</li><li><b>Don’t stop</b> — sprint, jump the gaps and dash if you need to. The Neon Core is on the spire.</li></ul>' },
+  };
+  api.setChecklist(() => {
+    const steps = [
+      ['Dash across the wide gap (sprint, jump, Q)', state.reached[1]],
+      ['Ride the moving platforms', state.reached[2]],
+      ['Cross the phasing platforms', state.reached[3]],
+      ['Get through the barrier gauntlet', state.reached[4]],
+      ['Outrun the collapse to the spire', api.player.position.z < -138 || state.coreTaken],
+      ['Take the Neon Core', state.coreTaken],
+    ];
+    const active = steps.findIndex((s) => !s[1]);
+    return steps.map(([text, done], i) => ({ text, state: done ? 'done' : i === active ? 'active' : 'todo' }));
+  });
+  kit.update(() => {
+    if (state.reached[1]) api.tutorial('movers', CARD.movers, 10);
+    if (state.reached[2]) api.tutorial('phase', CARD.phase, 11);
+    if (state.reached[3]) api.tutorial('gauntlet', CARD.gauntlet, 12);
+    if (state.reached[4]) api.tutorial('collapse', CARD.collapse, 10);
+  });
+  let introShown = false;
+  kit.update((dt, t) => {
+    if (!introShown && t > 0.5) {
+      introShown = true;
+      setTimeout(() => { if (!state.coreTaken && !state.disposed) api.message('Your gauntlet hums with stolen time — CHRONO-DASH unlocked: Q or right-click. Dashing phases you through energy barriers.', 5200); }, 4800);
+    }
+  });
+  api.setHint(() => {
+    if (state.coreTaken) return '';
+    switch (state.section) {
+      case 0: return 'The gap is too wide to jump. Sprint, jump, then DASH (Q / right-click) in mid-air.';
+      case 1: return 'Ride the moving platforms — time your jumps as they line up.';
+      case 2: return 'Platforms phase out of time in a wave. Move when the one ahead is solid.';
+      case 3: return 'Barriers pulse on and off — DASH straight through them. Jump the sweeping lasers.';
+      default: return 'Don’t stop. The bridge collapses beneath you and the rift is coming.';
+    }
+  });
+
+  const debug = {
+    state,
+    goto(i) { api.player.setCheckpoint(checkpoints[i], 0); api.player.reset(); },
+    takeCore() { core.userData.onInteract(); },
+  };
+
+  kit.track({ dispose() { state.disposed = true; } });
+
+  return kit.result({
+    spawn: checkpoints[0].clone(),
+    spawnYaw: 0,
+    bounds: 200,
+    killY: -22,
+    dash: true,
+    debug,
+  });
 }

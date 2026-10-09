@@ -1,0 +1,14 @@
+{ "url": "http://127.0.0.1:8000/index.html", "steps": [
+  { "eval": "__game.settings.set('showFps', true); __game.start(); __game.player.isLocked = true; null" },
+  { "wait": 5200 },
+  { "eval": "{ const p=__game.player; p.rig.position.set(-2,0,-17); p.yaw=-0.35; p.pitch=-0.35; } null" }, { "wait": 900 }, { "shot": "s1_courtyard" },
+  { "eval": "__game.levels.debug.solveBlocks(); null" }, { "wait": 3200 },
+  { "eval": "{ const p=__game.player; p.rig.position.set(9,0,-38); p.yaw=0.75; p.pitch=-0.22; } null" }, { "wait": 900 }, { "shot": "s2_suncourt" },
+  { "eval": "__game.levels.debug.alignMirrors(); null" }, { "wait": 1200 }, { "shot": "s3_beam" },
+  { "wait": 4500 }, { "eval": "{ const p=__game.player; p.rig.position.set(2,0,-52); p.yaw=0.2; p.pitch=-0.12; } null" }, { "wait": 900 }, { "shot": "s4_bridge" },
+  { "eval": "{ const p=__game.player; p.rig.position.set(0,0,-70); p.yaw=0; p.pitch=-0.05; } null" }, { "wait": 900 }, { "shot": "s5_sanctum" },
+  { "eval": "__game.levels.debug.readTablets(); __game.levels.debug.solveDrums(); null" }, { "wait": 3500 },
+  { "eval": "{ const p=__game.player; p.rig.position.set(1.5,1.35,-77.5); p.yaw=0.15; p.pitch=-0.1; } null" }, { "wait": 900 }, { "shot": "s6_core" },
+  { "eval": "{ const p=__game.player; p.rig.position.set(20,0,-8); p.yaw=-0.4; p.pitch=-0.15; } null" }, { "wait": 900 }, { "shot": "s7_pool" },
+  { "eval": "{ const p=__game.player; p.mode='first'; p.rig.position.set(-6,0,4); p.yaw=-2.4; p.pitch=0.05; } null" }, { "wait": 900 }, { "shot": "s8_firstperson" }
+]}

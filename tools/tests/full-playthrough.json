@@ -1,0 +1,125 @@
+{
+ "url": "http://127.0.0.1:8000/index.html",
+ "steps": [
+  {
+   "eval": "__game.start(); __game.player.isLocked = true; JSON.stringify(__game.renderer.info.memory)"
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "eval": "window.dispatchEvent(new KeyboardEvent('keydown',{code:'Space'})); null"
+  },
+  {
+   "wait": 800
+  },
+  {
+   "eval": "window.dispatchEvent(new KeyboardEvent('keydown',{code:'Space'})); null"
+  },
+  {
+   "wait": 800
+  },
+  {
+   "eval": "__game.player.isLocked = true; JSON.stringify({mode: __game.mode(), state: __game.levels.state})"
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "eval": "{ const d=__game.levels.debug; d.solveBlocks(); d.alignMirrors(); d.readTablets(); d.solveDrums(); } null"
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "eval": "__game.levels.debug.takeCore(); null"
+  },
+  {
+   "wait": 5500
+  },
+  {
+   "eval": "JSON.stringify({lvl: __game.levels.index, st: __game.levels.state, cores: __game.timeMachine.getCores(), mem: __game.renderer.info.memory})"
+  },
+  {
+   "eval": "__game.levels.debug.readLogs(); null"
+  },
+  {
+   "wait": 600
+  },
+  {
+   "eval": "{ const d=__game.levels.debug; __game.ui.closeTopPanel(); __game.player.isLocked = true; d.takeFlashlight(); d.revealAll(); d.openDoor(); d.solveGrid(); } null"
+  },
+  {
+   "wait": 3500
+  },
+  {
+   "eval": "__game.levels.debug.dropField(); null"
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "eval": "__game.levels.debug.takeCore(); null"
+  },
+  {
+   "wait": 5500
+  },
+  {
+   "eval": "JSON.stringify({lvl: __game.levels.index, st: __game.levels.state, cores: __game.timeMachine.getCores(), mem: __game.renderer.info.memory})"
+  },
+  {
+   "shot": "f1_neon_arrival"
+  },
+  {
+   "eval": "__game.levels.debug.takeCore(); null"
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "shot": "f2_finale"
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "shot": "f3_finale"
+  },
+  {
+   "wait": 2500
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "eval": "__game.mode()"
+  },
+  {
+   "eval": "window.dispatchEvent(new KeyboardEvent('keydown',{code:'Space'})); null"
+  },
+  {
+   "wait": 800
+  },
+  {
+   "eval": "window.dispatchEvent(new KeyboardEvent('keydown',{code:'Space'})); null"
+  },
+  {
+   "wait": 800
+  },
+  {
+   "shot": "f4_win"
+  },
+  {
+   "eval": "JSON.stringify({mode: __game.mode(), st: __game.levels.state, cores: __game.timeMachine.getCores(), heap: Math.round(performance.memory.usedJSHeapSize/1e6)})"
+  },
+  {
+   "eval": "document.getElementById('win-restart-button').click(); __game.player.isLocked = true; null"
+  },
+  {
+   "wait": 3000
+  },
+  {
+   "eval": "JSON.stringify({lvl: __game.levels.index, st: __game.levels.state, cores: __game.timeMachine.getCores(), mem: __game.renderer.info.memory, heap: Math.round(performance.memory.usedJSHeapSize/1e6)})"
+  }
+ ]
+}
