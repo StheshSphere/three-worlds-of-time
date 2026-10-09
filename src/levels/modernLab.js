@@ -759,6 +759,7 @@ export function build(kit, api) {
     state.power = true;
     powerT = 0;
     api.sound('power-up', { volume: 1 });
+    labSound('power-restored', { volume: 1 });   // Member 2 · Lab cue lands with the audio pass
     api.shake(0.2);
     api.message('POWER RESTORED. Lights stutter on across the facility — the vault unseals.', 3600);
     api.setObjective('Recover the Lab Core from the vault (east of the hall)');
@@ -863,6 +864,46 @@ export function build(kit, api) {
     coreLight.intensity = 0;
     api.completeLevel(core.position);
     return 'pickup';
+  });
+
+  /* ===================================================================
+     Member 2 — power-restoration payoff (completion-guide task 3)
+     The base game already flickers the work lights, tubes, hemisphere and
+     screens on over ~1.5–2 s (the powerT updater above). This section
+     completes the transformation with cheap tricks — no new lights, no
+     shadow casters, nothing allocated per frame:
+       · the emergency reds — power-room lamp, beacon lamps and rotating
+         spots, floor strips, moonlight — FADE out over ~1.4 s instead of
+         cutting to black the moment the grid accepts the route,
+       · the fog lifts from near-black to a cool powered blue-grey and
+         thins a little, so the far ends of the hall read brighter,
+       · the glass (temple pit panel, vault containment tube) is set to
+         catch more of the environment once the hall is lit.
+     Moon and strip end values (0.15 / 0.3) are restorePower()'s own
+     targets, so this only softens the journey between the two states.
+     =================================================================== */
+  const emergency = {
+    roomRed: roomRed.intensity,
+    lamp: redLamp.emissiveIntensity,
+    moon: moon.intensity,
+    strips: stripMat.emissiveIntensity,
+    spots: beacons.map((b) => b.spot.intensity),
+  };
+  const fogFrom = scene.fog.color.clone();
+  const fogTo = new THREE.Color(0x101a2a);       // powered cool blue-grey
+  const fogDensity0 = scene.fog.density;
+  const glassMats = [glassMat, containMat];
+  kit.update(() => {
+    if (powerT < 0 || powerT > 4 || !state.power) return;
+    const k = THREE.MathUtils.clamp(1 - powerT / 1.4, 0, 1);   // 1 → 0
+    roomRed.intensity = emergency.roomRed * k;
+    redLamp.emissiveIntensity = emergency.lamp * k;
+    moon.intensity = 0.15 + (emergency.moon - 0.15) * k;
+    stripMat.emissiveIntensity = 0.3 + (emergency.strips - 0.3) * k;
+    beacons.forEach((b, i) => { b.spot.visible = k > 0.001; b.spot.intensity = emergency.spots[i] * k; });
+    scene.fog.color.lerpColors(fogFrom, fogTo, 1 - k);
+    scene.fog.density = 0.013 + (fogDensity0 - 0.013) * k;
+    for (const m of glassMats) m.envMapIntensity = 1.6 - 0.6 * k;
   });
 
   /* ===================================================================
