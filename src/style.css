@@ -200,3 +200,27 @@ kbd {
 #credits-roll h2 { font-family: 'Cinzel', serif; color: var(--gold); margin: 2.4rem 0 0.6rem; }
 #credits-roll li { list-style: none; margin: 0.5rem 0; }
 #credits-roll b { color: var(--text); }
+
+/* ----------------------------- guidance ---------------------------- */
+#checklist { list-style: none; margin: 0.45rem 0 0; padding: 0; font-size: 1.02rem; text-shadow: 0 2px 6px #000; }
+#checklist li { display: flex; gap: 0.5rem; align-items: baseline; margin: 0.12rem 0; color: var(--muted); }
+#checklist li::before { content: '○'; color: var(--muted); font-size: 0.85em; width: 1em; }
+#checklist li.active { color: #fff; font-weight: 700; }
+#checklist li.active::before { content: '◆'; color: var(--accent); }
+#checklist li.done { color: rgba(255, 255, 255, 0.45); text-decoration: line-through; }
+#checklist li.done::before { content: '✓'; color: #7dffa8; text-decoration: none; }
+#hint { max-width: 38vw; }
+#waypoint { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
+#waypoint .wp-diamond { position: absolute; left: -11px; top: -11px; width: 22px; height: 22px; transform: rotate(45deg); border: 3px solid var(--accent); background: rgba(0, 0, 0, 0.35); box-shadow: 0 0 14px var(--accent-glow); animation: wpPulse 1.2s ease-in-out infinite; }
+@keyframes wpPulse { 50% { transform: rotate(45deg) scale(1.25); } }
+#waypoint .wp-arrow { position: absolute; left: -9px; top: -32px; width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 14px solid var(--accent); transform-origin: 9px 32px; display: none; filter: drop-shadow(0 0 6px var(--accent-glow)); }
+#waypoint.edge .wp-arrow { display: block; }
+#wp-dist { position: absolute; left: -40px; top: 16px; width: 80px; text-align: center; font-weight: 700; font-size: 0.95rem; text-shadow: 0 1px 4px #000; }
+#tutorial-card { position: absolute; top: 96px; left: 50%; transform: translateX(-50%); width: min(560px, 90vw); padding: 1rem 1.4rem 0.8rem;
+  border-radius: 12px; background: rgba(6, 8, 14, 0.82); border: 1px solid var(--accent); box-shadow: 0 0 30px var(--accent-glow), 0 20px 50px rgba(0,0,0,0.5);
+  animation: capIn 0.4s ease both; text-align: left; }
+#tutorial-card h3 { margin: 0 0 0.45rem; font-size: 1.35rem; color: #fff; }
+#tut-body { font-size: 1.12rem; line-height: 1.45; color: #e9eef5; }
+#tut-body ul { margin: 0.3rem 0 0; padding-left: 1.2rem; }
+#tut-body li { margin: 0.2rem 0; }
+.tut-foot { margin: 0.6rem 0 0; font-size: 0.85rem; color: var(--muted); text-align: right; }

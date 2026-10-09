@@ -38,6 +38,12 @@ export const meta = {
   accent: 0x6fd3ff,
   surface: 'stone',
   fallPenalty: 10,
+  introCard: {
+    kicker: 'The Present · Your goal', title: 'Investigate the lab and recover the Lab Core',
+    html: '<ul><li>This era is about <b>finding information</b>: read laptops, notes and boards (<kbd>E</kbd>).</li>'
+      + '<li>Every clue goes into your <b>journal</b> (<kbd>J</kbd>). The <b>◆ marker</b> and checklist show the next step.</li>'
+      + '<li>Start with the <b>laptop on the east workbench</b>, near the windows.</li></ul>',
+  },
 };
 
 export function build(kit, api) {
@@ -848,6 +854,41 @@ export function build(kit, api) {
 
   let markerStep = -1;
   const _m = new THREE.Vector3();
+  const CARD = {
+    flashlight: { kicker: 'New tool · Flashlight', title: 'The flashlight reveals hidden ink',
+      html: '<ul><li>Press <kbd>F</kbd> to switch it on or off.</li><li>Prof. Adeyemi wrote the Archive code in <b>phosphor ink</b> that only glows inside the beam.</li><li>Go to the dark <b>Archive (north)</b> and sweep the walls <b>slowly</b>.</li></ul>' },
+    archive: { kicker: 'Puzzle · The Archive', title: 'Find the four ink digits',
+      html: '<ul><li>Point the flashlight at the walls between the shelves and hold it there.</li><li>Each mark is a <b>digit</b> with <b>dots</b> under it: 1 dot = first digit … 4 dots = last.</li><li>Found digits are saved in your journal (<kbd>J</kbd>). Then use the <b>keypad</b> by the door at the end.</li></ul>' },
+    power: { kicker: 'Puzzle · Power room', title: 'Route the power',
+      html: '<ul><li>Look at a tile on the wall console and press <kbd>E</kbd> to rotate it.</li><li>Connect <b>GRID IN</b> (left, middle row) to <b>VAULT OUT</b> (right, middle row).</li><li>Tiles carrying power <b>light up</b> — follow the glow.</li></ul>' },
+  };
+  api.setChecklist(() => {
+    const n = state.marks.filter(Boolean).length;
+    const steps = [
+      ['Read the incident log (east workbench)', state.readIncident],
+      ['Take the flashlight from Prof. Adeyemi’s office (west)', state.flashlight],
+      [`Reveal the ink digits in the dark Archive (${n}/4)`, n === 4 || state.doorOpen],
+      ['Open the Archive door with the keypad code', state.doorOpen],
+      ['Route power in the power room', state.power],
+      ['Drop the vault’s containment field (east)', state.fieldDown],
+      ['Take the Lab Core', state.coreTaken],
+    ];
+    const active = steps.findIndex((s) => !s[1]);
+    return steps.map(([text, done], i) => ({ text, state: done ? 'done' : i === active ? 'active' : 'todo' }));
+  });
+  kit.update(() => {
+    const p = api.player.position;
+    if (state.flashlight) api.tutorial('flashlight', CARD.flashlight, 14);
+    if (state.flashlight && p.z < -12.8) {
+      api.tutorial('archive', CARD.archive, 15);
+      api.say('archive', [['Ari', 'Pitch black… If the professor really wrote the code in phosphor ink, my flashlight should pick it up.', 5]]);
+    }
+    if (state.doorOpen && p.z < -30.8) {
+      api.tutorial('power', CARD.power, 15);
+      api.say('power', [['Ari', 'The main power console. If I can get the current flowing to the vault, everything should come back on.', 5]]);
+    }
+    if (state.power) api.say('powered', [['Ari', 'Power’s back! The vault should be open now — east side of the hall.', 4]]);
+  });
   api.setHint(() => {
     const p = api.player.position;
     const n = state.marks.filter(Boolean).length;

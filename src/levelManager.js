@@ -41,6 +41,9 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
   let envRT = null;
   let sun = null;
   let hintFn = null;
+  let checklistFn = null;
+  const shownTutorials = new Set();
+  const spokenLines = new Set();
   let marker = null;
   let stability = 0;
   let stabilityMax = 1;
@@ -66,6 +69,20 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     message: (text, ms) => ui.message(text, ms),
     setObjective: (text) => ui.setObjective(text),
     setHint: (fn) => { hintFn = fn; },
+    /** fn() → [{ text, state: 'done'|'active'|'todo' }] — the HUD step checklist. */
+    setChecklist: (fn) => { checklistFn = fn; },
+    /** Instruction card, shown once per key per era load (H shows it again). */
+    tutorial: (key, card, seconds = 13) => {
+      if (shownTutorials.has(key)) return;
+      shownTutorials.add(key);
+      ui.tutorial(card, seconds);
+    },
+    /** Ari thinks aloud (in-game captions), once per key. */
+    say: (key, lines) => {
+      if (spokenLines.has(key)) return;
+      spokenLines.add(key);
+      ui.say(lines);
+    },
     setMarker: (pos, color) => { marker = pos ? pos.clone() : null; minimap.setObjective(marker, color); },
     checkpoint: (pos, yaw, label = 'Checkpoint — the timeline remembers this moment.') => {
       player.setCheckpoint(pos, yaw);
@@ -135,6 +152,11 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     player.clearAttachments();
     level = null;
     hintFn = null;
+    checklistFn = null;
+    shownTutorials.clear();
+    spokenLines.clear();
+    ui.setChecklist(null);
+    ui.hideTutorial();
     marker = null;
     minimap.setObjective(null);
   }
@@ -220,7 +242,10 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     audio.setAmbience(meta.ambience);
     state = title ? 'title' : cutscene ? 'cutscene' : 'playing';
     stateTime = 0;
-    if (!title && !cutscene) ui.eraCard(meta.numeral, meta.title, meta.subtitle);
+    if (!title && !cutscene) {
+      ui.eraCard(meta.numeral, meta.title, meta.subtitle);
+      if (meta.introCard) setTimeout(() => { if (state === 'playing') api.tutorial('intro', meta.introCard, 16); }, 4200);
+    }
     if (callbacks.onLoaded) callbacks.onLoaded(i);
   }
 
@@ -230,6 +255,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     stateTime = 0;
     player.frozen = false;
     ui.eraCard(meta.numeral, meta.title, meta.subtitle);
+    if (meta.introCard) setTimeout(() => { if (state === 'playing') api.tutorial('intro', meta.introCard, 16); }, 4200);
   }
 
   /* ------------------------------ core → next era ---------------------------- */
@@ -327,6 +353,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
       ui.setStability(frac, stability);
       postfx.u.uGlitch.value = frac < 0.25 ? (0.25 - frac) * 4 * (0.5 + 0.5 * Math.sin(time * 2.3)) : 0;
       if (hintFn) ui.setHint(typeof hintFn === 'function' ? hintFn() : hintFn);
+      if (checklistFn) ui.setChecklist(checklistFn());
       if (stability <= 0) fail('Timeline stability ran out — the era folded in on itself.');
       // Short warp pulses (dash) fade back out during normal play.
       postfx.u.uWarp.value = Math.max(0, postfx.u.uWarp.value - dt * 1.6);
@@ -374,6 +401,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
           player.frozen = false;
           state = 'playing';
           if (callbacks.onEraArrive) callbacks.onEraArrive(index);
+          if (meta.introCard) setTimeout(() => { if (state === 'playing') api.tutorial('intro', meta.introCard, 16); }, 4600);
         }
       }
     }

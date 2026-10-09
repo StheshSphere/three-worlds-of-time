@@ -67,6 +67,7 @@
     <div class="hud-top-left">
       <div id="era-badge" class="title-font">The Past</div>
       <div id="objective">Recover the Ancient Core</div>
+      <ul id="checklist"></ul>
       <div id="hint"></div>
     </div>
     <div class="hud-top-center">
@@ -83,12 +84,19 @@
       <div id="fps" class="hidden"></div>
     </div>
     <div id="crosshair"></div>
+    <div id="waypoint" class="hidden"><div class="wp-diamond"></div><div class="wp-arrow"></div><div id="wp-dist">0 m</div></div>
+    <div id="tutorial-card" class="hidden">
+      <p class="kicker" id="tut-kicker">How to play</p>
+      <h3 id="tut-title" class="title-font"></h3>
+      <div id="tut-body"></div>
+      <p class="tut-foot"><kbd>H</kbd> show this again</p>
+    </div>
     <div id="interact-prompt" class="hidden"><kbd>E</kbd><span id="interact-label">Interact</span></div>
     <div id="message-banner"></div>
     <div id="dash-meter" class="hidden"><kbd>Q</kbd><div class="dash-fill"></div><span>Chrono-dash</span></div>
     <div id="minimap-frame"><span class="minimap-n">N</span></div>
     <div class="hud-keys">
-      <span><kbd>V</kbd> view</span><span><kbd>M</kbd> map</span><span><kbd>J</kbd> journal</span><span><kbd>Esc</kbd> pause</span>
+      <span><kbd>H</kbd> help</span><span><kbd>J</kbd> journal</span><span><kbd>M</kbd> map</span><span><kbd>V</kbd> view</span><span><kbd>Esc</kbd> pause</span>
     </div>
   </div>
 
@@ -200,6 +208,8 @@
         <dt><kbd>V</kbd></dt><dd>Switch first / third person</dd>
         <dt><kbd>M</kbd></dt><dd>Toggle minimap</dd>
         <dt><kbd>J</kbd></dt><dd>Field journal (clues you have found)</dd>
+        <dt><kbd>H</kbd></dt><dd>Help — show the current instructions again</dd>
+        <dt>◆ marker</dt><dd>Your next goal (with distance); the checklist top-left tracks your progress</dd>
         <dt><kbd>Esc</kbd></dt><dd>Pause</dd>
       </dl>
       <button class="menu-btn" data-close>Back</button>

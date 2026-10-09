@@ -231,6 +231,7 @@ window.addEventListener('keydown', (e) => {
     else if (mode === 'playing') { player.unlock(); ui.openPanel('journal-screen'); }
   }
   if (e.code === 'KeyM' && mode === 'playing') settings.set('minimap', !settings.get('minimap'));
+  if (e.code === 'KeyH' && mode === 'playing') ui.toggleTutorial();
 });
 
 settings.onChange((key) => {
@@ -245,6 +246,37 @@ window.addEventListener('resize', () => {
   postfx.setSize(window.innerWidth, window.innerHeight);
 });
 
+/* On-screen waypoint: project the current objective into screen space. Off
+   screen (or behind the camera) it sticks to the edge with an arrow pointing
+   the way — the player always knows where to go next. */
+const _wp = new THREE.Vector3();
+function updateWaypoint() {
+  const m = levels.marker;
+  if (!m || mode !== 'playing' || levels.state !== 'playing') { ui.setWaypoint(false); return; }
+  const dist = Math.hypot(m.x - player.position.x, m.z - player.position.z);
+  if (dist < 2.2) { ui.setWaypoint(false); return; }
+  _wp.set(m.x, (m.y || player.position.y) + 1.6, m.z).project(camera);
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const behind = _wp.z > 1;
+  let x = (_wp.x * 0.5 + 0.5) * w;
+  let y = (-_wp.y * 0.5 + 0.5) * h;
+  if (behind) { x = w - x; y = Math.max(y, h * 0.75); }
+  const mx = 56;
+  const top = 130;
+  const off = behind || x < mx || x > w - mx || y < top || y > h - mx;
+  if (!off) { ui.setWaypoint(true, x, y, dist); return; }
+  const cx = w / 2;
+  const cy = h / 2;
+  let dx = x - cx;
+  let dy = y - cy;
+  if (Math.abs(dx) < 1e-3 && Math.abs(dy) < 1e-3) dy = 1;
+  const k = Math.min((w / 2 - mx) / Math.abs(dx || 1e-6), (h / 2 - mx) / Math.abs(dy || 1e-6));
+  x = cx + dx * k;
+  y = Math.max(top, cy + dy * k);
+  ui.setWaypoint(true, x, y, dist, Math.atan2(dy, dx) + Math.PI / 2);
+}
+
 function formatTime(sec) {
   const s = Math.round(sec);
   return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
@@ -257,6 +289,7 @@ const clock = new THREE.Clock();
 let fpsFrames = 0;
 let fpsTime = 0;
 let perfSamples = [];
+let playSeconds = 0;
 let t = 0;
 let titleAngle = 0;
 
@@ -295,6 +328,7 @@ function frame() {
     minimap.enabled = settings.get('minimap');
   }
 
+  updateWaypoint();
   postfx.render(t);
   if (mode === 'playing' && minimap.enabled) minimap.render(player.position, player.facing, t);
 
@@ -304,11 +338,16 @@ function frame() {
   if (fpsTime >= 0.5) {
     const fps = Math.round(fpsFrames / fpsTime);
     ui.setFps(fps);
-    if (mode === 'playing' && !userPickedQuality && settings.get('quality') !== 'low') {
+    // Measure only after 8 s of uninterrupted play (shader compilation and
+    // asset uploads stutter right after an era loads), then judge on the
+    // MEDIAN of 10 s of samples so one hitch can't trigger a downgrade.
+    if (mode === 'playing' && levels.state === 'playing') playSeconds += 0.5; else playSeconds = 0;
+    if (playSeconds > 8 && !userPickedQuality && settings.get('quality') !== 'low') {
       perfSamples.push(fps);
-      if (perfSamples.length >= 12) {
-        const avg = perfSamples.reduce((a, b) => a + b, 0) / perfSamples.length;
-        if (avg < 32) {
+      if (perfSamples.length >= 20) {
+        const sorted = [...perfSamples].sort((x, y) => x - y);
+        const median = sorted[Math.floor(sorted.length / 2)];
+        if (median < 28) {
           settings.set('quality', 'low');
           ui.message('Running slowly — switched to Low graphics quality (change it in Options).', 4500);
         }

@@ -35,6 +35,12 @@ export const meta = {
   surface: 'metal',
   sun: { color: 0xa9d8ff, intensity: 1.4, extent: 20 },
   fallPenalty: 12,
+  introCard: {
+    kicker: 'The Future · Your goal', title: 'Survive the collapsing skyline',
+    html: '<ul><li>New ability — <b>Chrono-Dash</b>: press <kbd>Q</kbd> or <b>right-click</b> (works in mid-air).</li>'
+      + '<li>The first gap is too wide to jump: <b>sprint</b> (<kbd>Shift</kbd>), <b>jump</b> (<kbd>Space</kbd>), then <b>dash</b> in the air.</li>'
+      + '<li>Falling costs stability, but you restart from the last <b>checkpoint</b>. Follow the <b>◆ marker</b> to the Neon Core.</li></ul>',
+  },
 };
 
 export function build(kit, api) {
@@ -413,6 +419,30 @@ export function build(kit, api) {
       const spots = [[0, -19], [0, -47], [0, -81], [0, -108], [0, -142]];
       api.setMarker(step < 5 ? _m.set(spots[step][0], 0, spots[step][1]) : null, 0xff5be0);
     }
+  });
+  const CARD = {
+    movers: { kicker: 'Section 2', title: 'Ride the moving platforms', html: '<ul><li>Platforms slide and rise — <b>stand on one and it carries you</b>.</li><li>Jump when the next one lines up with you.</li></ul>' },
+    phase: { kicker: 'Section 3', title: 'Platforms phase out of time', html: '<ul><li>These platforms <b>dissolve and re-form</b> in a wave.</li><li>Wait at the edge, then move <b>as soon as the next one is solid</b>. Don’t stand still on a flickering one.</li></ul>' },
+    gauntlet: { kicker: 'Section 4', title: 'Barriers and lasers', html: '<ul><li>Pink <b>energy barriers</b> pulse on and off — run through when they dim, or <b>DASH through</b> them even when they’re on.</li><li><b>Jump</b> over the red laser sweepers.</li></ul>' },
+    collapse: { kicker: 'Final section', title: 'Outrun the collapse', html: '<ul><li>The bridge <b>falls away</b> just after you step on it, and a time rift is chasing you.</li><li><b>Don’t stop</b> — sprint, jump the gaps and dash if you need to. The Neon Core is on the spire.</li></ul>' },
+  };
+  api.setChecklist(() => {
+    const steps = [
+      ['Dash across the wide gap (sprint, jump, Q)', state.reached[1]],
+      ['Ride the moving platforms', state.reached[2]],
+      ['Cross the phasing platforms', state.reached[3]],
+      ['Get through the barrier gauntlet', state.reached[4]],
+      ['Outrun the collapse to the spire', api.player.position.z < -138 || state.coreTaken],
+      ['Take the Neon Core', state.coreTaken],
+    ];
+    const active = steps.findIndex((s) => !s[1]);
+    return steps.map(([text, done], i) => ({ text, state: done ? 'done' : i === active ? 'active' : 'todo' }));
+  });
+  kit.update(() => {
+    if (state.reached[1]) api.tutorial('movers', CARD.movers, 10);
+    if (state.reached[2]) api.tutorial('phase', CARD.phase, 11);
+    if (state.reached[3]) api.tutorial('gauntlet', CARD.gauntlet, 12);
+    if (state.reached[4]) api.tutorial('collapse', CARD.collapse, 10);
   });
   let introShown = false;
   kit.update((dt, t) => {

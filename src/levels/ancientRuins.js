@@ -36,6 +36,13 @@ export const meta = {
   surface: 'grass',
   sun: { color: 0xffd9a8, intensity: 3.4, extent: 26 },
   fallPenalty: 15,
+  introCard: {
+    kicker: 'The Past · Your goal', title: 'Find the Ancient Core in this temple',
+    html: '<ul><li>Follow the <b>◆ marker</b> — it always shows your next goal and how far away it is.</li>'
+      + '<li>The <b>checklist</b> (top-left) tracks every step of the temple’s puzzles.</li>'
+      + '<li>Look at objects and press <kbd>E</kbd> to use them. <kbd>J</kbd> opens your journal of clues; <kbd>H</kbd> shows help again.</li>'
+      + '<li>Keep an eye on <b>Timeline stability</b> (top) — if it runs out, the era collapses and you rewind.</li></ul>',
+  },
 };
 
 const TILE = 2;
@@ -875,34 +882,149 @@ export function build(kit, api) {
      =================================================================== */
   const _marker = new THREE.Vector3();
   let checkpointBridge = false;
-  let markerStep = -1;
   let enteredCourt = false;
-  api.setHint(() => {
-    const p = api.player.position;
-    const found = state.tablets.filter(Boolean).length;
-    if (state.coreTaken) return '';
-    if (!enteredCourt) return 'The temple lies north. Something heavy guards its inner gate.';
-    if (!state.gateOpen) return 'Walk INTO a stone block to push it a tile. Weigh down both glowing plates. (Stuck? Use the sun stone.)';
-    if (!state.crystalLit) return 'Turn the bronze mirrors (E) to bounce the sunbeam onto the crystal by the chasm.';
-    if (p.z > -68) return 'Cross the floating bridge.';
-    if (!state.dialsSolved) return found < 3 ? `Turn the drums to the tablets' glyphs, in hour order I → III. Tablets found: ${found}/3 (journal: J).` : 'Set drums I, II, III to the glyphs of hours I, II, III (see journal: J).';
-    return 'Take the core.';
+  let inSunCourt = false;
+  let markerKey = '';
+  const MIRROR_SOLUTION = [2, 0, 2];
+  const CARD = {
+    court: {
+      kicker: 'Puzzle · The Courtyard of Weights', title: 'Push the stone weights onto the plates',
+      html: '<ul><li>Walk <b>into</b> a carved stone block and keep pushing (<kbd>W</kbd>) — it slides <b>one tile</b>.</li>'
+        + '<li>Get <b>both blocks onto the two glowing plates</b> beside the far gate.</li>'
+        + '<li>Blocks only move in straight lines, so plan your pushes — you may need to push from the side.</li>'
+        + '<li>Stuck in a corner? Press <kbd>E</kbd> on the <b>sun stone</b> by the entrance to reset the blocks.</li></ul>',
+    },
+    sun: {
+      kicker: 'Puzzle · The Sun Court', title: 'Steer the sunlight onto the crystal',
+      html: '<ul><li>A beam of sunlight enters through the <b>round window</b> in the west wall.</li>'
+        + '<li>Look at a <b>bronze mirror</b> and press <kbd>E</kbd> to turn it a quarter turn.</li>'
+        + '<li>Bounce the beam from mirror to mirror until it hits the <b>crystal</b> by the cliff edge.</li>'
+        + '<li>The <b>◆ marker</b> points at the next mirror that needs turning.</li></ul>',
+    },
+    tablet: {
+      kicker: 'Clue · Rune tablets', title: 'Collect the three carved tablets',
+      html: '<ul><li>Each tablet shows a <b>symbol</b> and a <b>number</b> (I, II or III).</li>'
+        + '<li>There are <b>three</b> hidden around the temple — they <b>glow and sparkle</b>. Look behind the pool, in the courtyard corners and in the Sun Court.</li>'
+        + '<li>Every tablet you read is saved in your <b>journal</b> (<kbd>J</kbd>). You will need them at the altar.</li></ul>',
+    },
+    altar: {
+      kicker: 'Puzzle · The Sanctum', title: 'Set the rune drums',
+      html: '<ul><li>Press <kbd>E</kbd> on a drum to turn it to its next symbol.</li>'
+        + '<li>Set drum <b>I</b> to the symbol on tablet <b>I</b>, drum <b>II</b> to tablet <b>II</b>, drum <b>III</b> to tablet <b>III</b>.</li>'
+        + '<li>Check your journal (<kbd>J</kbd>) for the symbols. Missing a tablet? The <b>◆ marker</b> leads to the nearest one.</li></ul>',
+    },
+  };
+
+  // Tablets you haven't read yet glow and sparkle, so they stand out.
+  const tabletSparkles = tabletSpots.map((spot) => {
+    const sp = createParticles({ count: 14, center: [spot.pos[0] + (spot.rot > 0 ? 0.35 : -0.35), spot.pos[1], spot.pos[2]], box: [0.4, 1.4, 1.2], color: 0xffd27a, size: 0.06 });
+    kit.add(sp.mesh);
+    kit.track(sp);
+    return sp;
   });
+  kit.update((dt, t) => {
+    tabletSparkles.forEach((sp, i) => { sp.mesh.visible = !state.tablets[i]; sp.update(t); });
+    tabletMeshes.forEach((slab, i) => {
+      if (state.tablets[i]) return;
+      const face = slab.children[1];
+      face.material.emissiveIntensity = 0.12 + 0.18 * (0.5 + 0.5 * Math.sin(t * 2.5 + i));
+    });
+    // Unweighted plates pulse so you can see where the blocks must go.
+    plateRingMats.forEach((m, i) => { if (!state.plates[i]) m.emissiveIntensity = 0.4 + 0.5 * (0.5 + 0.5 * Math.sin(t * 3)); });
+  });
+
+  api.setChecklist(() => {
+    const found = state.tablets.filter(Boolean).length;
+    const plates = state.plates.filter(Boolean).length;
+    const main = [
+      { text: 'Enter the temple’s inner courtyard (north)', done: enteredCourt },
+      { text: `Push both stone blocks onto the plates (${plates}/2)`, done: state.gateOpen },
+      { text: 'Bounce the sunbeam onto the crystal', done: state.crystalLit },
+      { text: 'Cross the stone bridge to the sanctum', done: checkpointBridge },
+      { text: 'Set the rune drums to the tablets’ code', done: state.dialsSolved },
+      { text: 'Take the Ancient Core', done: state.coreTaken },
+    ];
+    const activeIdx = main.findIndex((m) => !m.done);
+    // While tablets are missing they are the active step, not the drums.
+    const items = main.map((m, i) => ({ text: m.text, state: m.done ? 'done' : (i === activeIdx && !(i === 4 && found < 3)) ? 'active' : 'todo' }));
+    const tabState = found === 3 ? 'done' : (activeIdx === 4 ? 'active' : 'todo');
+    items.splice(4, 0, { text: `Find the 3 glowing rune tablets (${found}/3)`, state: tabState });
+    return items;
+  });
+
+  api.setHint(() => {
+    if (state.coreTaken) return '';
+    if (!enteredCourt) return 'Head north through the stone archway between the two statues.';
+    if (!state.gateOpen) return 'Walk into a block to push it. Both glowing plates need a block on them.';
+    if (!state.crystalLit) return 'Press E on the marked mirror to turn it. Follow the beam.';
+    if (!checkpointBridge) return 'The bridge is up — cross the chasm to the north.';
+    if (!state.tablets.every(Boolean)) return 'You need all three tablets to know the drum code — follow the ◆ marker.';
+    if (!state.dialsSolved) return 'Match drums I, II, III to tablets I, II, III (journal: J).';
+    return 'Take the core floating above the altar.';
+  });
+
+  function nearestMissingTablet(p) {
+    let best = null;
+    let bestD = Infinity;
+    tabletSpots.forEach((spot, i) => {
+      if (state.tablets[i]) return;
+      const d = Math.hypot(spot.pos[0] - p.x, spot.pos[2] - p.z);
+      if (d < bestD) { bestD = d; best = spot; }
+    });
+    return best;
+  }
+
   kit.update(() => {
     const p = api.player.position;
-    if (!enteredCourt && p.z < -15) { enteredCourt = true; api.setObjective('Weigh down both pressure plates'); }
+    if (!enteredCourt && p.z < -15.5) {
+      enteredCourt = true;
+      api.setObjective('Open the Sun Gate');
+      api.tutorial('court', CARD.court, 16);
+    }
+    if (enteredCourt && !state.gateOpen) {
+      api.say('court', [['Ari', 'Two glowing plates by that gate… and two heavy carved blocks. If I push the blocks onto the plates, maybe the gate will open.', 5.5]]);
+    }
+    if (state.gateOpen) api.say('gate', [['Ari', 'It worked — the gate is open! There’s sunlight pouring into the next court.', 4]]);
+    if (state.gateOpen && !inSunCourt && p.z < -36) {
+      inSunCourt = true;
+      api.setObjective('Light the sun crystal');
+      api.tutorial('sun', CARD.sun, 16);
+      api.say('sun', [['Ari', 'That beam comes through the round window. If I turn those bronze mirrors, I can bounce it onto the crystal by the cliff.', 5.5]]);
+    }
+    if (state.crystalLit) api.say('bridge', [['Ari', 'Whoa — stones are rising out of the chasm! A bridge!', 3.5]]);
+    const found = state.tablets.filter(Boolean).length;
+    if (found >= 1) api.tutorial('tablet', CARD.tablet, 15);
+    if (found === 1) api.say('tablet1', [['Ari', 'A carving — a symbol and a number. This must be part of some kind of code.', 4.5]]);
+    if (found === 3) api.say('tablets', [['Ari', 'That’s all three tablets. Now I just need to find what they unlock.', 4]]);
     if (state.bridgeBuilt && !checkpointBridge && p.z < -69) {
       checkpointBridge = true;
       api.checkpoint(new THREE.Vector3(0, 0, -70), 0);
       api.setObjective('Unlock the altar’s rune drums');
+      api.tutorial('altar', CARD.altar, 16);
+      api.say('altar', found < 3
+        ? [['Ari', 'Three drums, three hours… I need the symbols from all three tablets to know how to set them.', 5]]
+        : [['Ari', 'Three drums — I’ll set them to match the tablets: hour I, II, then III.', 4.5]]);
     }
-    let step = 5;
-    if (!enteredCourt) step = 0; else if (!state.gateOpen) step = 1; else if (!state.crystalLit) step = 2;
-    else if (!checkpointBridge) step = 3; else if (!state.coreTaken) step = 4;
-    if (step !== markerStep) {
-      markerStep = step;
-      const spots = [[0, -16], [0, -31], [-4, -45], [0, -62], [0, -82]];
-      api.setMarker(step < 5 ? _marker.set(spots[step][0], 0, spots[step][1]) : null);
+
+    // Waypoint: always the exact next thing to deal with.
+    let target = null;
+    if (!enteredCourt) target = [0, 0, -15];
+    else if (!state.gateOpen) {
+      const loose = blocks.find((b) => !plateCells.some(([c, r]) => b.c === c && b.r === r));
+      target = loose ? [loose.mesh.position.x, 0, loose.mesh.position.z] : [0, 0, -31];
+    } else if (!state.crystalLit) {
+      const wrong = mirrors.slice(0, 3).find((m, i) => m.o !== MIRROR_SOLUTION[i]);
+      target = p.z > -35 ? [0, 0, -36] : wrong ? [wrong.x, 0, wrong.z] : [crystal.position.x, 0, crystal.position.z];
+    } else if (!checkpointBridge) target = [0, 0, -63];
+    else if (!state.dialsSolved && !state.tablets.every(Boolean)) {
+      const t = nearestMissingTablet(p);
+      if (t) target = [t.pos[0], 0, t.pos[2]];
+    } else if (!state.dialsSolved) target = [0, 1.35, -81.6];
+    else if (!state.coreTaken) target = [0, 1.35, -83.3];
+    const key = target ? target.map((v) => v.toFixed(1)).join(',') : 'none';
+    if (key !== markerKey) {
+      markerKey = key;
+      api.setMarker(target ? _marker.set(target[0], target[1], target[2]) : null);
     }
   });
 

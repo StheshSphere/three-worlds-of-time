@@ -76,6 +76,54 @@ export class UI {
   }
 
   setObjective(text) { this._set('objective', 'text', text || ''); }
+
+  /** items: [{ text, state: 'done' | 'active' | 'todo' }] — only touches the DOM when it changes. */
+  setChecklist(items) {
+    const key = items ? items.map((i) => i.state[0] + i.text).join('|') : '';
+    if (this._cache.checklist === key) return;
+    this._cache.checklist = key;
+    const ul = $('checklist');
+    ul.innerHTML = '';
+    for (const it of items || []) {
+      const li = document.createElement('li');
+      li.className = it.state;
+      li.textContent = it.text;
+      ul.appendChild(li);
+    }
+  }
+
+  /** Instruction card: { kicker, title, html } — stays up `seconds`, H brings back the last one. */
+  tutorial(card, seconds = 12) {
+    this._tutorial = card;
+    $('tut-kicker').textContent = card.kicker || 'How to play';
+    $('tut-title').textContent = card.title;
+    $('tut-body').innerHTML = card.html;
+    const el = $('tutorial-card');
+    el.classList.remove('hidden');
+    el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+    clearTimeout(this._tutTimer);
+    this._tutTimer = setTimeout(() => el.classList.add('hidden'), seconds * 1000);
+    this.audio.play('ui-open', { volume: 0.5 });
+  }
+
+  toggleTutorial() {
+    const el = $('tutorial-card');
+    if (!el.classList.contains('hidden')) { el.classList.add('hidden'); return; }
+    if (this._tutorial) this.tutorial(this._tutorial, 15);
+  }
+
+  hideTutorial() { $('tutorial-card').classList.add('hidden'); this._tutorial = null; }
+
+  /** Screen-space waypoint. edgeAngle (radians) set → pinned to the screen edge, arrow pointing out. */
+  setWaypoint(visible, x = 0, y = 0, dist = 0, edgeAngle = null) {
+    const el = $('waypoint');
+    if (!visible) { if (!this._cache.wpHidden) { el.classList.add('hidden'); this._cache.wpHidden = true; } return; }
+    if (this._cache.wpHidden !== false) { el.classList.remove('hidden'); this._cache.wpHidden = false; }
+    el.style.transform = `translate(${x.toFixed(0)}px, ${y.toFixed(0)}px)`;
+    el.classList.toggle('edge', edgeAngle !== null);
+    if (edgeAngle !== null) el.querySelector('.wp-arrow').style.transform = `rotate(${edgeAngle}rad)`;
+    this._set('wp-dist', 'text', `${Math.round(dist)} m`);
+  }
   setHint(text) { this._set('hint', 'text', text || ''); }
 
   setStability(frac, secondsLeft) {
