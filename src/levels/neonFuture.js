@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { createParticles, createBeam } from '../shaders/effects.js';
 import { createBarrierMaterial, createScreenMaterial } from '../shaders/labShaders.js';
 import { createBeaconMaterial } from '../shaders/beacon.js';
-import { createCity, createGridFloor, createTraffic, phaseMaterial } from '../shaders/neonShaders.js';
+import { createCity, createGridFloor, createTraffic, createStars, createDistantLights, phaseMaterial } from '../shaders/neonShaders.js';
 
 /**
  * LEVEL 3 — THE FUTURE: "The Fractured Skyline".  Verb: SURVIVE.
@@ -59,7 +59,7 @@ export function build(kit, api) {
   const magenta = kit.track(new THREE.MeshStandardMaterial({ color: 0x1a0414, emissive: 0xff3fd0, emissiveIntensity: 2.6 }));
   const underGlow = kit.track(new THREE.MeshBasicMaterial({ color: 0x5a1a8a, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
 
-  const state = { section: 0, riftActive: false, coreTaken: false, puzzleSolved: false, puzzleStep: 0, puzzleCd: 0, fallCued: false, reached: [false, false, false, false, false] };
+  const state = { section: 0, riftActive: false, coreTaken: false, puzzleSolved: false, puzzleStep: 0, puzzleCd: 0, reached: [false, false, false, false, false] };
   const checkpoints = [
     new THREE.Vector3(0, 0, 4),
     new THREE.Vector3(0, 0.5, -18),
@@ -110,59 +110,19 @@ export function build(kit, api) {
   const data = createParticles({ count: 260, center: [0, 2, -70], box: [40, 30, 170], color: 0x6ff0ff, size: 0.07, rise: 0.6 });
   kit.add(data.mesh);
   kit.track(data);
-  // Rising motes drifting up out of the void between the platforms — they
-  // give the drop below the course depth and motion.
-  const qS = api.quality.grass > 0.5 ? 1 : 0.55;
-  const motes = createParticles({ count: Math.round(220 * qS), center: [0, -2, -70], box: [70, 90, 180], color: 0xff7ae0, size: 0.12, rise: 1.6 });
+  // Sky depth for pennies: a twinkling star dome and hovering city lights
+  // (each ONE GPU-animated Points draw — see docs/SHADERS.md), plus a
+  // second, magenta mote layer drifting up past the decks.
+  const stars = createStars({ count: Math.round(650 * (api.quality.grass > 0.5 ? 1 : 0.5)) });
+  kit.add(stars.mesh);
+  kit.track(stars);
+  const cityLights = createDistantLights({ count: Math.round(110 * (api.quality.grass > 0.5 ? 1 : 0.6)), avoid: (x, z) => Math.abs(x) < 24 && z < 25 && z > -160 });
+  kit.add(cityLights.mesh);
+  kit.track(cityLights);
+  const motes = createParticles({ count: 150, center: [0, -2, -70], box: [64, 22, 170], color: 0xff9ae8, size: 0.05, rise: 0.25 });
   kit.add(motes.mesh);
   kit.track(motes);
-  // Distant spire lights: two soft blinking clouds (red/cyan) at
-  // aviation-light heights. Each light keeps its own twinkle rhythm, and
-  // being world-fixed they parallax past the sky's own stars as you walk.
-  const beaconRed = createParticles({ count: Math.round(22 * qS), center: [0, -12, -70], box: [260, 110, 300], color: 0xff3b4e, size: 0.9, rise: 0 });
-  kit.add(beaconRed.mesh);
-  kit.track(beaconRed);
-  const beaconCyan = createParticles({ count: Math.round(18 * qS), center: [0, -6, -70], box: [240, 96, 280], color: 0x6fe8ff, size: 0.7, rise: 0 });
-  kit.add(beaconCyan.mesh);
-  kit.track(beaconCyan);
-  // A parallax starfield (the sky dome follows the camera, so its stars
-  // never move): two sizes of additive points twinkling against each other.
-  const starLayers = [1.4, 2.3].map((size, li) => {
-    const n = Math.round((li ? 150 : 420) * qS);
-    const pos = new Float32Array(n * 3);
-    const col = new Float32Array(n * 3);
-    const tint = new THREE.Color();
-    for (let i = 0; i < n; i++) {
-      const r = 240 + Math.random() * 70;
-      const el = 0.06 + Math.random() * 1.15;            // just above the horizon → near zenith
-      const az = Math.random() * Math.PI * 2;
-      pos[i * 3] = Math.cos(az) * Math.cos(el) * r;
-      pos[i * 3 + 1] = Math.sin(el) * r;
-      pos[i * 3 + 2] = -70 + Math.sin(az) * Math.cos(el) * r;
-      tint.setHex(Math.random() < 0.55 ? 0xcfe4ff : Math.random() < 0.5 ? 0x9fd8ff : 0xffe2bd).multiplyScalar(0.7 + Math.random() * 0.6);
-      col[i * 3] = tint.r; col[i * 3 + 1] = tint.g; col[i * 3 + 2] = tint.b;
-    }
-    const geo = kit.track(new THREE.BufferGeometry());
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    const mat = kit.track(new THREE.PointsMaterial({ size, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
-    const pts = new THREE.Points(geo, mat);
-    pts.frustumCulled = false;
-    kit.add(pts);
-    return mat;
-  });
-  // The void itself: a very slow drone anchored deep below mid-course. It
-  // swells as you drop toward it, so a fall is heard before the respawn.
-  const voidAnchor = new THREE.Object3D();
-  voidAnchor.position.set(0, -110, -70);
-  kit.add(voidAnchor);
-  api.positional('hum', voidAnchor, { volume: 0.5, refDistance: 26, rolloff: 0.6, rate: 0.42 });
-  kit.update((dt, t) => {
-    city.update(t, scene); grid.update(t); traffic.update(t);
-    data.update(t); motes.update(t); beaconRed.update(t); beaconCyan.update(t);
-    starLayers[0].opacity = 0.5 + 0.28 * Math.sin(t * 0.7);
-    starLayers[1].opacity = 0.6 + 0.32 * Math.sin(t * 0.93 + 1.7);
-  });
+  kit.update((dt, t) => { city.update(t, scene); grid.update(t); traffic.update(t); data.update(t); stars.update(t); cityLights.update(t); motes.update(t); });
 
   // Holographic billboards hovering beside the course.
   const holoTexts = [
@@ -209,20 +169,24 @@ export function build(kit, api) {
     c.position.set(cx, cy, cz);
     kit.add(c);
   }
-  // Floating holo arrows hover over each section's threshold, bobbing and
-  // pulsing — readable across a gap in a way floor paint never is.
-  const arrowMat = kit.track(new THREE.MeshBasicMaterial({ map: chevronTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, opacity: 0.9 }));
-  const floaters = [];
-  for (const [ax, ay, az] of [[0, 1.7, -11.5], [0, 2.0, -24.5], [0, 2.5, -50.8], [0, 3.0, -85.5], [0, 4.3, -122]]) {
-    const m = new THREE.Mesh(chev.geometry, arrowMat);
-    m.rotation.copy(chev.rotation);
-    m.position.set(ax, ay, az);
-    kit.add(m);
-    floaters.push({ m, base: ay, ph: floaters.length * 1.9 });
+  // Holographic guide arrows: the same chevron hung over each section
+  // entry, tilted toward the approach, bobbing and pulsing — the route
+  // reads from mid-gap even when the ◆ marker hides behind a tower.
+  const arrowGeo = kit.track(new THREE.PlaneGeometry(4.5, 2.25));
+  const arrowMat = kit.track(new THREE.MeshBasicMaterial({ map: chevronTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  const arrows = [];
+  for (const [ax, ay, az, ph] of [[0, 2.4, -12.5, 0], [0, 2.9, -23.5, 1.7], [0, 3.3, -50.5, 3.1], [0, 3.8, -84.5, 4.4], [0, 4.2, -110.5, 5.6]]) {
+    const a = new THREE.Mesh(arrowGeo, arrowMat);
+    a.rotation.set(-Math.PI / 2 + 0.4, 0, Math.PI / 2);   // flat chevron, tipped up ~23°
+    a.position.set(ax, ay, az);
+    a.userData.baseY = ay;
+    a.userData.phase = ph;
+    kit.add(a);
+    arrows.push(a);
   }
   kit.update((dt, t) => {
-    for (const f of floaters) f.m.position.y = f.base + Math.sin(t * 1.6 + f.ph) * 0.14;
-    arrowMat.opacity = 0.55 + 0.3 * Math.sin(t * 2.3);
+    arrowMat.opacity = 0.55 + 0.3 * (0.5 + 0.5 * Math.sin(t * 2.1));
+    for (const a of arrows) a.position.y = a.userData.baseY + Math.sin(t * 1.4 + a.userData.phase) * 0.18;
   });
 
   /* ===================================================================
@@ -237,9 +201,10 @@ export function build(kit, api) {
   for (const [z, axis, amp, speed, phase, trim] of [[-27, 'x', 3.8, 0.8, 0, cyan], [-33, 'y', 1.2, 0.95, 1.3, magenta], [-39, 'x', 4.2, 0.72, 2.6, cyan]]) {
     const p = platform(0, z, 3.6, 3.6, 0.6, trim);
     p.body.userData.carryDelta = new THREE.Vector3();
+    // Each pad is a levitating machine: a low engine note, detuned per
+    // pad so the three read as separate motors rather than one hum.
+    p.sfx = api.positional('hum', p.group, { volume: 0.16, refDistance: 3.5, rolloff: 1.8, rate: 0.85 + movers.length * 0.09 });
     movers.push({ ...p, base: p.group.position.clone(), axis, amp, speed, phase });
-    // Motor hum that rides with the platform (each slightly detuned).
-    api.positional('hum', p.group, { volume: 0.16, refDistance: 2.2, rolloff: 1.9, rate: 0.85 + movers.length * 0.09 });
   }
   platform(0, -47, 8, 7, 1.0, magenta);   // deeper catch pad: the hop off the last mover is 2.7 m
   const _prevPos = new THREE.Vector3();   // scratch — no per-frame allocations
@@ -262,11 +227,11 @@ export function build(kit, api) {
     const mat = phaseMaterial(deck, i % 2 ? 0xff5be0 : 0x6ff0ff);
     kit.track(mat);
     const p = platform(0, -53 - i * 5, 3.4, 3.4, 1.0, i % 2 ? magenta : cyan, { mat });
-    phases.push({ ...p, mat, offset: i * 0.85, solid: true, c: 0 });
+    const sfx = api.positional('hum', p.group, { volume: 0.22, refDistance: 3, rolloff: 2, rate: 1.25 + i * 0.06 });
+    phases.push({ ...p, mat, sfx, offset: i * 0.85, solid: true, c: 0 });
   }
   platform(0, -81, 8, 7, 1.5, cyan);   // phase-wave catch pad (2.8 m gap off the last dissolving tile)
   kit.update((dt, t) => {
-    const player = api.player;
     for (const ph of phases) {
       // 0 → 2.6 s solid, then dissolve, 1.1 s gone, rematerialise.
       const c = (t + ph.offset) % PERIOD;
@@ -277,15 +242,33 @@ export function build(kit, api) {
       else if (c >= 4.1) v = (c - 4.1) / 0.5;
       ph.mat.userData.phase.uPhase.value = v;
       ph.group.children.forEach((ch) => { if (ch !== ph.body && ch.material !== underGlow) ch.visible = v > 0.05; });
+      // The hum dissolves with the platform, so the wave is audible too.
+      ph.sfx.sound.setVolume(0.22 * v);
       const solid = v > 0.35;
       if (solid !== ph.solid) {
         ph.solid = solid;
-        // A nearby tile re-forming gets a tiny glitch blip — the audible "go".
-        if (solid && player.position.distanceToSquared(ph.group.position) < 144) api.sound('glitch', { volume: 0.14, rate: 1.3, jitter: 0.15 });
         const idx = kit.walkables.indexOf(ph.body);
         if (solid && idx < 0) kit.walkables.push(ph.body);
         if (!solid && idx >= 0) kit.walkables.splice(idx, 1);
+        // Re-materialise shimmer, gated to the tile just ahead so the
+        // wave doesn't tick like a clock from across the level.
+        if (solid && api.player.position.distanceToSquared(ph.group.position) < 49) api.sound('glitch', { volume: 0.16, rate: 1.5, jitter: 0 });
       }
+    }
+  });
+
+  /* ===================================================================
+     Falling into the city gets its own beat: a time-slip glitch as the
+     deck drops away (the era manager's respawn 'warp' only fires at
+     killY — the two must stay distinct sounds).
+     =================================================================== */
+  let fallCued = false;
+  kit.update(() => {
+    const player = api.player;
+    if (player.onGround || player.velocity.y > -9) { fallCued = false; return; }
+    if (!fallCued && player.position.y < -2.5) {
+      fallCued = true;                           // committed to the void
+      api.sound('glitch', { volume: 0.5, rate: 0.5, jitter: 0 });
     }
   });
 
@@ -312,8 +295,8 @@ export function build(kit, api) {
       const post = kit.box({ size: [0.35, 3.2, 0.35], pos: [sx, 1.5 + 1.6, z], mat: deckDark, tile: 1, walk: false, map: false });
       post.material = deckDark;
     }
-    const fieldSfx = api.positional('force-field', wall, { volume: 0.4, refDistance: 3 });
-    barriers.push({ wall, mat, proxy, fieldSfx, sfxOn: true, offset, active: true, warn: false, on: true, c: 0, z });
+    const sfx = api.positional('force-field', wall, { volume: 0.4, refDistance: 3 });
+    barriers.push({ wall, mat, proxy, sfx, vol: 0.4, wasOn: true, offset, active: true, warn: false, on: true, c: 0, z });
   }
   const lasers = [];
   for (const [z, dir] of [[-93.5, 1], [-102.5, -1]]) {
@@ -346,17 +329,17 @@ export function build(kit, api) {
       const c = (t + b.offset) % 2.9;
       const on = c < 1.55;
       b.on = on;
-      // The buzz follows the field: live barriers hum, dimmed ones fall
-      // silent, so you can hear the window close and open.
-      if (on !== b.sfxOn) {
-        b.sfxOn = on;
-        const s = b.fieldSfx.sound;
-        if (s.buffer) { if (on) { if (!s.isPlaying) s.play(); } else if (s.isPlaying) s.pause(); }
-      }
       b.c = c;                     // read by debug() for automated tests
       b.mat.uniforms.uTime.value = t;
       b.mat.uniforms.uActive.value += ((on ? 1 : 0) - b.mat.uniforms.uActive.value) * Math.min(1, dt * 10);
       b.mat.uniforms.uDissolve.value = on ? 0 : 0.55;
+      // The buzz breathes with the field — full charge while on, a faint
+      // idle leak while off — so the cycle is audible before it is visible.
+      b.vol += ((on ? 0.4 : 0.07) - b.vol) * Math.min(1, dt * 9);
+      b.sfx.sound.setVolume(b.vol);
+      // Snap-on crackle at the energise edge, close range only.
+      if (on && !b.wasOn && player.position.distanceToSquared(b.wall.position) < 196) api.sound('zap', { volume: 0.1, rate: 1.8, jitter: 0 });
+      b.wasOn = on;
       // Warning flash rising edge: a short cue when the player is close enough
       // for it to matter (the flash itself is the shader's uWarn).
       const warn = !on && c > 2.55;
@@ -492,19 +475,6 @@ export function build(kit, api) {
     }
   });
 
-  // Fall cue: the moment a drop into the void is real (well below the deck
-  // and still accelerating) a low time-glitch fires — the killY respawn warp
-  // is levelManager's. Rearmed once you're back on solid ground.
-  kit.update(() => {
-    const p = api.player.position;
-    if (state.fallCued) {
-      if (p.y > -1 || api.player.onGround) state.fallCued = false;
-    } else if (p.y < -5 && api.player.velocity.y < -6) {
-      state.fallCued = true;
-      api.sound('glitch', { volume: 0.4, rate: 0.78, jitter: 0.12 });
-    }
-  });
-
   /* ===================================================================
      The Neon Core
      =================================================================== */
@@ -522,9 +492,9 @@ export function build(kit, api) {
   kit.add(coreBeam.mesh);
   kit.track(coreBeam);
   const coreLight = kit.pointLight(0xff4fd8, 18, 14, [0, 5.2, -143]);
-  // A faint shimmer so the core is audible from across the spire (it dies
-  // with the light when the core is taken).
-  const coreSfx = api.positional('hum', core, { volume: 0.3, refDistance: 4, rolloff: 1.4, rate: 1.55 });
+  // The core is never silent: a bright hum marks it from across the
+  // spire — a "hear the goal" cue, like the lab's generator room.
+  const coreSfx = api.positional('hum', core, { volume: 0.3, refDistance: 4.5, rolloff: 1.4, rate: 1.5 });
   kit.interact(core, () => (state.coreTaken || !state.puzzleSolved ? null : 'Take the Neon Core'), () => {
     if (state.coreTaken || !state.puzzleSolved) return null;   // the sequence lock gates the core
     state.coreTaken = true;
@@ -532,6 +502,7 @@ export function build(kit, api) {
     coreBeam.mesh.visible = false;
     coreLight.intensity = 0;
     if (coreSfx.sound.isPlaying) coreSfx.sound.pause();
+    api.sound('bell', { volume: 0.45, rate: 1.3 });            // chime layered under the shared core-get fanfare
     api.completeLevel(core.position);
     return 'pickup';
   });

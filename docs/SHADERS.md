@@ -42,6 +42,8 @@ Every member should be able to talk through **at least the first five** below. E
 | 15 | Synthwave grid | `shaders/neonShaders.js` → `createGridFloor` | `fract()` grid lines with `fwidth()` for constant-width antialiased lines, scrolling, distance fade. |
 | 16 | GPU traffic | `shaders/neonShaders.js` → `createTraffic` | Per-instance `aLane` attribute; the vertex stage moves cars with `mod(time × speed + offset, length)`. Head/tail lights chosen per vertex. |
 | 17 | Phase dissolve (injection) | `shaders/neonShaders.js` → `phaseMaterial` | Keeps three's full PBR lighting but patches its GLSL with `onBeforeCompile`: world position → `noise > uPhase ⇒ discard`, neon rim added to `totalEmissiveRadiance`. The level animates `uPhase` on a timer and removes the platform from the walkable list while it's gone. |
+| 18 | Starfield dome (Future) | `shaders/neonShaders.js` → `createStars` | One `THREE.Points` on a dome inside the camera's far plane; a raw ShaderMaterial ignores scene fog, so the sky keeps its depth behind the haze. Per-star `aSeed` drives size class, twinkle rate and warm/cool tint; the vertex stage does all animation (`sin(uTime·rate + seed)`), `gl_PointCoord` softens the sprite. Hundreds of stars, one draw call, zero CPU per frame. |
+| 19 | Distant city lights (Future) | `shaders/neonShaders.js` → `createDistantLights` | One `THREE.Points` annulus of hovering beacon glows between the towers; a per-point `aColor` attribute picks the city-window palette, `aSeed` paces each lamp's slow pulse in the vertex stage; the fragment stage layers a wide halo over a tight core so points read as lamps, not dots. Size attenuation `300/-mv.z` shrinks them with distance for free. |
 
 ## Likely marker questions (and short answers)
 
@@ -53,4 +55,5 @@ Every member should be able to talk through **at least the first five** below. E
   `uOn/uLightPos/uLightDir` ← player flashlight, `uCores` ← Time Machine sockets, `uActive/uDissolve` ← barrier timers
   and power, `uPhase` ← platform cycle, `uPlayer` ← player position (grass).
 - *Performance?* Instancing (grass, city, traffic, leaves) keeps draw calls low; particles and traffic animate on the GPU;
+  stars and distant city lights are one GPU-animated `Points` draw each and also scale down on Low quality;
   reflections render at ⅓–½ resolution and are off on Low quality.

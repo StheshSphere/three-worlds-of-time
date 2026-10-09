@@ -219,3 +219,147 @@ export function phaseMaterial(base, edgeColor = 0x6ff0ff) {
   m.customProgramCacheKey = () => 'phase-dissolve';
   return m;
 }
+
+/* =====================================================================
+   CUSTOM SHADER — Starfield over the fractured sky (Future only).
+   One THREE.Points: stars are scattered on a large dome centred above the
+   course (inside the camera's 600 m far plane — the city fog can't reach
+   them because a raw ShaderMaterial ignores scene.fog, so the sky keeps
+   its depth). Each star carries an aSeed attribute; the VERTEX stage
+   sizes and twinkles it with sin(uTime · rate + seed) — the CPU never
+   touches a star after creation. The FRAGMENT stage softens the square
+   point sprite into a round glow, and tints ~¼ of the stars warm so the
+   sky doesn't read as monochrome. Additive + depthWrite off = one cheap
+   transparent draw call that bloom lifts into a proper night sky.
+   ===================================================================== */
+export function createStars({ count = 650, radius = 520, center = [0, 20, -70], minElevation = 0.04 } = {}) {
+  const pos = new Float32Array(count * 3);
+  const seed = new Float32Array(count * 4);
+  for (let i = 0; i < count; i++) {
+    // Rejection-sample a direction in the upper hemisphere (biased away
+    // from the horizon so stars never float below the skyline).
+    let x = 0, y = 0, z = 0;
+    do {
+      x = Math.random() * 2 - 1; y = Math.random(); z = Math.random() * 2 - 1;
+    } while (x * x + y * y + z * z > 1 || y < minElevation);
+    const len = Math.hypot(x, y, z) || 1;
+    const r = radius * (0.92 + Math.random() * 0.08);
+    pos[i * 3] = center[0] + (x / len) * r;
+    pos[i * 3 + 1] = center[1] + (y / len) * r;
+    pos[i * 3 + 2] = center[2] + (z / len) * r;
+    seed[i * 4] = Math.random();                       // twinkle phase
+    seed[i * 4 + 1] = Math.random();                   // twinkle rate
+    seed[i * 4 + 2] = Math.random();                   // size class
+    seed[i * 4 + 3] = Math.random();                   // warm/cool tint
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geometry.setAttribute('aSeed', new THREE.BufferAttribute(seed, 4));
+  const material = new THREE.ShaderMaterial({
+    vertexShader: /* glsl */`
+      attribute vec4 aSeed;
+      uniform float uTime;
+      uniform float uSize;
+      varying float vTwinkle;
+      varying float vWarm;
+      void main() {
+        // A few bright stars, many faint ones; each blinks on its own beat.
+        float bright = 0.5 + pow(aSeed.z, 3.0) * 1.6;
+        vTwinkle = 0.55 + 0.45 * sin(uTime * (0.5 + aSeed.y * 1.8) + aSeed.x * 40.0);
+        vWarm = aSeed.w;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = uSize * bright * (300.0 / -mv.z);
+        gl_Position = projectionMatrix * mv;
+      }
+    `,
+    fragmentShader: /* glsl */`
+      varying float vTwinkle;
+      varying float vWarm;
+      void main() {
+        float d = length(gl_PointCoord - 0.5);
+        float a = smoothstep(0.5, 0.05, d) * vTwinkle;
+        vec3 cool = vec3(0.82, 0.9, 1.0);
+        vec3 warm = vec3(1.0, 0.85, 0.68);
+        vec3 col = mix(cool, warm, step(0.76, vWarm));
+        gl_FragColor = vec4(col * a * 1.6, a);
+      }
+    `,
+    uniforms: { uTime: { value: 0 }, uSize: { value: 2.6 } },
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  });
+  const points = new THREE.Points(geometry, material);
+  points.frustumCulled = false;
+  return { mesh: points, material, update(t) { material.uniforms.uTime.value = t; }, dispose() { geometry.dispose(); material.dispose(); } };
+}
+
+/* =====================================================================
+   CUSTOM SHADER — Distant city lights (Future only).
+   Hovering beacon glows between the towers: one THREE.Points annulus
+   around the course, each point tinted by an aColor attribute (the same
+   cyan / magenta / amber as the city windows) and pulsed slowly in the
+   VERTEX stage from its aSeed. The FRAGMENT stage layers a wide soft
+   halo over a tight hot core, so each point reads as a lamp, not a dot.
+   Point size uses the standard 300/-mv.z perspective attenuation, so the
+   lamps shrink with distance for free. Static, GPU-animated, one draw.
+   ===================================================================== */
+export function createDistantLights({ count = 110, center = [0, 0, -70], inner = 30, outer = 165, yMin = -100, yMax = 40, avoid } = {}) {
+  const PALETTE = [[0.24, 0.9, 1.0], [1.0, 0.3, 0.85], [1.0, 0.72, 0.38], [1.0, 0.25, 0.3]];
+  const pos = new Float32Array(count * 3);
+  const seed = new Float32Array(count);
+  const col = new Float32Array(count * 3);
+  let n = 0;
+  for (let i = 0; i < count * 4 && n < count; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = inner + Math.random() * (outer - inner);
+    const x = center[0] + Math.cos(a) * r;
+    const z = center[2] + Math.sin(a) * r;
+    if (avoid && avoid(x, z)) continue;                 // keep the course corridor clear
+    pos[n * 3] = x;
+    pos[n * 3 + 1] = center[1] + yMin + Math.pow(Math.random(), 1.5) * (yMax - yMin);
+    pos[n * 3 + 2] = z;
+    seed[n] = Math.random();
+    const c = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+    col[n * 3] = c[0]; col[n * 3 + 1] = c[1]; col[n * 3 + 2] = c[2];
+    n++;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(pos.slice(0, n * 3), 3));
+  geometry.setAttribute('aSeed', new THREE.BufferAttribute(seed.slice(0, n), 1));
+  geometry.setAttribute('aColor', new THREE.BufferAttribute(col.slice(0, n * 3), 3));
+  const material = new THREE.ShaderMaterial({
+    vertexShader: /* glsl */`
+      attribute float aSeed;
+      attribute vec3 aColor;
+      uniform float uTime;
+      uniform float uSize;
+      varying vec3 vColor;
+      varying float vPulse;
+      void main() {
+        vColor = aColor;
+        // Each lamp drifts in and out on its own slow beat — a skyline
+        // breathing rather than a wall of static dots.
+        vPulse = 0.5 + 0.5 * sin(uTime * (0.25 + aSeed * 0.8) + aSeed * 40.0);
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = uSize * (0.8 + vPulse * 0.4) * (300.0 / -mv.z);
+        gl_Position = projectionMatrix * mv;
+      }
+    `,
+    fragmentShader: /* glsl */`
+      varying vec3 vColor;
+      varying float vPulse;
+      void main() {
+        float d = length(gl_PointCoord - 0.5);
+        float halo = smoothstep(0.5, 0.0, d);
+        halo *= halo;                                        // softer skirt
+        float core = smoothstep(0.14, 0.0, d);               // bright lamp centre
+        float a = (halo * 0.5 + core) * (0.45 + 0.55 * vPulse);
+        gl_FragColor = vec4(vColor * a * 2.2, a);
+      }
+    `,
+    uniforms: { uTime: { value: 0 }, uSize: { value: 2.4 } },
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  });
+  const points = new THREE.Points(geometry, material);
+  points.frustumCulled = false;
+  return { mesh: points, material, update(t) { material.uniforms.uTime.value = t; }, dispose() { geometry.dispose(); material.dispose(); } };
+}

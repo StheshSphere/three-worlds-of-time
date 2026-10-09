@@ -242,6 +242,21 @@ export class AudioManager {
       const g2 = this.ctx.createGain(); g2.gain.value = 0.22;
       src.connect(hp).connect(g2).connect(gain);
       nodes.push(lp, g, hp, g2);
+      // The void under the skyline: a near-sub drone (two sines 0.6 Hz
+      // apart, beating slowly) plus a dark howl that rises and falls far
+      // below the deck — the bottomless city should sound bottomless too.
+      for (const f of [36, 36.6]) {
+        const o = this.ctx.createOscillator(); o.frequency.value = f;
+        const g3 = this.ctx.createGain(); g3.gain.value = 0.028;
+        o.connect(g3).connect(gain); o.start(); nodes.push(o, g3);
+      }
+      const voidSrc = noise();
+      const vp = this.ctx.createBiquadFilter(); vp.type = 'bandpass'; vp.frequency.value = 260; vp.Q.value = 1.4;
+      const g4 = this.ctx.createGain(); g4.gain.value = 0.09;
+      voidSrc.connect(vp).connect(g4).connect(gain);
+      lfo(0.045, 150, vp.frequency);
+      lfo(0.031, 0.05, g4.gain);
+      nodes.push(vp, g4);
     }
     this.ambience = { nodes, gain };
   }
