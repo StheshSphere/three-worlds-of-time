@@ -107,3 +107,9 @@ the in-game **Credits** screen.
 
 Large parts of this remaster were produced with AI assistance (Claude Code, Anthropic). This is declared in the in-game
 credits; every team member should still be able to explain the code they present.
+
+```bash
+python3 -m http.server 8000 &            # from the repo root
+cd tools && npm install
+node play.mjs tests/full-playthrough.json /tmp/shots   # all three eras → win screen, fails on any page error
+```

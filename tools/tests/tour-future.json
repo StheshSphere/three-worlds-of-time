@@ -1,0 +1,10 @@
+{ "url": "http://127.0.0.1:8000/index.html", "steps": [
+  { "eval": "__game.skipTo(2); __game.player.isLocked = true; null" }, { "wait": 5200 },
+  { "eval": "__game.player.tryDash(); null" }, { "wait": 1500 },
+  { "eval": "{ const p=__game.player; p.rig.position.set(2,1.0,-48); p.yaw=0.15; p.pitch=-0.25; } null" }, { "wait": 1500 }, { "shot": "o4_phase" },
+  { "eval": "{ const p=__game.player; p.rig.position.set(1.2,1.5,-84); p.yaw=0.1; p.pitch=-0.2; } null" }, { "wait": 1300 }, { "shot": "o5_gauntlet" },
+  { "eval": "__game.levels.debug.goto(4); { const p=__game.player; p.rig.position.set(0,1.6,-112); } null" }, { "wait": 200 },
+  { "eval": "JSON.stringify({rift: __game.levels.debug.state.riftActive, ground: __game.player.groundObject && __game.player.groundObject.userData.tileIndex})" },
+  { "wait": 800 }, { "eval": "{ const p=__game.player; p.yaw=Math.PI; p.pitch=-0.1; } null" }, { "wait": 400 }, { "shot": "o6_rift" },
+  { "eval": "JSON.stringify(__game.levels.debug.state)" }
+]}
