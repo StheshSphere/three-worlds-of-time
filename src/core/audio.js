@@ -135,11 +135,19 @@ export class AudioManager {
       else this.ctx.addEventListener('statechange', () => { if (this.ctx.state === 'running' && sound.buffer && !sound.isPlaying && sound.parent) sound.play(); }, { once: true });
     }
     object.add(sound);
+    let disposed = false;
     return {
       sound,
       dispose() {
+        // Idempotent: levels may wind a positional sound down early (e.g. the
+        // lab's generators stop when mains returns) and the manager disposes
+        // every handle again on unload. A second disconnect would throw from
+        // THREE.PositionalAudio.disconnect() (destination already detached)
+        // and abort the rest of the unload disposal loop.
+        if (disposed) return;
+        disposed = true;
         try { if (sound.isPlaying) sound.stop(); } catch { /* already stopped */ }
-        sound.disconnect();
+        try { sound.disconnect(); } catch { /* audio graph already torn down */ }
         if (sound.parent) sound.parent.remove(sound);
       },
     };

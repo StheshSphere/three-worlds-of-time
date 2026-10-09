@@ -55,8 +55,17 @@ export class UI {
 
   /* ----------------------------- loading ---------------------------- */
   setProgress(f, label) {
+    // The bar is a genuine job count (see assets.js); name the job that is
+    // actually loading instead of repeating the percentage.
     $('progress-fill').style.width = `${Math.round(f * 100)}%`;
-    if (label) $('loading-text').textContent = `Gathering fragments of time… ${Math.round(f * 100)}%`;
+    if (label) {
+      const pretty = label
+        .replace(/^audio music:/, 'music: ')
+        .replace(/^audio /, 'sound: ')
+        .replace(/^texture /, 'texture: ')
+        .replace(/^model /, 'model: ');
+      $('loading-text').textContent = `Gathering fragments of time… ${pretty}`;
+    }
   }
 
   /* ----------------------------- HUD -------------------------------- */

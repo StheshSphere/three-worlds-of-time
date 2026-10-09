@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createParticles, createBeam } from '../shaders/effects.js';
 import { createBarrierMaterial, createScreenMaterial } from '../shaders/labShaders.js';
+import { createBeaconMaterial } from '../shaders/beacon.js';
 import { createCity, createGridFloor, createTraffic, phaseMaterial } from '../shaders/neonShaders.js';
 
 /**
@@ -145,6 +146,13 @@ export function build(kit, api) {
   chev.rotation.set(-Math.PI / 2, 0, Math.PI / 2);
   chev.position.set(0, 0.02, -5.6);
   kit.add(chev);
+  // Repeat the arrows at the two later decision points (same texture/material).
+  for (const [cx, cy, cz] of [[0, 0.52, -15.6], [0, 1.52, -105.6]]) {
+    const c = new THREE.Mesh(chev.geometry, chev.material);
+    c.rotation.copy(chev.rotation);
+    c.position.set(cx, cy, cz);
+    kit.add(c);
+  }
 
   /* ===================================================================
      2. Moving platforms
@@ -156,13 +164,14 @@ export function build(kit, api) {
     movers.push({ ...p, base: p.group.position.clone(), axis, amp, speed, phase });
   }
   platform(0, -47, 8, 6, 1.0, magenta);
+  const _prevPos = new THREE.Vector3();   // scratch — no per-frame allocations
   kit.update((dt, t) => {
     for (const m of movers) {
-      const prev = m.group.position.clone();
+      _prevPos.copy(m.group.position);
       m.group.position.copy(m.base);
       m.group.position[m.axis] += Math.sin(t * m.speed + m.phase) * m.amp;
       m.group.updateMatrixWorld(true);
-      m.body.userData.carryDelta.subVectors(m.group.position, prev);
+      m.body.userData.carryDelta.subVectors(m.group.position, _prevPos);
     }
   });
 
@@ -175,13 +184,14 @@ export function build(kit, api) {
     const mat = phaseMaterial(deck, i % 2 ? 0xff5be0 : 0x6ff0ff);
     kit.track(mat);
     const p = platform(0, -53 - i * 5, 3.2, 3.2, 1.0, i % 2 ? magenta : cyan, { mat });
-    phases.push({ ...p, mat, offset: i * 0.85, solid: true });
+    phases.push({ ...p, mat, offset: i * 0.85, solid: true, c: 0 });
   }
   platform(0, -81, 8, 6, 1.5, cyan);
   kit.update((dt, t) => {
     for (const ph of phases) {
       // 0 → 2.6 s solid, then dissolve, 1.1 s gone, rematerialise.
       const c = (t + ph.offset) % PERIOD;
+      ph.c = c;                  // read by debug() for automated tests
       let v = 1;
       if (c > 2.6 && c < 3.1) v = 1 - (c - 2.6) / 0.5;
       else if (c >= 3.1 && c < 4.1) v = 0;
@@ -216,18 +226,25 @@ export function build(kit, api) {
       post.material = deckDark;
     }
     api.positional('force-field', wall, { volume: 0.4, refDistance: 3 });
-    barriers.push({ wall, mat, proxy, offset, active: true, z });
+    barriers.push({ wall, mat, proxy, offset, active: true, warn: false, on: true, c: 0, z });
   }
   const lasers = [];
   for (const [z, dir] of [[-93.5, 1], [-102.5, -1]]) {
     const post = new THREE.Mesh(kit.cylGeo(0.22, 0.3, 0.9, 12, 1), deckDark);
     post.position.set(0, 1.5 + 0.45, z);
     kit.add(post);
+    // The emitter bollard is solid, like the barriers' side posts. The beam
+    // hit test treats the segment's origin as lethal, so a permeable post
+    // would zap the exact spot it visually covers; collision now matches
+    // the visible emitter (and it is still low enough to jump over).
+    kit.proxy({ size: [0.62, 0.9, 0.62], pos: [0, 1.5 + 0.45, z] });
     const beam = createBeam({ radius: 0.07, color: 0xff2a6a });
     kit.add(beam.mesh);
     kit.track(beam);
     lasers.push({ z, dir, beam, y: 1.5 + 0.5, angle: dir > 0 ? 0 : Math.PI });
   }
+  // Each laser hums where it sweeps, so the danger is audible before it is seen.
+  lasers.forEach((l, i) => api.positional('hum', l.beam.mesh, { volume: 0.15, refDistance: 2.5, rolloff: 2, rate: 1.1 - i * 0.2 }));
   const _a = new THREE.Vector3();
   const _b = new THREE.Vector3();
   const _hitFrom = new THREE.Vector3();
@@ -238,10 +255,17 @@ export function build(kit, api) {
       // 1.7 s on, 1.1 s off, with a warning flicker before switching on.
       const c = (t + b.offset) % 2.8;
       const on = c < 1.7;
+      b.on = on;
+      b.c = c;                     // read by debug() for automated tests
       b.mat.uniforms.uTime.value = t;
       b.mat.uniforms.uActive.value += ((on ? 1 : 0) - b.mat.uniforms.uActive.value) * Math.min(1, dt * 10);
       b.mat.uniforms.uDissolve.value = on ? 0 : 0.55;
-      b.mat.uniforms.uWarn.value = !on && c > 2.45 ? 1 : 0;
+      // Warning flash rising edge: a short cue when the player is close enough
+      // for it to matter (the flash itself is the shader's uWarn).
+      const warn = !on && c > 2.45;
+      b.mat.uniforms.uWarn.value = warn ? 1 : 0;
+      if (warn && !b.warn && player.position.distanceToSquared(b.wall.position) < 196) api.sound('switch', { volume: 0.22, rate: 1.45, jitter: 0 });
+      b.warn = warn;
       // Dashing phases you through even an active barrier.
       const solid = on && !player.isDashing;
       if (solid !== b.active) { b.active = solid; if (solid) kit.addCollider(b.proxy); else kit.removeCollider(b.proxy); }
@@ -289,6 +313,7 @@ export function build(kit, api) {
   riftSparks.mesh.position.set(0, -4, 0);
   kit.track(riftSparks);
   let riftZ = -104;
+  let riftRumble = null;   // positional handle, created lazily on the first run
 
   function resetCollapse() {
     tiles.forEach((tile) => {
@@ -305,6 +330,7 @@ export function build(kit, api) {
     state.riftActive = false;
     riftZ = -104;
     rift.visible = false;
+    if (riftRumble && riftRumble.sound.isPlaying) riftRumble.sound.pause();
   }
 
   const warnMat = kit.track(new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0xff2a2a, emissiveIntensity: 3 }));
@@ -319,6 +345,8 @@ export function build(kit, api) {
     if (!state.riftActive && ground && ground.userData.tileIndex === 0 && !state.coreTaken) {
       state.riftActive = true;
       rift.visible = true;
+      if (!riftRumble) riftRumble = api.positional('hum', rift, { volume: 0.55, refDistance: 7, rolloff: 1.3, rate: 0.55 });
+      else if (riftRumble.sound.buffer && !riftRumble.sound.isPlaying) riftRumble.sound.play();
       api.sound('crumble', { volume: 0.9 });
       api.shake(0.35);
       api.message('The skyline is collapsing behind you — RUN!', 2400);
@@ -357,6 +385,7 @@ export function build(kit, api) {
       }
       if (player.position.z < -138) {
         state.riftActive = false;
+        if (riftRumble && riftRumble.sound.isPlaying) riftRumble.sound.pause();
         riftMat.uniforms.uDissolve.value = 0;
         api.message('You outran the collapse. The Neon Core waits on the spire.', 2600);
       }
@@ -398,6 +427,33 @@ export function build(kit, api) {
   });
 
   /* ===================================================================
+     Checkpoint beacons — Member 3's second custom shader (see
+     src/shaders/beacon.js). One holographic pillar per checkpoint; the
+     pulse fires when the checkpoint is earned in the loop below.
+     =================================================================== */
+  const beaconGeo = kit.track(new THREE.PlaneGeometry(1.3, 2.8));
+  const beacons = checkpoints.map((cp) => {
+    const mat = kit.track(createBeaconMaterial(0xff5be0));
+    const g = new THREE.Group();
+    for (const ry of [0, Math.PI / 2]) {
+      const q = new THREE.Mesh(beaconGeo, mat);
+      q.rotation.y = ry;
+      q.position.y = 1.4;
+      g.add(q);
+    }
+    g.position.set(2.4, cp.y, cp.z);
+    kit.add(g);
+    return { mat, pulse: 0 };
+  });
+  kit.update((dt, t) => {
+    for (const b of beacons) {
+      b.pulse = Math.max(0, b.pulse - dt * 0.7);
+      b.mat.uniforms.uTime.value = t;
+      b.mat.uniforms.uPulse.value = b.pulse;
+    }
+  });
+
+  /* ===================================================================
      Checkpoints, hints, marker
      =================================================================== */
   const sectionZ = [-15, -45, -79, -105];
@@ -410,6 +466,7 @@ export function build(kit, api) {
         state.reached[i + 1] = true;
         state.section = i + 1;
         api.checkpoint(checkpoints[i + 1], 0);
+        beacons[i + 1].pulse = 1;
         if (i + 1 === 4) resetCollapse();
       }
     }
@@ -448,6 +505,7 @@ export function build(kit, api) {
   kit.update((dt, t) => {
     if (!introShown && t > 0.5) {
       introShown = true;
+      beacons[0].pulse = 1;
       setTimeout(() => { if (!state.coreTaken && !state.disposed) api.message('Your gauntlet hums with stolen time — CHRONO-DASH unlocked: Q or right-click. Dashing phases you through energy barriers.', 5200); }, 4800);
     }
   });
@@ -466,6 +524,16 @@ export function build(kit, api) {
     state,
     goto(i) { api.player.setCheckpoint(checkpoints[i], 0); api.player.reset(); },
     takeCore() { core.userData.onInteract(); },
+    collapse() { return { riftActive: state.riftActive, riftZ, fallen: tiles.filter((x) => x.fallen).length }; },
+    // Read-only views of the timing hazards for the automated route test.
+    gauntlet() {
+      return {
+        barriers: barriers.map((b) => ({ on: b.on, c: b.c, active: b.active })),
+        lasers: lasers.map((l) => ({ angle: l.angle })),
+      };
+    },
+    movers: () => movers.map((m) => ({ x: m.group.position.x, y: m.group.position.y, z: m.group.position.z })),
+    phases: () => phases.map((ph) => ({ solid: ph.solid, c: ph.c })),
   };
 
   kit.track({ dispose() { state.disposed = true; } });

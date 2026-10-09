@@ -17,10 +17,13 @@ const [scriptPath, outDir] = process.argv.slice(2);
 const script = JSON.parse(fs.readFileSync(scriptPath, 'utf8'));
 fs.mkdirSync(outDir, { recursive: true });
 const [w, h] = (script.size || '1280x720').split('x').map(Number);
+// --use-angle=metal only exists on macOS; passing it on Windows silently
+// drops Chrome to the software renderer (~7 fps, game time crawls).
+const angleArgs = process.platform === 'darwin' ? ['--use-angle=metal'] : ['--use-angle=default'];
 const browser = await puppeteer.launch({
   executablePath: process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: 'new',
-  args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'],
+  args: [...angleArgs, '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'],
   defaultViewport: { width: w, height: h },
 });
 const page = await browser.newPage();

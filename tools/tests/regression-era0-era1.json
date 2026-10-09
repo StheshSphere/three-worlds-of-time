@@ -1,0 +1,80 @@
+{
+ "comment": "Regression: Members 1-2 work. Era 0 (ruins) audio+progress; Era 1 (lab) audio, checkpoint reset (Member 2 API), volume/mute, power-restoration payoff. Exits non-zero on any page/eval error.",
+ "url": "http://127.0.0.1:8000/index.html",
+ "steps": [
+  {"eval": "__game.start(); __game.player.isLocked = true; null"},
+  {"comment": "Skip prologue: press Space until actually playing (pacing-independent).",
+   "eval": "new Promise((resolve) => { let n = 0; const iv = setInterval(() => { if (__game.mode() === 'playing') { clearInterval(iv); resolve('prologue skipped, mode=playing'); } else { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' })); if (++n > 120) { clearInterval(iv); resolve('TIMEOUT mode=' + __game.mode()); } } }, 500); })"},
+
+  {"comment": "ERA 0 — Level 1 basics + audio (music track loaded, ambience synth, master bus).",
+   "eval": "JSON.stringify({mode: __game.mode(), lvl: __game.levels.index, st: __game.levels.state, cores: __game.timeMachine.getCores()})"},
+  {"eval": "JSON.stringify({music: (__game.audio.music && __game.audio.music.name) || null, musicBuffer: !!(__game.audio.music && __game.audio.music.source && __game.audio.music.source.buffer), ambience: !!__game.audio.ambience, ambNodes: __game.audio.ambience ? __game.audio.ambience.nodes.length : 0, ctx: __game.audio.ctx.state, masterGain: +__game.audio.listener.gain.gain.value.toFixed(2)})"},
+  {"wait": 2500},
+
+  {"comment": "Solve Level 1 via its debug API (same as full-playthrough).",
+   "eval": "{ const d = __game.levels.debug; d.solveBlocks(); d.alignMirrors(); d.readTablets(); d.solveDrums(); } null"},
+  {"wait": 3000},
+  {"comment": "readTablets() opens real reader panels — close them so the render loop resumes (frame() only updates in mode 'playing').",
+   "eval": "{ __game.ui.closeAllPanels(); __game.player.isLocked = true; } null"},
+  {"eval": "JSON.stringify({ panelsOpen: !!__game.ui.panelOpen, mode: __game.mode() })"},
+  {"eval": "__game.levels.debug.takeCore(); null"},
+
+  {"comment": "Wait for Past -> Present transition to finish.",
+   "eval": "new Promise((resolve) => { const t0 = Date.now(); const iv = setInterval(() => { const ok = __game.levels.index === 1 && __game.levels.state === 'playing'; if (ok || Date.now() - t0 > 240000) { clearInterval(iv); resolve(ok ? 'era1 ready' : 'TIMEOUT ' + JSON.stringify({ lvl: __game.levels.index, st: __game.levels.state })); } }, 500); })"},
+
+  {"comment": "ERA 1 — progress carried (1 core), music crossfaded, ambience swapped, and Member 2: loading a level CLEARS checkpoints.",
+   "eval": "JSON.stringify({lvl: __game.levels.index, st: __game.levels.state, cores: __game.timeMachine.getCores(), music: (__game.audio.music && __game.audio.music.name) || null, ambience: !!__game.audio.ambience, checkpointClearedOnLoad: __game.player.getCheckpoint() === null})"},
+  {"shot": "g1_lab_dark"},
+
+  {"comment": "Lab dark-phase snapshot: night fog, 3 rotating red beacons visible, red power-room lamp, grid offline.",
+   "eval": "(() => { let redVis = 0, roomRed = -1; __game.scene.traverse((o) => { if (!o.isLight) return; if (o.isSpotLight && o.color.getHex() === 0xff1a0a && o.visible) redVis++; if (o.isPointLight && o.color.getHex() === 0xff2a14) roomRed = o.intensity; }); return JSON.stringify({ fog: '#' + __game.scene.fog.color.getHexString(), density: +__game.scene.fog.density.toFixed(4), beaconsVisible: redVis, roomRedLamp: roomRed, power: __game.levels.debug.state.power }); })()"},
+
+  {"comment": "Member 2 keypad feedback, BOTH outcomes — wire the spy, press E on the real keypad, deny a wrong code, then grant the real code (this also arms the silent checkpoint at the door).",
+   "eval": "(() => { window.__snd = []; const ap = __game.audio.play.bind(__game.audio); __game.audio.play = (n, o) => { window.__snd.push(n); return ap(n, o); }; const kp = __game.player.interactables.find((o) => Math.abs(o.position.x - 2.25) < 0.01 && Math.abs(o.position.z + 29.66) < 0.01); if (!kp) return 'keypad mesh not found'; kp.userData.onInteract(); const real = __game.ui.onKeypadSubmit; window.__wrong = __game.ui.onKeypadSubmit('9999'); __game.ui.onKeypadSubmit(__game.levels.debug.code); __game.ui.closeTopPanel(); __game.player.isLocked = true; return JSON.stringify({ found: true, wrongCodeAccepted: window.__wrong, panelStillOpen: !!__game.ui.panelOpen }); })()"},
+  {"wait": 800},
+  {"eval": "(() => { const s = __game.levels.debug.state; return JSON.stringify({ doorOpen: s.doorOpen, wrongCodes: s.wrongCodes, sounds: window.__snd }); })()"},
+
+  {"comment": "Member 2 power-room checkpoint pad: teleport through the open door; the pad update should arm a VISIBLE checkpoint at (0,0,-31.2) and overwrite the door one. Self-heal first: headless Chrome can drop pointer lock, which pauses the loop — re-assert 'playing' via the game's own lock event contract.",
+   "eval": "(() => { const p = __game.player; if (__game.mode() !== 'playing') { p.isLocked = true; p.dispatchEvent({ type: 'lock' }); } p.rig.position.set(0, 0.1, -31.6); p.velocity.set(0, 0, 0); return 'mode=' + __game.mode() + ', teleported into power room'; })()"},
+  {"wait": 1200},
+  {"eval": "(() => { const p = __game.player; if (__game.mode() !== 'playing') { p.isLocked = true; p.dispatchEvent({ type: 'lock' }); } const cp = p.getCheckpoint(); return JSON.stringify({ checkpoint: cp ? { x: +cp.position.x.toFixed(2), z: +cp.position.z.toFixed(2), yaw: +cp.yaw.toFixed(2) } : null, checkpointSound: window.__snd.filter((n) => n === 'checkpoint').length }); })()"},
+  {"shot": "g2_checkpoint_pad"},
+
+  {"comment": "VOLUME / MUTE (Member 2): settings drive the live audio graph.",
+   "eval": "__game.settings.set('masterVolume', 0.25); __game.settings.set('musicVolume', 0.2); __game.settings.set('sfxVolume', 0.4); null"},
+  {"wait": 600},
+  {"eval": "JSON.stringify({ master: +__game.audio.listener.gain.gain.value.toFixed(2), musicBus: +__game.audio.musicBus.gain.value.toFixed(2), sfxBus: +__game.audio.sfxBus.gain.value.toFixed(2), ambBus: +__game.audio.ambBus.gain.value.toFixed(2) })"},
+  {"eval": "document.getElementById('pause-mute-button').click(); null"},
+  {"wait": 500},
+  {"eval": "(() => { const b = document.getElementById('pause-mute-button'); return JSON.stringify({ setting: __game.settings.get('masterVolume'), listenerGain: +__game.audio.listener.gain.gain.value.toFixed(2), buttonText: b.textContent, buttonMutedClass: b.classList.contains('muted'), pauseSlider: document.getElementById('pause-volume-slider').value, titleSlider: document.getElementById('title-volume-slider').value, optionsSlider: document.querySelector('#options-screen input[data-setting=\"masterVolume\"]').value, musicStillLoaded: !!__game.audio.music && __game.audio.music.name === 'lab' }); })()"},
+  {"eval": "document.getElementById('pause-mute-button').click(); null"},
+  {"wait": 500},
+  {"eval": "(() => { const b = document.getElementById('pause-mute-button'); return JSON.stringify({ setting: __game.settings.get('masterVolume'), listenerGain: +__game.audio.listener.gain.gain.value.toFixed(2), buttonText: b.textContent }); })()"},
+  {"eval": "__game.settings.set('masterVolume', 0.8); __game.settings.set('musicVolume', 0.55); __game.settings.set('sfxVolume', 0.8); null"},
+  {"wait": 600},
+  {"eval": "JSON.stringify({ master: +__game.audio.listener.gain.gain.value.toFixed(2), musicBus: +__game.audio.musicBus.gain.value.toFixed(2), sfxBus: +__game.audio.sfxBus.gain.value.toFixed(2), ambBus: +__game.audio.ambBus.gain.value.toFixed(2) })"},
+
+  {"comment": "LAB POWER CHANGE (Member 2 payoff): solve the grid; emergency lights fade, fog lifts, work lights stutter on, generator hums stop.",
+   "eval": "(() => { const p = __game.player; if (__game.mode() !== 'playing') { p.isLocked = true; p.dispatchEvent({ type: 'lock' }); } let positional = 0; __game.scene.traverse((o) => { if (o instanceof __game.THREE.PositionalAudio) positional++; }); window.__posBefore = positional; __game.levels.debug.solveGrid(); return 'grid solved, mode=' + __game.mode() + ', positional sounds before: ' + positional; })()"},
+  {"wait": 600},
+  {"eval": "JSON.stringify({ power: __game.levels.debug.state.power, powerSounds: window.__snd.filter((n) => /power/.test(n)) })"},
+  {"comment": "Game-time-driven wait: the transformation takes ~4s of GAME time; headless rendering is slower than wall-clock, so poll until the emergency fade has fully settled.",
+   "eval": "new Promise((resolve) => { const t0 = Date.now(); let tube = 0, workOn = 0; const iv = setInterval(() => { const fog = __game.scene.fog; tube = 0; workOn = 0; __game.scene.traverse((o) => { if (o.isMesh && o.material && o.material.emissive && o.material.emissive.getHex && o.material.emissive.getHex() === 0xd8f2ff) tube = Math.max(tube, o.material.emissiveIntensity); if (o.isPointLight && o.userData.target !== undefined && o.visible && o.intensity > 0) workOn++; }); const done = fog.color.getHexString() === '101a2a' && Math.abs(fog.density - 0.013) < 0.0005 && Math.abs(tube - 2.4) < 0.05 && workOn === 9; if (done || Date.now() - t0 > 120000) { clearInterval(iv); resolve(done ? 'power transformation settled' : 'TIMEOUT fog=' + fog.color.getHexString() + ' d=' + fog.density.toFixed(4) + ' tube=' + tube.toFixed(2) + ' workOn=' + workOn); } }, 400); })"},
+  {"eval": "(() => { let work = 0, workOn = 0, redVis = 0, roomRed = -1, tube = 0, positional = 0; __game.scene.traverse((o) => { if (o.isLight) { if (o.isPointLight && o.userData.target !== undefined) { work++; if (o.visible && o.intensity > 0) workOn++; } if (o.isSpotLight && o.color.getHex() === 0xff1a0a && o.visible) redVis++; if (o.isPointLight && o.color.getHex() === 0xff2a14) roomRed = o.intensity; } if (o.isMesh && o.material && o.material.emissive && o.material.emissive.getHex && o.material.emissive.getHex() === 0xd8f2ff) tube = Math.max(tube, o.material.emissiveIntensity); if (o instanceof __game.THREE.PositionalAudio) positional++; }); return JSON.stringify({ fog: '#' + __game.scene.fog.color.getHexString(), density: +__game.scene.fog.density.toFixed(4), workLights: work, workLightsOn: workOn, beaconsVisible: redVis, roomRedLamp: roomRed, tubeEmissive: +tube.toFixed(2), positionalBefore: window.__posBefore, positionalAfter: positional }); })()"},
+  {"shot": "g3_power_restored"},
+
+  {"comment": "CHECKPOINT RESET: real api.hurt({respawn}) — shock sound, 450ms, reset() returns to the armed checkpoint.",
+   "eval": "(() => { const p = __game.player; if (__game.mode() !== 'playing') { p.isLocked = true; p.dispatchEvent({ type: 'lock' }); } __game.levels.api.hurt({ respawn: true }); return 'hurt sent, mode=' + __game.mode(); })()"},
+  {"wait": 1600},
+  {"eval": "(() => { const p = __game.player, r = p.rig.position; return JSON.stringify({ x: +r.x.toFixed(2), y: +r.y.toFixed(2), z: +r.z.toFixed(2), keysStuck: Object.values(p.keys).some(Boolean), mode: __game.mode(), levelState: __game.levels.state, cores: __game.timeMachine.getCores(), shocks: __game.levels.stats.shocks }); })()"},
+
+  {"comment": "Finish Level 2: drop the vault field, take the core, ride to Era 2 (confirms 1-2 still function end to end).",
+   "eval": "(() => { const p = __game.player; if (__game.mode() !== 'playing') { p.isLocked = true; p.dispatchEvent({ type: 'lock' }); } __game.levels.debug.dropField(); return 'field dropped, mode=' + __game.mode(); })()"},
+  {"wait": 1600},
+  {"eval": "JSON.stringify({ fieldDown: __game.levels.debug.state.fieldDown, cores: __game.timeMachine.getCores() })"},
+  {"eval": "__game.levels.debug.takeCore(); null"},
+  {"eval": "new Promise((resolve) => { const t0 = Date.now(); const iv = setInterval(() => { const ok = __game.levels.index === 2 && __game.levels.state === 'playing'; if (ok || Date.now() - t0 > 240000) { clearInterval(iv); resolve(ok ? 'era2 ready' : 'TIMEOUT ' + JSON.stringify({ lvl: __game.levels.index, st: __game.levels.state })); } }, 500); })"},
+  {"eval": "JSON.stringify({ lvl: __game.levels.index, st: __game.levels.state, cores: __game.timeMachine.getCores(), sfxSeen: window.__snd.length })"},
+  {"shot": "g4_era2_arrival"}
+ ]
+}

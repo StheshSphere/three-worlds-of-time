@@ -5,25 +5,11 @@
    "eval": "__game.start(); __game.player.isLocked = true; JSON.stringify(__game.renderer.info.memory)"
   },
   {
-   "wait": 1500
+   "comment": "Skip the prologue: press Space until the game is actually playing (pacing-independent).",
+   "eval": "new Promise((resolve) => { let n = 0; const iv = setInterval(() => { if (__game.mode() === 'playing') { clearInterval(iv); resolve('prologue skipped, mode=playing'); } else { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' })); if (++n > 120) { clearInterval(iv); resolve('TIMEOUT mode=' + __game.mode()); } } }, 500); })"
   },
   {
-   "eval": "window.dispatchEvent(new KeyboardEvent('keydown',{code:'Space'})); null"
-  },
-  {
-   "wait": 800
-  },
-  {
-   "eval": "window.dispatchEvent(new KeyboardEvent('keydown',{code:'Space'})); null"
-  },
-  {
-   "wait": 800
-  },
-  {
-   "eval": "__game.player.isLocked = true; JSON.stringify({mode: __game.mode(), state: __game.levels.state})"
-  },
-  {
-   "wait": 3000
+   "eval": "__game.player.isLocked = true; JSON.stringify({ mode: __game.mode(), state: __game.levels.state })"
   },
   {
    "eval": "{ const d=__game.levels.debug; d.solveBlocks(); d.alignMirrors(); d.readTablets(); d.solveDrums(); } null"
@@ -35,7 +21,8 @@
    "eval": "__game.levels.debug.takeCore(); null"
   },
   {
-   "wait": 5500
+   "comment": "Wait for the Past -> Present era transition to FINISH (game-time driven, machine-speed independent).",
+   "eval": "new Promise((resolve) => { const t0 = Date.now(); const iv = setInterval(() => { const ok = __game.levels.index === 1 && __game.levels.state === 'playing'; if (ok || Date.now() - t0 > 240000) { clearInterval(iv); resolve(ok ? 'era1 ready' : 'TIMEOUT ' + JSON.stringify({ lvl: __game.levels.index, st: __game.levels.state })); } }, 500); })"
   },
   {
    "eval": "JSON.stringify({lvl: __game.levels.index, st: __game.levels.state, cores: __game.timeMachine.getCores(), mem: __game.renderer.info.memory})"
@@ -62,7 +49,8 @@
    "eval": "__game.levels.debug.takeCore(); null"
   },
   {
-   "wait": 5500
+   "comment": "Wait for the Present -> Future era transition to finish.",
+   "eval": "new Promise((resolve) => { const t0 = Date.now(); const iv = setInterval(() => { const ok = __game.levels.index === 2 && __game.levels.state === 'playing'; if (ok || Date.now() - t0 > 240000) { clearInterval(iv); resolve(ok ? 'era2 ready' : 'TIMEOUT ' + JSON.stringify({ lvl: __game.levels.index, st: __game.levels.state })); } }, 500); })"
   },
   {
    "eval": "JSON.stringify({lvl: __game.levels.index, st: __game.levels.state, cores: __game.timeMachine.getCores(), mem: __game.renderer.info.memory})"
@@ -74,37 +62,30 @@
    "eval": "__game.levels.debug.takeCore(); null"
   },
   {
-   "wait": 2500
+   "comment": "Final core: wait for the finale state, then the epilogue cutscene, skip it, then credits.",
+   "eval": "new Promise((resolve) => { const t0 = Date.now(); const iv = setInterval(() => { const st = __game.levels.state; if (st === 'finale' || Date.now() - t0 > 240000) { clearInterval(iv); resolve('state=' + st); } }, 400); })"
   },
   {
    "shot": "f2_finale"
   },
   {
-   "wait": 3000
+   "eval": "new Promise((resolve) => { const t0 = Date.now(); const iv = setInterval(() => { const m = __game.mode(); if (m === 'cutscene' || Date.now() - t0 > 300000) { clearInterval(iv); resolve('mode=' + m); } }, 400); })"
   },
   {
    "shot": "f3_finale"
   },
   {
-   "wait": 2500
+   "eval": "window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' })); null"
   },
   {
    "wait": 1500
   },
   {
-   "eval": "__game.mode()"
+   "eval": "new Promise((resolve) => { const t0 = Date.now(); const iv = setInterval(() => { const m = __game.mode(); if (m === 'credits' || m === 'won' || Date.now() - t0 > 60000) { clearInterval(iv); resolve('mode=' + m); } }, 500); })"
   },
   {
-   "eval": "window.dispatchEvent(new KeyboardEvent('keydown',{code:'Space'})); null"
-  },
-  {
-   "wait": 800
-  },
-  {
-   "eval": "window.dispatchEvent(new KeyboardEvent('keydown',{code:'Space'})); null"
-  },
-  {
-   "wait": 800
+   "comment": "Credits roll for ~26.5 s wall-clock, then the win screen appears.",
+   "eval": "new Promise((resolve) => { const t0 = Date.now(); const iv = setInterval(() => { if (__game.mode() === 'won' || Date.now() - t0 > 90000) { clearInterval(iv); resolve('mode=' + __game.mode()); } }, 500); })"
   },
   {
    "shot": "f4_win"
@@ -116,7 +97,8 @@
    "eval": "document.getElementById('win-restart-button').click(); __game.player.isLocked = true; null"
   },
   {
-   "wait": 3000
+   "comment": "Win-restart loads era 0 again; wait for it to be playable.",
+   "eval": "new Promise((resolve) => { const t0 = Date.now(); const iv = setInterval(() => { const ok = __game.levels.index === 0 && __game.levels.state === 'playing'; if (ok || Date.now() - t0 > 120000) { clearInterval(iv); resolve(ok ? 'restarted at era 0' : 'TIMEOUT ' + JSON.stringify({ lvl: __game.levels.index, st: __game.levels.state })); } }, 500); })"
   },
   {
    "eval": "JSON.stringify({lvl: __game.levels.index, st: __game.levels.state, cores: __game.timeMachine.getCores(), mem: __game.renderer.info.memory, heap: Math.round(performance.memory.usedJSHeapSize/1e6)})"
