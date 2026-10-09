@@ -3,6 +3,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createKit } from './core/kit.js';
 import { createSky } from './shaders/sky.js';
 import { settings } from './core/settings.js';
+import { ERA_CARDS } from './story.js';
 import * as ancientRuins from './levels/ancientRuins.js';
 import * as modernLab from './levels/modernLab.js';
 import * as neonFuture from './levels/neonFuture.js';
@@ -243,10 +244,18 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     state = title ? 'title' : cutscene ? 'cutscene' : 'playing';
     stateTime = 0;
     if (!title && !cutscene) {
-      ui.eraCard(meta.numeral, meta.title, meta.subtitle);
-      if (meta.introCard) setTimeout(() => { if (state === 'playing') api.tutorial('intro', meta.introCard, 16); }, 4200);
+      showEraCard();
+      // The how-to-play card waits for the era card (4.7s) to finish so the
+      // story line gets the screen to itself first.
+      if (meta.introCard) setTimeout(() => { if (state === 'playing') api.tutorial('intro', meta.introCard, 16); }, 5200);
     }
     if (callbacks.onLoaded) callbacks.onLoaded(i);
+  }
+
+  /** Era transition card: level meta + that era's story card (src/story.js). */
+  function showEraCard() {
+    const c = ERA_CARDS[index] || {};
+    ui.eraCard({ numeral: meta.numeral, title: meta.title, sub: meta.subtitle, tag: meta.name, verb: c.verb, line: c.line });
   }
 
   /** After a cutscene: hand control to the player and start the era's clock. */
@@ -254,8 +263,8 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     state = 'playing';
     stateTime = 0;
     player.frozen = false;
-    ui.eraCard(meta.numeral, meta.title, meta.subtitle);
-    if (meta.introCard) setTimeout(() => { if (state === 'playing') api.tutorial('intro', meta.introCard, 16); }, 4200);
+    showEraCard();
+    if (meta.introCard) setTimeout(() => { if (state === 'playing') api.tutorial('intro', meta.introCard, 16); }, 5600);
   }
 
   /* ------------------------------ core → next era ---------------------------- */
@@ -403,7 +412,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
           player.frozen = false;
           state = 'playing';
           if (callbacks.onEraArrive) callbacks.onEraArrive(index);
-          if (meta.introCard) setTimeout(() => { if (state === 'playing') api.tutorial('intro', meta.introCard, 16); }, 4600);
+          if (meta.introCard) setTimeout(() => { if (state === 'playing') api.tutorial('intro', meta.introCard, 16); }, 5600);
         }
       }
     }

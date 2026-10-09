@@ -191,11 +191,19 @@ export class UI {
     el.classList.toggle('active', on);
   }
 
-  eraCard(numeral, title, sub) {
+  /**
+   * Era transition card: { numeral, title, sub, tag, verb, line } — the era
+   * word of play (e.g. "The Past — Solve") and one line of story, tinted by
+   * the era accent. Pure DOM + CSS animations and pointer-events:none, so it
+   * can never disturb pointer lock, the loading screen or the render loop.
+   */
+  eraCard(card) {
     const el = $('era-card');
-    $('era-card-numeral').textContent = numeral;
-    $('era-card-title').textContent = title;
-    $('era-card-sub').textContent = sub;
+    $('era-card-numeral').textContent = card.numeral;
+    $('era-card-title').textContent = card.title;
+    $('era-card-sub').textContent = card.sub;
+    $('era-card-tag').textContent = card.verb ? `${card.tag || ''} — ${card.verb}` : (card.tag || '');
+    $('era-card-line').textContent = card.line || '';
     el.classList.add('hidden');
     void el.offsetWidth; // restart CSS animations
     el.classList.remove('hidden');

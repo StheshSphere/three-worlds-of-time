@@ -1,0 +1,27 @@
+{
+  "comment": "Era transition cards: PAST — SOLVE / PRESENT — INVESTIGATE / FUTURE — SURVIVE. skipTo(i) mounts each era through the real levels.load() path, so the card fires from the same code as a genuine era arrival. Verifies text, era accent colour, auto-hide and that pointer lock/loading are untouched.",
+  "url": "http://localhost:8000/",
+  "size": "1280x720",
+  "steps": [
+    {"comment": "ERA 0 — The Past — Solve (gold accent)."},
+    {"eval": "window.__t0 = performance.now(); __game.skipTo(0); null"},
+    {"wait": 600},
+    {"eval": "JSON.stringify({ dt: Math.round(performance.now() - window.__t0), card: !document.getElementById('era-card').classList.contains('hidden'), tag: document.getElementById('era-card-tag').textContent, title: document.getElementById('era-card-title').textContent, line: document.getElementById('era-card-line').textContent, era: document.body.dataset.era, accent: getComputedStyle(document.body).getPropertyValue('--accent').trim(), mode: __game.mode(), pointerLockTouched: document.pointerLockElement !== null })"},
+    {"shot": "card_era0_past"},
+    {"comment": "ERA 1 — The Present — Investigate (cyan accent)."},
+    {"eval": "window.__t0 = performance.now(); __game.skipTo(1); null"},
+    {"wait": 600},
+    {"eval": "JSON.stringify({ dt: Math.round(performance.now() - window.__t0), card: !document.getElementById('era-card').classList.contains('hidden'), tag: document.getElementById('era-card-tag').textContent, title: document.getElementById('era-card-title').textContent, line: document.getElementById('era-card-line').textContent, era: document.body.dataset.era, accent: getComputedStyle(document.body).getPropertyValue('--accent').trim() })"},
+    {"comment": "Beauty shot: re-show the same era-1 card (its 4.7s timer fired during the heavy lab build's main-thread block). Uses the real mounted meta."},
+    {"eval": "(() => { const m = __game.levels.meta; __game.ui.eraCard({ numeral: m.numeral, title: m.title, sub: m.subtitle, tag: m.name, verb: 'Investigate', line: 'Ari lands back in the lab on the very night of the accident — investigate the blackout and take back the second core.' }); return 'reshown'; })()"},
+    {"shot": "card_era1_present"},
+    {"comment": "ERA 2 — The Future — Survive (magenta accent)."},
+    {"eval": "window.__t0 = performance.now(); __game.skipTo(2); null"},
+    {"wait": 600},
+    {"eval": "JSON.stringify({ dt: Math.round(performance.now() - window.__t0), card: !document.getElementById('era-card').classList.contains('hidden'), tag: document.getElementById('era-card-tag').textContent, title: document.getElementById('era-card-title').textContent, line: document.getElementById('era-card-line').textContent, era: document.body.dataset.era, accent: getComputedStyle(document.body).getPropertyValue('--accent').trim() })"},
+    {"shot": "card_era2_future"},
+    {"comment": "Card must auto-hide after 4.7s without leaving any overlay/panel state behind."},
+    {"wait": 3600},
+    {"eval": "JSON.stringify({ cardHidden: document.getElementById('era-card').classList.contains('hidden'), hudVisible: !document.getElementById('hud').classList.contains('hidden'), loadingGone: document.getElementById('loading-screen').classList.contains('hidden'), mode: __game.mode(), lvl: __game.levels.index, state: __game.levels.state })"}
+  ]
+}

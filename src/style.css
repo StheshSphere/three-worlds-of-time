@@ -110,6 +110,16 @@ kbd {
 #era-card-numeral { font-size: 1.4rem; color: var(--accent); margin: 0; }
 #era-card-title { font-size: clamp(2.4rem, 6vw, 4.4rem); margin: 0.2rem 0; color: #fff; }
 #era-card-sub { font-size: 1.3rem; letter-spacing: 0.3em; text-transform: uppercase; color: var(--accent); margin: 0; }
+/* Era word of play — "THE PAST — SOLVE" — flanked by accent rules. */
+#era-card-tag { display: flex; align-items: center; justify-content: center; gap: 1.2em; margin: 0 0 1.3rem; font-weight: 700; font-size: 1.02rem; letter-spacing: 0.5em; text-transform: uppercase; color: var(--accent); text-shadow: 0 0 18px var(--accent-glow); }
+#era-card-tag::before, #era-card-tag::after { content: ''; width: 72px; height: 1px; flex: none; }
+#era-card-tag::before { background: linear-gradient(90deg, transparent, var(--accent)); }
+#era-card-tag::after { background: linear-gradient(90deg, var(--accent), transparent); }
+#era-card-tag:empty { display: none; }
+/* One line of story, carried from era to era. */
+#era-card-line { max-width: min(680px, 84vw); margin: 1.25rem auto 0; padding-top: 1rem; font-size: 1.25rem; line-height: 1.5; color: #ece4d3; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9); }
+#era-card-line::before { content: ''; display: block; width: 130px; height: 1px; margin: 0 auto 0.9rem; background: var(--line); box-shadow: 0 0 12px var(--accent-glow); }
+#era-card-line:empty { display: none; }
 
 /* ----------------------------- HUD --------------------------------- */
 #hud { position: fixed; inset: 0; pointer-events: none; z-index: 20; }

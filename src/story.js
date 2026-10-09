@@ -130,6 +130,17 @@ export const ARRIVALS = {
   ],
 };
 
+/**
+ * Era transition cards (shown as each era mounts — see ui.eraCard): the era's
+ * word of play — PAST — SOLVE / PRESENT — INVESTIGATE / FUTURE — SURVIVE —
+ * plus one continuity line that carries the story between eras.
+ */
+export const ERA_CARDS = {
+  0: { verb: 'Solve', line: 'The hourglass is shattered and its first core sleeps in this temple — solve the trials of the First Hour to claim it.' },
+  1: { verb: 'Investigate', line: 'Ari lands back in the lab on the very night of the accident — investigate the blackout and take back the second core.' },
+  2: { verb: 'Survive', line: '2187. The last core waits atop a skyline that is tearing itself apart — survive the climb, and time can be made whole.' },
+};
+
 export function epilogue({ player, timeMachine: tm, postfx, ui, cs, audio }) {
   const ari = v3(2.7, 0, 5.9);
   const facing = Math.atan2(-ari.x, -ari.z);
