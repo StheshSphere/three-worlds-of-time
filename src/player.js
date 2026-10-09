@@ -78,6 +78,10 @@ export class Player extends THREE.EventDispatcher {
     this.facing = 0;
     this.spawn = new THREE.Vector3(0, 0, 12);
     this.spawnYaw = 0;
+    // Reusable checkpoint (see the checkpoint API block below setCheckpoint).
+    this.checkpoint = new THREE.Vector3();
+    this.checkpointYaw = 0;
+    this.hasCheckpoint = false;
     this.velocity = new THREE.Vector3();
     this.onGround = false;
     this.groundObject = null;
@@ -247,19 +251,59 @@ export class Player extends THREE.EventDispatcher {
     this.killY = killY;
     this.defaultSurface = surface;
     this.canDash = false;
+    this.clearCheckpoint();       // each era starts from its own spawn
     this.clearAttachments();
     this.reset();
   }
 
+  /* --------------------------- checkpoints ---------------------------
+   * REUSABLE CHECKPOINT API (Member 2) — shared by every era. Levels and
+   * tests use these three methods (or the api.checkpoint(pos, yaw, label?)
+   * wrapper in levelManager, which adds a HUD message + sound) without
+   * needing to modify this file:
+   *
+   *   setCheckpoint(position, yaw?)   remember a respawn point (a
+   *                                   THREE.Vector3 and a facing yaw;
+   *                                   yaw defaults to the current facing)
+   *   getCheckpoint()                 → { position, yaw } or null
+   *                                   (position is the live vector —
+   *                                   copy it if you need to keep it)
+   *   clearCheckpoint()               forget it — respawn falls back to
+   *                                   the current level's spawn
+   *
+   * Behaviour (identical to pre-API play when no checkpoint is set):
+   *  - reset() — used by fall respawn and hurt respawn — returns to the
+   *    checkpoint when one is set, otherwise to the level's spawn,
+   *    exactly as before this API existed;
+   *  - loading ANY level (new era, "Restart this era", "Restart journey",
+   *    title screen) clears the checkpoint, so a full Restart always
+   *    respawns at the original Ancient spawn;
+   *  - checkpoints therefore never survive a level change — each era
+   *    arms its own as the player reaches it.
+   * ------------------------------------------------------------------- */
   setCheckpoint(pos, yaw) {
-    this.spawn.copy(pos);
-    if (yaw !== undefined) this.spawnYaw = yaw;
+    this.checkpoint.copy(pos);
+    this.checkpointYaw = yaw !== undefined ? yaw : this.yaw;
+    this.hasCheckpoint = true;
+  }
+
+  getCheckpoint() {
+    return this.hasCheckpoint ? { position: this.checkpoint, yaw: this.checkpointYaw } : null;
+  }
+
+  clearCheckpoint() {
+    this.hasCheckpoint = false;
   }
 
   reset() {
-    this.rig.position.copy(this.spawn);
-    this.yaw = this.spawnYaw;
-    this.facing = this.spawnYaw + Math.PI;
+    if (this.hasCheckpoint) {
+      this.rig.position.copy(this.checkpoint);
+      this.yaw = this.checkpointYaw;
+    } else {
+      this.rig.position.copy(this.spawn);
+      this.yaw = this.spawnYaw;
+    }
+    this.facing = this.yaw + Math.PI;
     this.pitch = -0.12;
     this.velocity.set(0, 0, 0);
     this.onGround = false;

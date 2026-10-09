@@ -650,6 +650,50 @@ export function build(kit, api) {
   kit.prop('modular-pipes', { pos: [0, 3.6, -40], rot: Math.PI / 2, height: 1.0, solid: false });
   const roomRed = kit.pointLight(0xff2a14, 10, 16, [0, 3.8, -38]);
 
+  // Member 2 · reusable checkpoint — power room entry. The archive keypad
+  // already saves a silent respawn at the door; this second, VISIBLE one
+  // fires when the player steps through into the power room (the breaker
+  // room), the last stretch before the vault. It goes through the shared
+  // api.checkpoint → Player.setCheckpoint, so message + sound + this pad
+  // flash confirm it together. Emissive only — no extra light, and the pad
+  // is not interactable so it can never block interaction rays.
+  const cpPadMat = kit.track(new THREE.MeshStandardMaterial({ color: 0x0c1c26, emissive: 0x6fd3ff, emissiveIntensity: 1.2, roughness: 0.4 }));
+  const cpPad = new THREE.Mesh(kit.track(new THREE.RingGeometry(0.55, 0.8, 48)), cpPadMat);
+  cpPad.rotation.x = -Math.PI / 2;
+  cpPad.position.set(0, 0.02, -31.2);
+  kit.add(cpPad);
+  const cpPulseMat = kit.track(new THREE.MeshBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+  const cpPulse = new THREE.Mesh(kit.track(new THREE.RingGeometry(0.8, 0.92, 48)), cpPulseMat);
+  cpPulse.rotation.x = -Math.PI / 2;
+  cpPulse.position.set(0, 0.025, -31.2);
+  cpPulse.visible = false;
+  kit.add(cpPulse);
+  let cpDone = false;
+  let cpFlash = 0;
+  kit.update((dt, t) => {
+    if (!cpDone) {
+      // z < −30.8 is reachable only through the archive security door.
+      if (api.player.position.z < -30.8) {
+        cpDone = true;
+        cpFlash = 1.4;
+        cpPulse.visible = true;
+        api.checkpoint(new THREE.Vector3(0, 0, -31.2), 0);
+        return;
+      }
+      cpPadMat.emissiveIntensity = 1.2 + 0.6 * Math.sin(t * 2.8);   // inviting pulse
+      return;
+    }
+    if (cpFlash > 0) {
+      cpFlash = Math.max(0, cpFlash - dt);
+      cpPadMat.emissiveIntensity = 1.6 + cpFlash * 4;
+      cpPulse.scale.setScalar(1 + (1 - cpFlash / 1.4) * 1.8);
+      cpPulseMat.opacity = (0.75 * cpFlash) / 1.4;
+      if (cpFlash === 0) cpPulse.visible = false;
+      return;
+    }
+    cpPadMat.emissiveIntensity = 1.6;                              // steady: checkpoint active
+  });
+
   // Console.
   kit.box({ size: [5.2, 3.4, 0.4], pos: [0, 1.9, -45.85], mat: darkSteel, tile: 1, walk: false });
   const labelTex = textTexture(['', ' GRID IN                  VAULT OUT'], { w: 1024, h: 120, bg: '#000', fg: '#6fd3ff', title: '        POWER ROUTING — rotate each conduit tile' });
