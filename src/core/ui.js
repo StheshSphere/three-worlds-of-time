@@ -54,9 +54,10 @@ export class UI {
   get justOpened() { return performance.now() - (this.openedAt || 0) < 300; }
 
   /* ----------------------------- loading ---------------------------- */
+  // The bar is byte-weighted real progress (see assets.js): it only moves
+  // when bytes actually arrive or a job actually finishes. Name the job that
+  // is loading instead of printing a percentage on top of it.
   setProgress(f, label) {
-    // The bar is a genuine job count (see assets.js); name the job that is
-    // actually loading instead of repeating the percentage.
     $('progress-fill').style.width = `${Math.round(f * 100)}%`;
     if (label) {
       const pretty = label
@@ -67,6 +68,10 @@ export class UI {
       $('loading-text').textContent = `Gathering fragments of time… ${pretty}`;
     }
   }
+
+  /** Post-load boot phase (hero rig, machines, title backdrop) — say what is
+   *  actually happening rather than freezing on the finished bar. */
+  setLoadingText(text) { $('loading-text').textContent = text; }
 
   /* ----------------------------- HUD -------------------------------- */
   _set(id, prop, value) {

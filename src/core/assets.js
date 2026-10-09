@@ -5,7 +5,8 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
 /**
  * Central asset cache. Everything is preloaded once behind the loading
- * screen (real progress, not a fake timer), so era transitions never hitch.
+ * screen (byte-weighted real progress — see loadAll), so era transitions
+ * never hitch.
  *
  * Disposal model: levels CLONE what they use. When a level unloads, the
  * level manager disposes the clones' geometries/materials/textures — that
@@ -90,6 +91,12 @@ export const assets = {
    * Load everything in MANIFEST. onProgress(fraction, label) drives the
    * loading bar. Individual failures are logged, not fatal — a missing prop
    * must never stop the game from starting.
+   *
+   * Progress is real, never simulated: every in-flight download reports the
+   * bytes it has actually received (the loaders' onProgress `{loaded, total}`),
+   * and a job only counts as done when its promise settles. If a response
+   * has no byte total (no Content-Length), that job simply waits at its last
+   * known value instead of guessing.
    */
   async loadAll(audioContext, onProgress) {
     const manager = new THREE.LoadingManager();
@@ -100,23 +107,41 @@ export const assets = {
     const jobs = [];
     let done = 0;
     const total = MANIFEST.textures.length * 3 + Object.keys(MANIFEST.models).length + MANIFEST.music.length + MANIFEST.sfx.length + MANIFEST['modern-lab'].length;
-    const tick = (label) => { done++; if (onProgress) onProgress(done / total, label); };
+
+    // Bar = finished jobs + the real byte share of every in-flight download,
+    // over the job count. Jobs without progress events (images decode in one
+    // step) stay put until they complete — the bar never invents movement.
+    const received = new Map();            // url → 0..1 share of that file's bytes
+    const report = (label) => {
+      let live = 0;
+      for (const f of received.values()) live += f;
+      if (onProgress) onProgress(Math.min((done + live) / total, 1), label);
+    };
+    const track = (url, ev) => {
+      // Cap at 0.99: only tick() may finish a job, never byte count alone.
+      if (received.has(url) && ev.total > 0) received.set(url, Math.min(ev.loaded / ev.total, 0.99));
+    };
+    const tick = (url, label) => { received.delete(url); done++; report(label); };
 
     for (const name of MANIFEST.textures) {
       const set = {};
       for (const map of ['color', 'normal', 'arm']) {
-        jobs.push(texLoader.loadAsync(`${BASE}textures/${name}/${map}.webp`).then((t) => {
+        const url = `${BASE}textures/${name}/${map}.webp`;
+        received.set(url, 0);
+        jobs.push(texLoader.loadAsync(url, (ev) => track(url, ev)).then((t) => {
           t.wrapS = t.wrapT = THREE.RepeatWrapping;
           t.colorSpace = map === 'color' ? THREE.SRGBColorSpace : THREE.NoColorSpace;
           t.anisotropy = anisotropy;
           set[map] = t;
-        }).catch((e) => console.warn('[assets] texture', name, map, e)).finally(() => tick(`texture ${name}`)));
+        }).catch((e) => console.warn('[assets] texture', name, map, e)).finally(() => tick(url, `texture ${name}`)));
       }
       textures.set(name, set);
     }
 
     for (const [name, url] of Object.entries(MANIFEST.models)) {
-      jobs.push(gltfLoader.loadAsync(BASE + url).then((g) => {
+      const file = BASE + url;
+      received.set(file, 0);
+      jobs.push(gltfLoader.loadAsync(file, (ev) => track(file, ev)).then((g) => {
         g.scene.traverse((o) => {
           if (o.isMesh) {
             o.castShadow = true;
@@ -126,23 +151,29 @@ export const assets = {
           }
         });
         gltfs.set(name, g);
-      }).catch((e) => console.warn('[assets] model', name, e)).finally(() => tick(`model ${name}`)));
+      }).catch((e) => console.warn('[assets] model', name, e)).finally(() => tick(file, `model ${name}`)));
     }
 
-    const decode = (name, url) => fileLoader.loadAsync(url)
-      .then((buf) => audioContext.decodeAudioData(buf))
-      .then((ab) => audio.set(name, ab))
-      .catch((e) => console.warn('[assets] audio', name, e))
-      .finally(() => tick(`audio ${name}`));
+    const decode = (name, url) => {
+      received.set(url, 0);
+      return fileLoader.loadAsync(url, (ev) => track(url, ev))
+        .then((buf) => audioContext.decodeAudioData(buf))
+        .then((ab) => audio.set(name, ab))
+        .catch((e) => console.warn('[assets] audio', name, e))
+        .finally(() => tick(url, `audio ${name}`));
+    };
     for (const m of MANIFEST.music) jobs.push(decode(`music:${m}`, `${BASE}audio/music/${m}.ogg`));
     for (const s of MANIFEST.sfx) jobs.push(decode(s, `${BASE}audio/sfx/${s}.ogg`));
     // Member 2 · optional Lab cues — a missing file is skipped silently (no
     // console warning): the Lab is fully audible on the shared sounds alone.
-    const decodeOptional = (name, url) => fileLoader.loadAsync(url)
-      .then((buf) => audioContext.decodeAudioData(buf))
-      .then((ab) => audio.set(name, ab))
-      .catch(() => { /* file not supplied yet — play without it */ })
-      .finally(() => tick(`audio ${name}`));
+    const decodeOptional = (name, url) => {
+      received.set(url, 0);
+      return fileLoader.loadAsync(url, (ev) => track(url, ev))
+        .then((buf) => audioContext.decodeAudioData(buf))
+        .then((ab) => audio.set(name, ab))
+        .catch(() => { /* file not supplied yet — play without it */ })
+        .finally(() => tick(url, `audio ${name}`));
+    };
     for (const s of MANIFEST['modern-lab']) jobs.push(decodeOptional(`modern-lab:${s}`, `${BASE}audio/modern-lab/${s}.ogg`));
 
     await Promise.all(jobs);

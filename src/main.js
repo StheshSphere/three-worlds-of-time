@@ -53,6 +53,11 @@ let userPickedQuality = false;
 
 ui.show('loading-screen');
 await assets.loadAll(audio.ctx, (f, label) => ui.setProgress(f, label));
+// Everything from here on is built, not streamed (hero rig, machines, the
+// title backdrop below) — say so honestly and give the finished bar one
+// frame to paint before the synchronous boot work blocks the tab.
+ui.setLoadingText('Preparing timeline…');
+await new Promise((resolve) => setTimeout(resolve, 50));
 
 const player = new Player(camera, renderer.domElement);
 scene.add(player.object, player.worldFx);
@@ -401,8 +406,11 @@ function frame() {
   }
 }
 
-ui.hide('loading-screen');
+// The title backdrop mounts synchronously and can take a beat — keep the
+// loading screen ("Preparing timeline…") up until it is actually ready,
+// then reveal the title in one step. Never show a blank canvas between.
 showTitle();
+ui.hide('loading-screen');
 frame();
 
 /* =====================================================================
