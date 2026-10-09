@@ -72,6 +72,9 @@ export const MANIFEST = {
     'zap', 'dash', 'power-up', 'computer', 'warp', 'crumble', 'hum', 'gate', 'creak',
     'lever', 'page', 'switch', 'core-get', 'fail', 'win', 'checkpoint',
   ],
+  /** Member 2 · the Present — optional era-specific cues from audio/modern-lab/.
+   *  Registered as 'modern-lab:<name>'; a missing file is skipped silently. */
+  'modern-lab': ['keypad-ok', 'keypad-deny', 'breaker-ok', 'breaker-deny', 'power-restored', 'core-pickup', 'generator-hum'],
 };
 
 const textures = new Map();   // name -> { color, normal, arm }
@@ -96,7 +99,7 @@ export const assets = {
 
     const jobs = [];
     let done = 0;
-    const total = MANIFEST.textures.length * 3 + Object.keys(MANIFEST.models).length + MANIFEST.music.length + MANIFEST.sfx.length;
+    const total = MANIFEST.textures.length * 3 + Object.keys(MANIFEST.models).length + MANIFEST.music.length + MANIFEST.sfx.length + MANIFEST['modern-lab'].length;
     const tick = (label) => { done++; if (onProgress) onProgress(done / total, label); };
 
     for (const name of MANIFEST.textures) {
@@ -133,6 +136,14 @@ export const assets = {
       .finally(() => tick(`audio ${name}`));
     for (const m of MANIFEST.music) jobs.push(decode(`music:${m}`, `${BASE}audio/music/${m}.ogg`));
     for (const s of MANIFEST.sfx) jobs.push(decode(s, `${BASE}audio/sfx/${s}.ogg`));
+    // Member 2 · optional Lab cues — a missing file is skipped silently (no
+    // console warning): the Lab is fully audible on the shared sounds alone.
+    const decodeOptional = (name, url) => fileLoader.loadAsync(url)
+      .then((buf) => audioContext.decodeAudioData(buf))
+      .then((ab) => audio.set(name, ab))
+      .catch(() => { /* file not supplied yet — play without it */ })
+      .finally(() => tick(`audio ${name}`));
+    for (const s of MANIFEST['modern-lab']) jobs.push(decodeOptional(`modern-lab:${s}`, `${BASE}audio/modern-lab/${s}.ogg`));
 
     await Promise.all(jobs);
   },

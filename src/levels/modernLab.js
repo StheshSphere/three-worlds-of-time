@@ -155,12 +155,13 @@ export function build(kit, api) {
   }
 
   /**
-   * Member 2 · one-shot Lab SFX hook. Names map to files in
-   * assets/audio/modern-lab/ that the Lab audio pass will supply — until the
-   * shared audio manager has a buffer for a name, api.sound() is a silent
-   * no-op (no console errors, no 404s), so wiring the calls early is safe.
+   * Member 2 · one-shot Lab SFX hook. Names map to optional files in
+   * assets/audio/modern-lab/ (registered as 'modern-lab:<name>' in the asset
+   * manifest, so they preload behind the loading screen). Until a file
+   * exists, the shared audio manager finds no buffer and stays silent — no
+   * console errors, no 404 spam — so the calls are safe to wire early.
    */
-  function labSound(name, opts) { api.sound(name, opts); }
+  function labSound(name, opts) { api.sound(`modern-lab:${name}`, opts); }
 
   /* ===================================================================
      Experiment hall
@@ -642,8 +643,18 @@ export function build(kit, api) {
   wall(1.6, -30.3, 8.3, -30.3, 4.6, M.panels);
   wall(-1.6, -30.3, 1.6, -30.3, 1.2, M.panels, 3.4);
   wall(-8.3, -46.3, 8.3, -46.3, 4.6, M.panels);
-  kit.prop('portable-generator', { pos: [-6, 0, -34], rot: 0.6, height: 0.75 });
-  kit.prop('portable-generator', { pos: [6, 0, -35], rot: -0.4, height: 0.75 });
+  const genA = kit.prop('portable-generator', { pos: [-6, 0, -34], rot: 0.6, height: 0.75 });
+  const genB = kit.prop('portable-generator', { pos: [6, 0, -35], rot: -0.4, height: 0.75 });
+  // Member 2 · emergency-generator hum — a positional file loop (one per
+  // machine) from assets/audio/modern-lab/generator-hum.ogg. Starts only
+  // after the audio context is unlocked by a user gesture, stays silent if
+  // the file isn't supplied, and is disposed with the era (api.positional
+  // registers the handles with the level manager). Room-tone ambience
+  // remains Member 1's synthesised era ambience, so nothing stacks.
+  const genHums = [
+    api.positional('modern-lab:generator-hum', genA, { volume: 0.45, refDistance: 3 }),
+    api.positional('modern-lab:generator-hum', genB, { volume: 0.45, refDistance: 3 }),
+  ];
   kit.prop('power-box-01', { pos: [-7.75, 1.2, -38], rot: Math.PI / 2, height: 0.6, solid: false });
   kit.prop('power-box-01', { pos: [7.75, 1.2, -40], rot: -Math.PI / 2, height: 0.6, solid: false });
   kit.prop('utility-box-01', { pos: [-7.6, 0, -43], rot: Math.PI / 2, height: 1.2 });
@@ -808,6 +819,7 @@ export function build(kit, api) {
     api.message('POWER RESTORED. Lights stutter on across the facility — the vault unseals.', 3600);
     api.setObjective('Recover the Lab Core from the vault (east of the hall)');
     roomRed.intensity = 0;
+    for (const h of genHums) h.dispose();   // generators wind down — mains is back
     for (const b of beacons) { b.spot.visible = false; b.lamp.material.emissiveIntensity = 0; }
     moon.intensity = 0.15;
     for (const s of strips) s.material.emissiveIntensity = 0.3;
@@ -904,6 +916,7 @@ export function build(kit, api) {
   });
   kit.interact(core, () => (state.fieldDown && !state.coreTaken ? 'Take the Lab Core' : null), () => {
     state.coreTaken = true;
+    labSound('core-pickup', { volume: 0.7 });   // Member 2 · Lab take cue, layered under the shared core-get fanfare
     core.visible = false;
     coreLight.intensity = 0;
     api.completeLevel(core.position);
