@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createForceFieldMaterial } from './shaders/forceField.js';
+import { createWarpRippleMaterial } from './shaders/warpRipple.js';
 
 /**
  * The Time Machine — the one object present in every era (pitch §10).
@@ -18,7 +19,8 @@ import { createForceFieldMaterial } from './shaders/forceField.js';
  *    │                                              └─ heart (glowing core)
  *    │                                                   └─ heartLight
  *    ├─ cables (tubes from the pylons into the dais)
- *    └─ field (force-field sphere, custom shader)
+ *    ├─ field (force-field sphere, custom shader)
+ *    └─ ripple (ground warp rings, custom shader — era jumps / restoration)
  *
  * Each ring is a CHILD of the one outside it, so ringInner's rotation is
  * composed with ringMiddle's, which is composed with ringOuter's — three
@@ -176,6 +178,18 @@ export function createTimeMachine() {
   field.scale.set(1, 1.15, 1);
   root.add(field);
 
+  /* ---------------------------- warp ripple -------------------------- */
+  // Ground shockwave around the dais (src/shaders/warpRipple.js): rings of
+  // energy race outward while the machine charges an era jump (levelManager
+  // calls setWarp during transitions / the finale surge) and while it restores
+  // itself; a faint idle pulse the rest of the time. One cheap draw call.
+  const rippleMat = t(createWarpRippleMaterial());
+  const ripple = new THREE.Mesh(t(new THREE.RingGeometry(3.55, 7.2, 96, 2)), rippleMat);
+  ripple.name = 'warpRipple';
+  ripple.rotation.x = -Math.PI / 2;
+  ripple.position.y = 0.14;
+  root.add(ripple);
+
   /* ---------------------------- state + animation -------------------- */
   let time = 0;
   let cores = 0;
@@ -183,6 +197,8 @@ export function createTimeMachine() {
   let restoring = 0;     // 0 → 1 over the restoration sequence
   let spin = 1;
   let overload = 0;      // prologue: 0 (stable) → 1 (Field Test 7 tearing the timeline)
+  let warp = 0;          // eased toward warpTarget — the era-transition charge
+  let warpTarget = 0;
   const ROT = [0.35, 0.6, 0.9];
 
   function update(dt) {
@@ -224,6 +240,14 @@ export function createTimeMachine() {
     fieldMat.uniforms.uCores.value += (cores + restoring * 2 - fieldMat.uniforms.uCores.value) * Math.min(1, dt * 1.5);
     fieldMat.uniforms.uUnstable.value = (1 - fixedness) + restoring * 0.6 + overload * 2.5;
     fieldMat.uniforms.uIntensity.value = 0.7 + restoring * 2.5 + overload * 2;
+
+    // Warp ripple: the charge is whatever the machine is currently doing to
+    // time — an era jump (setWarp from the level manager), the restoration
+    // sequence, or the prologue's overload.
+    warp += (warpTarget - warp) * Math.min(1, dt * 5);
+    rippleMat.uniforms.uTime.value = time;
+    rippleMat.uniforms.uCharge.value = Math.max(warp, restoring * 0.75, overload * 0.8);
+    rippleMat.uniforms.uCores.value += (cores - rippleMat.uniforms.uCores.value) * Math.min(1, dt * 2);
   }
 
   root.userData.isRestoring = false;
@@ -244,6 +268,8 @@ export function createTimeMachine() {
     root.userData.isRestoring = false;
   };
   root.setOverload = (v) => { overload = v; };
+  /** Level manager: 0 → 1 era-transition charge (see levelManager.update). */
+  root.setWarp = (v) => { warpTarget = Math.min(1, Math.max(0, v)); };
   /** Rips the cores out of their sockets; returns their world positions. */
   root.ejectCores = () => {
     const out = sockets.map((s) => s.core.getWorldPosition(new THREE.Vector3()));
@@ -257,6 +283,8 @@ export function createTimeMachine() {
     restoring = 0;
     spin = 1;
     overload = 0;
+    warp = 0;
+    warpTarget = 0;
     root.userData.isRestoring = false;
   };
   root.restoreProgress = () => restoring;

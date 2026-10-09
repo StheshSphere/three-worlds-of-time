@@ -1,0 +1,57 @@
+{
+ "comment": "Custom shader regression: Time Machine warp ripple (transition/restoration). The ripple must (1) exist as part of the persistent machine with the expected uniforms, (2) advance on uTime every frame, (3) charge from GAME STATE during an era transition (uCharge peaks while the level manager warps), (4) ease its colour uniform to the seated cores (uCores -> 1 after era 0), and (5) radiate through the restoration finale (restoring progress drives uCharge) with the warp target cleared afterwards. Exits non-zero on any page/eval error.",
+ "url": "http://127.0.0.1:8000/index.html",
+ "steps": [
+  {"eval": "__game.start(); __game.player.isLocked = true; null"},
+  {"comment": "Skip the prologue: press Space until actually playing (pacing-independent).",
+   "eval": "new Promise((resolve) => { let n = 0; const iv = setInterval(() => { if (__game.mode() === 'playing') { clearInterval(iv); resolve('prologue skipped, mode=playing'); } else { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' })); if (++n > 120) { clearInterval(iv); resolve('TIMEOUT mode=' + __game.mode()); } } }, 500); })"},
+
+  {"comment": "Ripple wiring: one mesh under the persistent Time Machine, ShaderMaterial with the game-state uniforms, visual only (no collider).",
+   "eval": "(() => { const tm = __game.timeMachine; const rip = tm.getObjectByName('warpRipple'); if (!rip) throw new Error('warpRipple mesh not found under the Time Machine'); if (rip.parent !== tm) throw new Error('warpRipple is not a direct child of the machine'); const u = rip.material.uniforms; for (const k of ['uTime', 'uCharge', 'uCores', 'uBrokenColor', 'uFixedColor']) if (!(k in u)) throw new Error('warpRipple material missing uniform ' + k); const p = rip.geometry.parameters; if (Math.abs(p.innerRadius - 3.55) > 0.01 || Math.abs(p.outerRadius - 7.2) > 0.01) throw new Error('ripple ring extents do not match the shader constants'); window.__rip = rip; window.__t0 = u.uTime.value; return JSON.stringify({ found: true, visible: rip.visible, ring: [p.innerRadius, p.outerRadius], uniforms: Object.keys(u).sort().join(','), uCharge: +u.uCharge.value.toFixed(3), uCores: +u.uCores.value.toFixed(3), uTime: +u.uTime.value.toFixed(2) }); })()"},
+
+  {"comment": "Frame the machine for the idle shot, then let ~1.5s of game time run.",
+   "eval": "(() => { const p = __game.player; p.rig.position.set(5, 0.5, 7); p.velocity.set(0, 0, 0); p.yaw = Math.atan2(5, 7); p.pitch = -0.3; return 'player aimed at the machine'; })()"},
+  {"wait": 1500},
+  {"comment": "uTime must advance every frame (baseline captured in the wiring step) and the idle charge must sit near zero.",
+   "eval": "(() => { const u = window.__rip.material.uniforms; if (!(u.uTime.value > window.__t0 + 0.5)) throw new Error('uTime is not advancing: ' + window.__t0 + ' -> ' + u.uTime.value); if (u.uCharge.value > 0.05) throw new Error('idle uCharge should be ~0, got ' + u.uCharge.value); return JSON.stringify({ uTime: +u.uTime.value.toFixed(2), idleCharge: +u.uCharge.value.toFixed(4) }); })()"},
+  {"shot": "w0_ruins_idle"},
+
+  {"comment": "Solve Level 1 via its debug API (same as full-playthrough).",
+   "eval": "{ const d = __game.levels.debug; d.solveBlocks(); d.alignMirrors(); d.readTablets(); d.solveDrums(); } null"},
+  {"wait": 3000},
+  {"comment": "readTablets() opens real reader panels — close them so the render loop resumes (frame() only updates in mode 'playing').",
+   "eval": "{ __game.ui.closeAllPanels(); __game.player.isLocked = true; } null"},
+  {"eval": "__game.levels.debug.takeCore(); null"},
+
+  {"comment": "Catch the ripple mid-warp: poll until the level manager is inside the transition AND the charge has ramped past 0.6.",
+   "eval": "new Promise((resolve, reject) => { const t0 = Date.now(); const iv = setInterval(() => { const u = window.__rip.material.uniforms; const st = __game.levels.state; if (st === 'transition' && u.uCharge.value > 0.6) { clearInterval(iv); resolve('mid-warp: state=' + st + ', uCharge=' + u.uCharge.value.toFixed(3)); } else if (Date.now() - t0 > 240000) { clearInterval(iv); reject(new Error('TIMEOUT waiting for warp charge: state=' + st + ', uCharge=' + u.uCharge.value.toFixed(3))); } }, 100); })"},
+  {"shot": "w1_warp_charge"},
+
+  {"comment": "Peak charge across the whole transition, then wait for the Past -> Present arrival.",
+   "eval": "new Promise((resolve, reject) => { const t0 = Date.now(); let peak = 0, sawTransition = false; const iv = setInterval(() => { const u = window.__rip.material.uniforms; peak = Math.max(peak, u.uCharge.value); if (__game.levels.state === 'transition') sawTransition = true; const ok = __game.levels.index === 1 && __game.levels.state === 'playing'; if (ok || Date.now() - t0 > 240000) { clearInterval(iv); if (!sawTransition || peak < 0.5) reject(new Error('ripple never charged: sawTransition=' + sawTransition + ', peak=' + peak.toFixed(3))); else resolve('transition charged the ripple, peak uCharge=' + peak.toFixed(3)); } }, 150); })"},
+  {"wait": 1200},
+  {"comment": "Arrival: the colour uniform eased to 1 seated core and the charge settled back to idle.",
+   "eval": "(() => { const u = window.__rip.material.uniforms; if (u.uCores.value < 0.8 || u.uCores.value > 1.2) throw new Error('uCores should ease to 1, got ' + u.uCores.value); if (u.uCharge.value > 0.1) throw new Error('charge should settle to ~0 after arrival, got ' + u.uCharge.value); return JSON.stringify({ cores: __game.timeMachine.getCores(), uCores: +u.uCores.value.toFixed(3), settledCharge: +u.uCharge.value.toFixed(4) }); })()"},
+
+  {"comment": "Rush Level 2 (debug API) and jump to the Future.",
+   "eval": "__game.levels.debug.readLogs(); null"},
+  {"wait": 600},
+  {"eval": "{ const d = __game.levels.debug; __game.ui.closeTopPanel(); __game.player.isLocked = true; d.takeFlashlight(); d.revealAll(); d.openDoor(); d.solveGrid(); } null"},
+  {"wait": 3500},
+  {"eval": "__game.levels.debug.dropField(); null"},
+  {"wait": 1500},
+  {"eval": "__game.levels.debug.takeCore(); null"},
+  {"eval": "new Promise((resolve, reject) => { const t0 = Date.now(); const iv = setInterval(() => { const ok = __game.levels.index === 2 && __game.levels.state === 'playing'; if (ok || Date.now() - t0 > 240000) { clearInterval(iv); ok ? resolve('era2 ready') : reject(new Error('TIMEOUT ' + JSON.stringify({ lvl: __game.levels.index, st: __game.levels.state }))); } }, 500); })"},
+
+  {"comment": "Break the sequence lock, take the final core — the restoration finale begins.",
+   "eval": "__game.levels.debug.solvePuzzle(); null"},
+  {"wait": 400},
+  {"eval": "__game.levels.debug.takeCore(); null"},
+  {"comment": "Wait for the finale state, then until the RESTORATION drives the ripple: charge > 0.5 with restoreProgress > 0.6 (the transition's warp spike has decayed by then).",
+   "eval": "new Promise((resolve, reject) => { const t0 = Date.now(); let sawFinale = false; const iv = setInterval(() => { const st = __game.levels.state; if (st === 'finale') sawFinale = true; const u = window.__rip.material.uniforms; const rp = __game.timeMachine.restoreProgress(); if (sawFinale && u.uCharge.value > 0.5 && rp > 0.6) { clearInterval(iv); resolve('restoration radiating: uCharge=' + u.uCharge.value.toFixed(3) + ', restoreProgress=' + rp.toFixed(3)); } else if (Date.now() - t0 > 240000) { clearInterval(iv); reject(new Error('TIMEOUT waiting for restoration ripple: state=' + st + ', uCharge=' + u.uCharge.value.toFixed(3) + ', restoreProgress=' + rp.toFixed(3))); } }, 150); })"},
+  {"shot": "w2_finale_ripple"},
+
+  {"comment": "After the finale the machine settles: the epilogue resets the restoration (story.js) but keeps all cores, so the colour uniform holds gold (~3) and the charge is cleared back to idle — proving the warp target was released rather than stuck at the surge level.",
+   "eval": "new Promise((resolve, reject) => { const t0 = Date.now(); const iv = setInterval(() => { const after = __game.levels.state === 'won' || __game.mode() === 'cutscene' || __game.mode() === 'credits'; if (!after) return; const u = window.__rip.material.uniforms; if (u.uCores.value < 2.9 || u.uCharge.value > 0.05) { if (Date.now() - t0 > 120000) { clearInterval(iv); reject(new Error('TIMEOUT waiting for the post-finale settle: uCores=' + u.uCores.value + ', uCharge=' + u.uCharge.value)); } return; } clearInterval(iv); resolve(JSON.stringify({ after: __game.mode() + '/' + __game.levels.state, cores: __game.timeMachine.getCores(), uCores: +u.uCores.value.toFixed(3), settledCharge: +u.uCharge.value.toFixed(4) })); }, 300); })"}
+ ]
+}

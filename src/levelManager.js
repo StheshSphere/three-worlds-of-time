@@ -371,6 +371,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
       const u = postfx.u;
       if (pending.phase === 'out') {
         u.uWarp.value = Math.min(1, stateTime / 1.4);
+        timeMachine.setWarp(u.uWarp.value);       // the ground ripple charges with the jump
         u.uFlash.value = THREE.MathUtils.smoothstep(stateTime, 0.9, 1.5);
         if (!pending.sfx) { pending.sfx = true; audio.play('warp', { volume: 0.9 }); }
         if (stateTime > 1.55) {
@@ -394,6 +395,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
         }
       } else if (pending.phase === 'in') {
         u.uWarp.value = Math.max(0, 1 - stateTime / 1.6);
+        timeMachine.setWarp(u.uWarp.value);       // and settles as the new era firms up
         u.uFlash.value = Math.max(0, 1 - stateTime / 0.9);
         if (stateTime > 1.6) {
           u.uWarp.value = 0;
@@ -409,6 +411,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     if (state === 'finale') {
       const u = postfx.u;
       u.uWarp.value = Math.max(0, 0.6 - stateTime * 0.6) + THREE.MathUtils.smoothstep(stateTime, 5.2, 6.4) * 0.8;
+      timeMachine.setWarp(THREE.MathUtils.smoothstep(stateTime, 5.2, 6.4));   // final surge ripples out (restoring drives the rest)
       u.uFlash.value = THREE.MathUtils.smoothstep(stateTime, 5.4, 6.4);
       if (stateTime > 1.5 && !pending.cheered) { pending.cheered = true; player.hero.play('cheer', { hold: true }); }
       if (stateTime > 6.6) {
@@ -416,6 +419,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
         cinematic = null;
         u.uFlash.value = 0.0;
         u.uWarp.value = 0;
+        timeMachine.setWarp(0);
         player.unlock();
         if (callbacks.onFinale) callbacks.onFinale({ ...stats });
       }
