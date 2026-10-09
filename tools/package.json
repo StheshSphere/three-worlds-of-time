@@ -1,0 +1,14 @@
+{
+  "name": "three-worlds-tools",
+  "private": true,
+  "description": "Dev-only tooling (asset pipeline, smoke tests). Not part of the deployed game.",
+  "type": "module",
+  "dependencies": {
+    "@gltf-transform/core": "^4.0.0",
+    "@gltf-transform/extensions": "^4.0.0",
+    "@gltf-transform/functions": "^4.0.0",
+    "meshoptimizer": "^0.22.0",
+    "puppeteer-core": "^23.0.0",
+    "sharp": "^0.35.5"
+  }
+}

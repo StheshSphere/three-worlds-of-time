@@ -3,3 +3,7 @@ dist/
 .DS_Store
 *.log
 .edge-*/
+
+# asset pipeline download cache
+tools/.cache/
+*.zip

@@ -1,224 +1,398 @@
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { createKit } from './core/kit.js';
+import { createSky } from './shaders/sky.js';
+import { settings } from './core/settings.js';
 import * as ancientRuins from './levels/ancientRuins.js';
 import * as modernLab from './levels/modernLab.js';
 import * as neonFuture from './levels/neonFuture.js';
 
-const LEVELS = [ancientRuins, modernLab, neonFuture];
+export const LEVELS = [ancientRuins, modernLab, neonFuture];
 
-const OBJECTIVES = [
-  'Past — Solve: recover the Ancient Core',
-  'Present — Investigate: restore power and recover the Lab Core',
-  'Future — Survive: cross the collapsing city and recover the Neon Core',
-];
-
-const LEVEL_NAMES = ['the Ancient Ruins', 'the Modern Laboratory', 'the Neon Future'];
+const _v = new THREE.Vector3();
+const _q = new THREE.Quaternion();
 
 /**
- * Owns the level lifecycle: mounting one era at a time, disposing the
- * previous era's GPU resources, driving per-frame level updates (platforms,
- * barriers, doors) and chaining 1 → 2 → 3 → win.
+ * Owns the era lifecycle: build → play → (fail | complete) → dispose → next.
  *
- * Level contract (see AGENTS.md):
- *   build(scene, api) → { interactables, objects, lights, disposables, update? }
+ * Level module contract (see AGENTS.md):
+ *   export const meta = { name, numeral, title, subtitle, objective, music,
+ *                         ambience, sky, stability, accent, surface }
+ *   export function build(kit, api) → kit.result({ spawn, spawnYaw, ... })
  *
- * `api` gives every level the same integration surface without imports:
- *   api.completeLevel()  — light this level's socket, then advance
- *   api.showMessage(t)   — timed HUD banner
- *   api.setHint(fn)      — per-level hint text provider for the [E] prompt
- *   api.getMaxAnisotropy() — renderer's max anisotropy (textures.js tiling)
+ * The `api` object is the ONLY way a level talks to the rest of the game —
+ * levels never import main.js, the player or the UI.
  *
- * Objects flagged userData.persistent = true survive disposal and are only
- * detached (levels reuse shared assets that way if they want to).
+ * Timeline stability: every era has a time budget (meta.stability seconds).
+ * Falling or getting shocked costs time; running out collapses the era (a
+ * fail state — Control & Playability asks for "succeed and fail"). As it
+ * runs low the post-process starts tearing the image (uGlitch).
  */
-export function createLevelManager(scene, player, renderer) {
-  let currentLevelIndex = -1;
-  let currentLevelData = null;
-  let timeMachine = null;
-  let levelUpdate = null;
-  let hintProvider = null;
-  let onLevelLoaded = null;
-  let transitioning = false;
-  let transitionToken = 0; // bumping this cancels a pending level swap (restart)
-
-  const transitionEl = document.getElementById('transition-overlay');
-  const messageEl = document.getElementById('message-banner');
-  let messageTimer = null;
-
-  // Persistent containers — reused across levels so we never re-add to scene.
+export function createLevelManager({ scene, renderer, camera, player, timeMachine, audio, ui, postfx, minimap }) {
   const levelGroup = new THREE.Group();
-  levelGroup.name = 'LevelObjects';
+  levelGroup.name = 'Level';
   scene.add(levelGroup);
+  const pmrem = new THREE.PMREMGenerator(renderer);
 
-  const lightsGroup = new THREE.Group();
-  lightsGroup.name = 'LevelLights';
-  scene.add(lightsGroup);
+  let index = -1;
+  let level = null;          // kit.result() of the mounted era
+  let meta = null;
+  let sky = null;
+  let envRT = null;
+  let sun = null;
+  let hintFn = null;
+  let marker = null;
+  let stability = 0;
+  let stabilityMax = 1;
+  let state = 'idle';        // idle | playing | transition | failing | finale | won | title
+  let stateTime = 0;
+  let pending = null;        // transition bookkeeping
+  let time = 0;
+  let cinematic = null;      // camera override fn(dt, t)
+  const levelDisposables = [];
+  const stats = { runTime: 0, falls: 0, rewinds: 0, shocks: 0 };
+  const callbacks = { onFail: null, onWin: null, onLoaded: null };
 
-  // Shared reference to the player's interactables array; mutated in-place
-  // so Player's stored reference stays valid across level swaps.
-  const levelInteractables = player.interactables;
+  /* ------------------------------ the level API ------------------------------ */
+  const flashState = { on: false, pos: new THREE.Vector3(), dir: new THREE.Vector3() };
+  const api = {
+    get time() { return time; },
+    get player() { return player; },
+    get camera() { return camera; },
+    get scene() { return scene; },
+    get quality() { return settings.quality(); },
+    get renderer() { return renderer; },
+    audio,
+    message: (text, ms) => ui.message(text, ms),
+    setObjective: (text) => ui.setObjective(text),
+    setHint: (fn) => { hintFn = fn; },
+    setMarker: (pos, color) => { marker = pos ? pos.clone() : null; minimap.setObjective(marker, color); },
+    checkpoint: (pos, yaw, label = 'Checkpoint — the timeline remembers this moment.') => {
+      player.setCheckpoint(pos, yaw);
+      if (label) ui.message(label, 2200);
+      audio.play('checkpoint', { volume: 0.5 });
+    },
+    penalize: (seconds, reason) => {
+      stability = Math.max(0, stability - seconds);
+      if (reason) ui.message(`${reason}  (−${seconds}s stability)`, 2600);
+    },
+    hurt: (opts = {}) => {
+      if (state !== 'playing') return;
+      if (player.hurt(opts)) {
+        stats.shocks++;
+        ui.damage();
+        audio.play('zap', { volume: 0.9 });
+        if (opts.penalty) api.penalize(opts.penalty, opts.reason);
+        if (opts.respawn) setTimeout(() => { if (state === 'playing') player.reset(); }, 450);
+      }
+    },
+    sound: (name, opts) => audio.play(name, opts),
+    positional: (name, obj, opts) => { const h = audio.positional(name, obj, opts); levelDisposables.push(h); return h; },
+    journal: (html, key) => ui.addJournal(html, key),
+    reader: (opts) => { player.unlock(); ui.openReader(opts); },
+    keypad: (onSubmit) => { player.unlock(); ui.openKeypad(onSubmit); },
+    grantFlashlight: () => { player.addFlashlight(); },
+    flashlight: () => player.getFlashlightState(flashState),
+    enableDash: () => { player.canDash = true; },
+    shake: (n) => player.shake(n),
+    completeLevel: (corePos) => beginCoreSequence(corePos),
+    get sun() { return sun; },
+    get sky() { return sky; },
+  };
 
-  // ---- per-level API handed to every build() ---------------------------
-  function completeLevel() {
-    if (transitioning || currentLevelIndex < 0) return;
-    timeMachine.lightSocket(currentLevelIndex);
-    if (currentLevelIndex < LEVELS.length - 1) {
-      transitioning = true;
-      const token = ++transitionToken;
-      showMessage(`The ${['Ancient', 'Laboratory', 'Neon'][currentLevelIndex]} Core is recovered — the timeline shifts…`, 2600);
-      if (transitionEl) transitionEl.classList.add('active');
-      setTimeout(() => {
-        if (token !== transitionToken) return; // a restart cancelled this swap
-        loadLevel(currentLevelIndex + 1);
-        transitioning = false;
-        if (transitionEl) transitionEl.classList.remove('active');
-      }, 900);
-    } else {
-      // Third core: main.js watches timeMachine.userData.isRestoring and
-      // raises the win screen after the restoration sequence plays.
-    }
-  }
-
-  function showMessage(text, ms = 2400) {
-    if (!messageEl) return;
-    messageEl.textContent = text;
-    messageEl.classList.add('active');
-    clearTimeout(messageTimer);
-    messageTimer = setTimeout(() => messageEl.classList.remove('active'), ms);
-  }
-
-  function setHint(fn) { hintProvider = fn; }
-
-  // Flashlight bridge — Level 2 grants it, any level could reuse it.
-  function grantFlashlight() { player.addFlashlight(); }
-  function isFlashlightOn() { return !!player.flashlight && player.flashlightOn; }
-  // Texture tiling quality — textures.js sets this on every tiled map.
-  function getMaxAnisotropy() {
-    return renderer ? renderer.capabilities.getMaxAnisotropy() : 4;
-  }
-
-  const api = { completeLevel, showMessage, setHint, grantFlashlight, isFlashlightOn, getMaxAnisotropy };
-
-  function getHint() {
-    if (!hintProvider) return null;
-    try { return hintProvider(); } catch { return null; }
-  }
-
-  // ---- disposal ---------------------------------------------------------
-  function disposeObject3D(root) {
-    root.traverse((child) => {
-      if (child.userData && child.userData.persistent) return;
-      if (child.isMesh) {
-        if (child.geometry) child.geometry.dispose();
-        const mats = Array.isArray(child.material) ? child.material : [child.material];
-        mats.forEach((m) => {
-          if (!m) return;
-          // Shared materials may already be gone from an earlier dispose.
-          for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap']) {
-            if (m[key]) m[key].dispose();
-          }
+  /* ------------------------------ disposal ----------------------------------- */
+  function disposeObject(root) {
+    root.traverse((o) => {
+      if (o.userData && o.userData.persistent) return;
+      if (o.isMesh || o.isPoints || o.isLine) {
+        if (o.geometry) o.geometry.dispose();
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        for (const m of mats) {
+          if (!m) continue;
+          for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap']) if (m[key]) m[key].dispose();
           m.dispose();
-        });
+        }
+        if (o.isInstancedMesh) o.dispose();
       }
-      if (child.isLight && child.shadow && child.shadow.map) {
-        child.shadow.map.dispose();
-      }
+      if (o.isLight && o.shadow && o.shadow.map) o.shadow.map.dispose();
+      if (typeof o.dispose === 'function' && !o.isMesh && !o.isLight && !o.isScene) { try { o.dispose(); } catch { /* */ } }
     });
   }
 
-  function disposeResource(resource) {
-    if (resource && typeof resource.dispose === 'function') resource.dispose();
-  }
-
-  function disposeLevel() {
-    if (currentLevelData) {
-      if (currentLevelData.objects) currentLevelData.objects.forEach(disposeObject3D);
-      if (currentLevelData.lights) currentLevelData.lights.forEach(disposeObject3D);
-      if (currentLevelData.disposables) currentLevelData.disposables.forEach(disposeResource);
+  function unload() {
+    if (level) {
+      for (const o of level.objects) disposeObject(o);
+      for (const l of level.lights) disposeObject(l);
+      for (const d of level.disposables) if (d && d.dispose) d.dispose();
     }
-    while (levelGroup.children.length > 0) levelGroup.remove(levelGroup.children[0]);
-    while (lightsGroup.children.length > 0) lightsGroup.remove(lightsGroup.children[0]);
-  }
-
-  // ---- loading ----------------------------------------------------------
-  function loadLevel(levelIndex) {
-    if (levelIndex < 0 || levelIndex >= LEVELS.length) return;
-    if (levelIndex === currentLevelIndex) return;
-
-    disposeLevel();
-    levelInteractables.length = 0;
-    player.setColliders([]);
-    player.setWalkables([]);
-    player.clearLevelAttachments();
-    levelUpdate = null;
-    hintProvider = null;
-    scene.background = null;
+    for (const d of levelDisposables.splice(0)) if (d && d.dispose) d.dispose();
+    levelGroup.clear();
+    if (sky) { scene.remove(sky.mesh); sky.dispose(); sky = null; }
+    if (envRT) { envRT.dispose(); envRT = null; }
+    if (sun) { scene.remove(sun, sun.target); sun.shadow.map?.dispose(); sun.dispose(); sun = null; }
+    scene.environment = null;
     scene.fog = null;
-
-    const spawn = new THREE.Vector3(0, 1.7, 12);
-
-    const result = LEVELS[levelIndex].build(scene, api);
-    currentLevelData = result;
-    currentLevelIndex = levelIndex;
-
-    if (result.objects) result.objects.forEach((obj) => levelGroup.add(obj));
-    if (result.lights) result.lights.forEach((light) => lightsGroup.add(light));
-    if (result.interactables) result.interactables.forEach((obj) => levelInteractables.push(obj));
-    if (result.colliders) player.setColliders(result.colliders);
-    if (result.walkables) player.setWalkables(result.walkables);
-    if (result.spawn) spawn.copy(result.spawn);
-    if (result.update) levelUpdate = result.update;
-
-    player.spawn.copy(spawn);
-    player.reset();
-    if (onLevelLoaded) onLevelLoaded(levelIndex);
+    player.clearAttachments();
+    level = null;
+    hintFn = null;
+    marker = null;
+    minimap.setObjective(null);
   }
 
-  function nextLevel() {
-    if (currentLevelIndex < LEVELS.length - 1) loadLevel(currentLevelIndex + 1);
+  /* ------------------------------ loading ------------------------------------ */
+  function load(i, { title = false } = {}) {
+    unload();
+    index = i;
+    const mod = LEVELS[i];
+    meta = mod.meta;
+    const q = settings.quality();
+
+    // Sky dome + image-based lighting rendered from it.
+    sky = createSky(meta.sky);
+    scene.add(sky.mesh);
+    if (meta.env === 'room') {
+      const room = new RoomEnvironment(renderer);
+      envRT = pmrem.fromScene(room, 0.04);
+      room.dispose?.();
+    } else {
+      const envScene = new THREE.Scene();
+      const dome = sky.mesh.clone();
+      dome.position.set(0, 0, 0);
+      envScene.add(dome);
+      envRT = pmrem.fromScene(envScene, 0, 0.1, 1000);
+    }
+    scene.environment = envRT.texture;
+    scene.environmentIntensity = meta.envIntensity ?? 1; // r160 ignores this; materials use envMapIntensity
+
+    // Shadow-casting sun that follows the player (tight shadow box = sharp shadows, cheap).
+    if (meta.sun) {
+      sun = new THREE.DirectionalLight(meta.sun.color, meta.sun.intensity);
+      sun.castShadow = q.shadows;
+      sun.shadow.mapSize.set(q.shadowMapSize, q.shadowMapSize);
+      const s = meta.sun.extent || 24;
+      Object.assign(sun.shadow.camera, { left: -s, right: s, top: s, bottom: -s, near: 1, far: 140 });
+      sun.shadow.bias = -0.0004;
+      sun.shadow.normalBias = 0.03;
+      sun.userData.dir = sky.sunDir.clone();
+      scene.add(sun, sun.target);
+    }
+
+    const kit = createKit({ renderer, quality: q, api });
+    level = mod.build(kit, api);
+    for (const o of level.objects) levelGroup.add(o);
+    for (const l of level.lights) levelGroup.add(l);
+
+    // The persistent Time Machine joins every era's physics. The kit's arrays
+    // are live (levels add/remove colliders at runtime, e.g. barriers), so the
+    // player is handed those exact arrays.
+    const tm = timeMachine.getPhysics();
+    kit.colliders.push(...tm.colliders);
+    kit.walkables.push(...tm.walkables);
+    player.setLevel({
+      colliders: kit.colliders, walkables: kit.walkables, interactables: kit.interactables,
+      spawn: level.spawn, spawnYaw: level.spawnYaw ?? 0, bounds: level.bounds ?? 120,
+      killY: level.killY ?? -14, surface: meta.surface,
+    });
+
+    timeMachine.setEra(i);
+    postfx.setEra(i);
+    minimap.setAccent(meta.accent);
+    ui.setEra(i, meta.name);
+    ui.setObjective(meta.objective);
+    ui.setHint('');
+    stabilityMax = meta.stability;
+    stability = stabilityMax;
+    audio.playMusic(title ? 'title' : meta.music);
+    audio.setAmbience(meta.ambience);
+    state = title ? 'title' : 'playing';
+    stateTime = 0;
+    if (!title) ui.eraCard(meta.numeral, meta.title, meta.subtitle);
+    if (callbacks.onLoaded) callbacks.onLoaded(i);
   }
 
-  function restart() {
-    if (timeMachine) timeMachine.reset();
-    // Cancel any pending transition AND dispose whatever is still mounted —
-    // nulling currentLevelData before disposal would leak the GPU resources.
-    transitionToken++;
-    transitioning = false;
-    if (transitionEl) transitionEl.classList.remove('active');
-    disposeLevel();
-    currentLevelData = null;
-    currentLevelIndex = -1;
-    loadLevel(0);
+  /* ------------------------------ core → next era ---------------------------- */
+  function beginCoreSequence() {
+    if (state !== 'playing') return;
+    state = 'transition';
+    stateTime = 0;
+    pending = { phase: 'out', next: index + 1 };
+    player.frozen = true;
+    audio.play('core-get', { volume: 0.9 });
+    audio.duck(0.25, 3);
+    ui.message(index < 2 ? 'The core is yours — the Time Machine calls it home…' : 'The final core! Hold on — the machine is pulling you back…', 3000);
   }
 
-  /** Called every frame from main.js's render loop. */
-  function update(delta) {
-    if (levelUpdate) levelUpdate(delta);
+  function fail(reason) {
+    if (state !== 'playing') return;
+    state = 'failing';
+    stateTime = 0;
+    player.frozen = true;
+    player.hero.play('death', { hold: true });
+    audio.play('fail', { volume: 0.8 });
+    audio.stopMusic(1);
+    pending = { reason };
   }
 
-  function registerTimeMachine(machine) { timeMachine = machine; }
-  function setOnLevelLoaded(fn) { onLevelLoaded = fn; }
-  function isTransitioning() { return transitioning; }
-
-  function getObjectiveText() {
-    return `Objective: ${OBJECTIVES[currentLevelIndex] || OBJECTIVES[0]}`;
+  function retryEra() {
+    stats.rewinds++;
+    player.frozen = false;
+    postfx.u.uFlash.value = 0;
+    postfx.u.uWarp.value = 0;
+    // Cores earned in this era are lost; earlier eras keep theirs.
+    load(index);
   }
-  function getCurrentLevelIndex() { return currentLevelIndex; }
-  function getLevelCount() { return LEVELS.length; }
-  function getLevelName() { return LEVEL_NAMES[currentLevelIndex] || LEVEL_NAMES[0]; }
+
+  function restartRun() {
+    timeMachine.reset();
+    stats.runTime = 0; stats.falls = 0; stats.rewinds = 0; stats.shocks = 0;
+    ui.setCores(0);
+    player.hero.setCores(0);
+    ui.resetJournal();
+    player.frozen = false;
+    postfx.u.uFlash.value = 0;
+    postfx.u.uWarp.value = 0;
+    load(0);
+  }
+
+  function startFinale() {
+    state = 'finale';
+    stateTime = 0;
+    player.frozen = true;
+    player.reset();                            // stand at the machine
+    const pos = new THREE.Vector3(0, timeMachine.daisTop, 5.2);
+    player.rig.position.copy(pos);
+    player.facing = Math.PI;
+    timeMachine.lightSocket(2);
+    ui.setCores(3);
+    player.hero.setCores(3);
+    audio.play('power-up', { volume: 1 });
+    audio.playMusic('title', 3);
+    let a = 0;
+    cinematic = (dt) => {
+      a += dt * 0.35;
+      const r = 9 - Math.min(stateTime, 5) * 0.5;
+      camera.position.set(Math.sin(a) * r, 3 + stateTime * 0.25, Math.cos(a) * r);
+      camera.lookAt(0, 2.6, 0);
+    };
+  }
+
+  /* ------------------------------ per frame ---------------------------------- */
+  function update(dt) {
+    time += dt;
+    stateTime += dt;
+    if (sky) sky.update(camera, time);
+    if (sun) {
+      // Follow the player; snap to shadow-map texels so shadows don't shimmer.
+      const s = sun.shadow.camera.right * 2 / sun.shadow.mapSize.x;
+      _v.copy(player.position);
+      _v.x = Math.round(_v.x / s) * s;
+      _v.z = Math.round(_v.z / s) * s;
+      sun.target.position.copy(_v);
+      sun.position.copy(_v).addScaledVector(sun.userData.dir, 60);
+      sun.target.updateMatrixWorld();
+    }
+
+    if (state === 'playing' || state === 'title') {
+      if (level && level.update) level.update(dt, time);
+    }
+
+    if (state === 'playing') {
+      stats.runTime += dt;
+      stability -= dt;
+      const frac = stability / stabilityMax;
+      ui.setStability(frac, stability);
+      postfx.u.uGlitch.value = frac < 0.25 ? (0.25 - frac) * 4 * (0.5 + 0.5 * Math.sin(time * 2.3)) : 0;
+      if (hintFn) ui.setHint(typeof hintFn === 'function' ? hintFn() : hintFn);
+      if (stability <= 0) fail('Timeline stability ran out — the era folded in on itself.');
+    } else {
+      postfx.u.uGlitch.value = 0;
+    }
+
+    if (state === 'failing' && stateTime > 1.8) {
+      state = 'failed';
+      player.unlock();
+      if (callbacks.onFail) callbacks.onFail(pending.reason);
+    }
+
+    if (state === 'transition') {
+      const u = postfx.u;
+      if (pending.phase === 'out') {
+        u.uWarp.value = Math.min(1, stateTime / 1.4);
+        u.uFlash.value = THREE.MathUtils.smoothstep(stateTime, 0.9, 1.5);
+        if (!pending.sfx) { pending.sfx = true; audio.play('warp', { volume: 0.9 }); }
+        if (stateTime > 1.55) {
+          const finishing = index === LEVELS.length - 1;
+          if (finishing) {
+            u.uWarp.value = 0.6;
+            startFinale();
+          } else {
+            const done = index;
+            timeMachine.lightSocket(done);
+            const cores = timeMachine.getCores();
+            ui.setCores(cores);
+            player.hero.setCores(cores);
+            player.frozen = false;
+            load(pending.next);
+            player.frozen = true;
+            state = 'transition';
+            pending = { phase: 'in' };
+            stateTime = 0;
+          }
+        }
+      } else if (pending.phase === 'in') {
+        u.uWarp.value = Math.max(0, 1 - stateTime / 1.6);
+        u.uFlash.value = Math.max(0, 1 - stateTime / 0.9);
+        if (stateTime > 1.6) {
+          u.uWarp.value = 0;
+          u.uFlash.value = 0;
+          player.frozen = false;
+          state = 'playing';
+          ui.message('A socket on the Time Machine burns with recovered time.', 3000);
+        }
+      }
+    }
+
+    if (state === 'finale') {
+      const u = postfx.u;
+      u.uWarp.value = Math.max(0, 0.6 - stateTime * 0.6) + THREE.MathUtils.smoothstep(stateTime, 5.2, 6.4) * 0.8;
+      u.uFlash.value = THREE.MathUtils.smoothstep(stateTime, 5.4, 6.4);
+      if (stateTime > 1.5 && !pending.cheered) { pending.cheered = true; player.hero.play('cheer', { hold: true }); }
+      if (stateTime > 6.6) {
+        state = 'won';
+        cinematic = null;
+        u.uFlash.value = 0.0;
+        u.uWarp.value = 0;
+        player.unlock();
+        if (callbacks.onWin) callbacks.onWin({ ...stats });
+      }
+    }
+  }
+
+  /** Called after player.update so cinematics can take the camera. */
+  function updateCamera(dt) { if (cinematic) cinematic(dt, time); }
 
   return {
-    loadLevel,
-    nextLevel,
-    restart,
+    api,
+    load,
+    retryEra,
+    restartRun,
     update,
-    registerTimeMachine,
-    setOnLevelLoaded,
-    isTransitioning,
-    getHint,
-    showMessage,
-    getObjectiveText,
-    getCurrentLevelIndex,
-    getLevelCount,
-    getLevelName,
+    updateCamera,
+    fail,
+    stats,
+    callbacks,
+    get index() { return index; },
+    get state() { return state; },
+    set state(s) { state = s; },
+    get meta() { return meta; },
+    get marker() { return marker; },
+    /** Level-provided QA shortcuts (e.g. solve a puzzle) for automated tests. */
+    get debug() { return level && level.debug; },
+    registerFall() {
+      stats.falls++;
+      api.penalize(meta?.fallPenalty ?? 15, 'You slipped out of time');
+      audio.play('warp', { volume: 0.5 });
+      player.reset();
+    },
   };
 }
