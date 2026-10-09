@@ -48,11 +48,15 @@ The hero's hourglass pack fills with glowing sand as cores return.
 ### III · The Future — `src/levels/neonFuture.js`
 1. **Dash gap** — too wide to jump: sprint, jump, press **Q / right-click** in the air.
 2. **Moving platforms** (they carry you). 3. **Phase platforms** — they dissolve in a wave; go when the next is solid.
-4. **Gauntlet** — barriers pulse on/off; **dashing phases you through** even when they're on; jump the sweeping lasers.
-5. **Collapse run** — tiles fall ~0.4 s after you step on them and the rift chases you; don't stop. Take the Neon Core
-   on the spire → finale.
+4. **Gauntlet** — barriers pulse on/off (1.55 s on / 1.35 s off); **dashing phases you through** even when they're on;
+   jump the sweeping lasers.
+5. **Collapse run** — tiles fall ~0.4 s after you step on them and the rift chases you; don't stop.
+6. **Sequence lock** — the Neon Core sits in a containment field. A holo panel shows a colour order (cyan / magenta / gold);
+   all three energy nodes rotate their glow every 3.5 s, so **touch the node currently glowing the highlighted colour** —
+   three times in a row. A wrong touch resets the lock (−3 s). Solve it to drop the field, take the Neon Core → finale.
 
-Checkpoints after each section. Falling costs 12 s; shocks 6–10 s.
+Checkpoints after each section — the pre-gauntlet and pre-collapse checkpoints are marked with ground rings + labels.
+Falling costs 12 s; shocks 6–10 s; a wrong lock touch 3 s.
 
 ## Systems everyone should be able to explain
 

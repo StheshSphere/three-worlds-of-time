@@ -59,7 +59,18 @@
    "shot": "f1_neon_arrival"
   },
   {
-   "eval": "__game.levels.debug.takeCore(); null"
+   "comment": "The Neon Core is gated by the sequence lock: an early takeCore must be refused.",
+   "eval": "__game.levels.debug.takeCore(); JSON.stringify({ coreTakenEarly: __game.levels.debug.state.coreTaken, solved: __game.levels.debug.puzzle().solved })"
+  },
+  {
+   "comment": "Solve the lock, then the core must open.",
+   "eval": "__game.levels.debug.solvePuzzle(); JSON.stringify(__game.levels.debug.puzzle())"
+  },
+  {
+   "wait": 400
+  },
+  {
+   "eval": "__game.levels.debug.takeCore(); JSON.stringify({ coreTaken: __game.levels.debug.state.coreTaken })"
   },
   {
    "comment": "Final core: wait for the finale state, then the epilogue cutscene, skip it, then credits.",

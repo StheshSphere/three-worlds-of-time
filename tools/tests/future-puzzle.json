@@ -1,0 +1,16 @@
+{ "url": "http://127.0.0.1:8000/index.html", "steps": [
+  { "eval": "__game.skipTo(2); __game.player.isLocked = true; null" }, { "wait": 2600 },
+  { "eval": "{ const p=__game.player; p.rig.position.set(0,3.2,-138.6); p.velocity.set(0,0,0); p.yaw=0; } null" }, { "wait": 1200 },
+  { "comment": "Initial lock state: unsolved, step 0, three nodes with three different colours.", "eval": "JSON.stringify(__game.levels.debug.puzzle())" },
+  { "comment": "Colours rotate on the 3.5 s beat: after 3.6 s every node's colour index must differ.", "eval": "JSON.stringify(__game.levels.debug.puzzle().nodes.map((n) => n.ci))" },
+  { "wait": 3600 },
+  { "eval": "JSON.stringify(__game.levels.debug.puzzle().nodes.map((n) => n.ci))" },
+  { "comment": "Correct first touch advances the step.", "eval": "(() => { const d=__game.levels.debug; const pz=d.puzzle(); d.pressNode(pz.nodes.findIndex((n)=>n.ci===pz.seq[0])); return JSON.stringify(d.puzzle()); })()" },
+  { "wait": 600 },
+  { "comment": "Wrong touch resets the lock to step 0.", "eval": "(() => { const d=__game.levels.debug; const pz=d.puzzle(); d.pressNode(pz.nodes.findIndex((n)=>n.ci!==pz.seq[pz.step])); return JSON.stringify(d.puzzle()); })()" },
+  { "wait": 600 },
+  { "comment": "The full correct sequence solves the lock.", "eval": "__game.levels.debug.solvePuzzle(); JSON.stringify(__game.levels.debug.puzzle())" },
+  { "wait": 400 },
+  { "comment": "The core is now takeable: takeCore flips coreTaken and starts the finale transition.", "eval": "__game.levels.debug.takeCore(); null" }, { "wait": 800 },
+  { "eval": "JSON.stringify({ solved: __game.levels.debug.puzzle().solved, coreTaken: __game.levels.debug.state.coreTaken, state: __game.levels.state })" }
+]}

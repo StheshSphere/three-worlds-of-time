@@ -18,6 +18,9 @@ import { createCity, createGridFloor, createTraffic, phaseMaterial } from '../sh
  *   4. Gauntlet: pulsing barriers (dash through!) + sweeping lasers.   z −86 … −104
  *   5. Collapse run: the bridge crumbles under you while a time-rift
  *      chases you up to the Neon Core.                                z −110 … −142
+ *   6. Sequence lock: the core sits in a containment field — three
+ *      colour-cycling nodes, touched in the colour order the holo panel
+ *      shows. Deliberately small; the level stays a timing gauntlet.
  *
  * New ways to fail: falling into the city, barrier shocks, laser sweeps,
  * and being caught by the rift. Checkpoints after every section.
@@ -40,7 +43,8 @@ export const meta = {
     kicker: 'The Future · Your goal', title: 'Survive the collapsing skyline',
     html: '<ul><li>New ability — <b>Chrono-Dash</b>: press <kbd>Q</kbd> or <b>right-click</b> (works in mid-air).</li>'
       + '<li>The first gap is too wide to jump: <b>sprint</b> (<kbd>Shift</kbd>), <b>jump</b> (<kbd>Space</kbd>), then <b>dash</b> in the air.</li>'
-      + '<li>Falling costs stability, but you restart from the last <b>checkpoint</b>. Follow the <b>◆ marker</b> to the Neon Core.</li></ul>',
+      + '<li>Falling costs stability, but you restart from the last <b>checkpoint</b>. Follow the <b>◆ marker</b> to the Neon Core.</li>'
+      + '<li>The core is sealed — break the small <b>sequence lock</b> at the end to take it.</li></ul>',
   },
 };
 
@@ -55,7 +59,7 @@ export function build(kit, api) {
   const magenta = kit.track(new THREE.MeshStandardMaterial({ color: 0x1a0414, emissive: 0xff3fd0, emissiveIntensity: 2.6 }));
   const underGlow = kit.track(new THREE.MeshBasicMaterial({ color: 0x5a1a8a, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
 
-  const state = { section: 0, riftActive: false, coreTaken: false, reached: [false, false, false, false, false] };
+  const state = { section: 0, riftActive: false, coreTaken: false, puzzleSolved: false, puzzleStep: 0, puzzleCd: 0, reached: [false, false, false, false, false] };
   const checkpoints = [
     new THREE.Vector3(0, 0, 4),
     new THREE.Vector3(0, 0.5, -18),
@@ -157,13 +161,18 @@ export function build(kit, api) {
   /* ===================================================================
      2. Moving platforms
      =================================================================== */
+  // Tuned against the player's envelope (sprint 8.2 m/s; a flat jump is
+  // ≈ 0.73 s of air ≈ 3.3 m walking / 6.0 m sprinting; dash adds 3.8 m):
+  // 3.6 m pads leave real landing room and the amplitudes put the
+  // worst-case lateral offset just past a walking hop — so "jump when it
+  // lines up" stays true instead of "pray the sine is kind".
   const movers = [];
-  for (const [z, axis, amp, speed, phase, trim] of [[-27, 'x', 4.5, 0.9, 0, cyan], [-33, 'y', 1.4, 1.1, 1.3, magenta], [-39, 'x', 5, 0.8, 2.6, cyan]]) {
-    const p = platform(0, z, 3.2, 3.2, 0.6, trim);
+  for (const [z, axis, amp, speed, phase, trim] of [[-27, 'x', 3.8, 0.8, 0, cyan], [-33, 'y', 1.2, 0.95, 1.3, magenta], [-39, 'x', 4.2, 0.72, 2.6, cyan]]) {
+    const p = platform(0, z, 3.6, 3.6, 0.6, trim);
     p.body.userData.carryDelta = new THREE.Vector3();
     movers.push({ ...p, base: p.group.position.clone(), axis, amp, speed, phase });
   }
-  platform(0, -47, 8, 6, 1.0, magenta);
+  platform(0, -47, 8, 7, 1.0, magenta);   // deeper catch pad: the hop off the last mover is 2.7 m
   const _prevPos = new THREE.Vector3();   // scratch — no per-frame allocations
   kit.update((dt, t) => {
     for (const m of movers) {
@@ -183,10 +192,10 @@ export function build(kit, api) {
   for (let i = 0; i < 5; i++) {
     const mat = phaseMaterial(deck, i % 2 ? 0xff5be0 : 0x6ff0ff);
     kit.track(mat);
-    const p = platform(0, -53 - i * 5, 3.2, 3.2, 1.0, i % 2 ? magenta : cyan, { mat });
+    const p = platform(0, -53 - i * 5, 3.4, 3.4, 1.0, i % 2 ? magenta : cyan, { mat });
     phases.push({ ...p, mat, offset: i * 0.85, solid: true, c: 0 });
   }
-  platform(0, -81, 8, 6, 1.5, cyan);
+  platform(0, -81, 8, 7, 1.5, cyan);   // phase-wave catch pad (2.8 m gap off the last dissolving tile)
   kit.update((dt, t) => {
     for (const ph of phases) {
       // 0 → 2.6 s solid, then dissolve, 1.1 s gone, rematerialise.
@@ -214,13 +223,19 @@ export function build(kit, api) {
   platform(0, -95, 5, 18, 1.5, magenta);
   platform(0, -108, 8, 6, 1.5, cyan);
   const barriers = [];
-  for (const [z, offset] of [[-89, 0], [-98.5, 1.3]]) {
+  for (const [z, offset] of [[-89, 0], [-98.5, 1.45]]) {
     const mat = kit.track(createBarrierMaterial(0xff4fd8));
     const wall = new THREE.Mesh(kit.track(new THREE.PlaneGeometry(5.2, 2.9, 40, 10)), mat);
     wall.position.set(0, 1.5 + 1.45, z);
     kit.add(wall);
     const proxy = kit.proxy({ size: [5.2, 2.9, 0.5], pos: [0, 1.5 + 1.45, z] });
-    proxy.userData.onTouch = () => api.hurt({ from: new THREE.Vector3(0, 1.5, z), power: 10, respawn: true, penalty: 8, reason: 'Barrier shock' });
+    proxy.userData.onTouch = () => {
+      // A dash must never shock: levels.update drops the collider the same
+      // frame a dash starts, but this guard keeps the rule true even if the
+      // touch and the state toggle meet mid-frame.
+      if (api.player.isDashing) return;
+      api.hurt({ from: new THREE.Vector3(0, 1.5, z), power: 10, respawn: true, penalty: 8, reason: 'Barrier shock' });
+    };
     for (const sx of [-2.75, 2.75]) {
       const post = kit.box({ size: [0.35, 3.2, 0.35], pos: [sx, 1.5 + 1.6, z], mat: deckDark, tile: 1, walk: false, map: false });
       post.material = deckDark;
@@ -252,9 +267,12 @@ export function build(kit, api) {
     const player = api.player;
     const p = player.position;
     for (const b of barriers) {
-      // 1.7 s on, 1.1 s off, with a warning flicker before switching on.
-      const c = (t + b.offset) % 2.8;
-      const on = c < 1.7;
+      // 1.55 s on / 1.35 s off (2.9 s cycle) — the longer off window fits a
+      // sprint-through plus a laser jump. The barriers sit half a cycle
+      // apart (offset 1.45), so leaving barrier 1 the moment it dims puts
+      // you at barrier 2 just as it dims; the dash covers any misjudged leave.
+      const c = (t + b.offset) % 2.9;
+      const on = c < 1.55;
       b.on = on;
       b.c = c;                     // read by debug() for automated tests
       b.mat.uniforms.uTime.value = t;
@@ -262,7 +280,7 @@ export function build(kit, api) {
       b.mat.uniforms.uDissolve.value = on ? 0 : 0.55;
       // Warning flash rising edge: a short cue when the player is close enough
       // for it to matter (the flash itself is the shader's uWarn).
-      const warn = !on && c > 2.45;
+      const warn = !on && c > 2.55;
       b.mat.uniforms.uWarn.value = warn ? 1 : 0;
       if (warn && !b.warn && player.position.distanceToSquared(b.wall.position) < 196) api.sound('switch', { volume: 0.22, rate: 1.45, jitter: 0 });
       b.warn = warn;
@@ -271,7 +289,7 @@ export function build(kit, api) {
       if (solid !== b.active) { b.active = solid; if (solid) kit.addCollider(b.proxy); else kit.removeCollider(b.proxy); }
     }
     for (const l of lasers) {
-      l.angle += dt * 1.7 * l.dir;
+      l.angle += dt * 1.6 * l.dir;   // a touch slower than v1 — readable sweep, still demands a jump
       const len = 2.45;
       _a.set(0, l.y, l.z);
       _b.set(Math.cos(l.angle) * len, l.y, l.z + Math.sin(l.angle) * len);
@@ -387,7 +405,7 @@ export function build(kit, api) {
         state.riftActive = false;
         if (riftRumble && riftRumble.sound.isPlaying) riftRumble.sound.pause();
         riftMat.uniforms.uDissolve.value = 0;
-        api.message('You outran the collapse. The Neon Core waits on the spire.', 2600);
+        api.message('You outran the collapse. The Neon Core is on the spire — sealed behind an energy lock.', 2600);
       }
     } else if (rift.visible && player.position.z < -138) {
       riftMat.uniforms.uDissolve.value = Math.min(1, riftMat.uniforms.uDissolve.value + dt * 0.8);
@@ -412,7 +430,8 @@ export function build(kit, api) {
   kit.add(coreBeam.mesh);
   kit.track(coreBeam);
   const coreLight = kit.pointLight(0xff4fd8, 18, 14, [0, 5.2, -143]);
-  kit.interact(core, () => (state.coreTaken ? null : 'Take the Neon Core'), () => {
+  kit.interact(core, () => (state.coreTaken || !state.puzzleSolved ? null : 'Take the Neon Core'), () => {
+    if (state.coreTaken || !state.puzzleSolved) return null;   // the sequence lock gates the core
     state.coreTaken = true;
     core.visible = false;
     coreBeam.mesh.visible = false;
@@ -424,6 +443,170 @@ export function build(kit, api) {
     core.rotation.y += dt * 1.6;
     core.position.y = 4.7 + Math.sin(t * 2.2) * 0.15;
     coreBeam.update(t);
+  });
+
+  /* ===================================================================
+     6. Sequence lock — the small finale puzzle. The Neon Core sits in a
+     containment field; three colour-cycling energy nodes must be touched
+     in the colour order the holo panel shows. All three nodes rotate
+     their glow on the same 3.5 s beat, so at any moment each glows a
+     DIFFERENT colour — the panel's highlighted chip therefore always
+     names exactly one node. Wrong touch resets the lock (−3 s).
+     =================================================================== */
+  const PUZZLE_COLORS = [0x6ff0ff, 0xff5be0, 0xffcc33];          // cyan / magenta / gold
+  const PUZZLE_NAMES = ['cyan', 'magenta', 'gold'];
+  const COLOR_HOLD = 3.5;                                        // seconds per colour
+  const seq = [0, 1, 2];                                         // shown order, reshuffled per load
+  for (let i = seq.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [seq[i], seq[j]] = [seq[j], seq[i]]; }
+  const cssHex = (n) => `#${n.toString(16).padStart(6, '0')}`;
+
+  const containmentMat = kit.track(createBarrierMaterial(0xff5be0));
+  const containment = new THREE.Mesh(kit.track(new THREE.CylinderGeometry(1.7, 1.7, 2.8, 40, 1, true)), containmentMat);
+  containment.position.set(0, 3.0 + 1.4, -143);
+  kit.add(containment);
+  const containmentProxy = kit.proxy({ size: [3.4, 2.8, 3.4], pos: [0, 3.0 + 1.4, -143] });
+  const fieldSfx = api.positional('force-field', containment, { volume: 0.5, refDistance: 3.5 });
+
+  const nodeGlowTex = kit.canvasTexture(128, 128, (g) => {
+    const rad = g.createRadialGradient(64, 64, 4, 64, 64, 62);
+    rad.addColorStop(0, 'rgba(255,255,255,0.9)');
+    rad.addColorStop(0.4, 'rgba(255,255,255,0.25)');
+    rad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = rad; g.fillRect(0, 0, 128, 128);
+  });
+  const nodeBaseGeo = kit.cylGeo(0.26, 0.4, 1.1, 6, 1.5);
+  const nodes = [];
+  [[-2.9, -140.2], [0, -139.4], [2.9, -140.2]].forEach(([nx, nz], i) => {
+    const g = new THREE.Group();
+    const pylon = new THREE.Mesh(nodeBaseGeo, deckDark);
+    pylon.castShadow = true; pylon.receiveShadow = true;
+    pylon.position.y = 0.55;
+    g.add(pylon);
+    const orbMat = kit.track(new THREE.MeshStandardMaterial({ color: 0x10161c, emissive: PUZZLE_COLORS[0], emissiveIntensity: 3, roughness: 0.3 }));
+    const orb = new THREE.Mesh(kit.track(new THREE.IcosahedronGeometry(0.3, 1)), orbMat);
+    orb.position.y = 1.5;
+    g.add(orb);
+    const glowMat = kit.track(new THREE.MeshBasicMaterial({ map: nodeGlowTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, color: PUZZLE_COLORS[0] }));
+    const glow = new THREE.Mesh(kit.track(new THREE.PlaneGeometry(1.6, 1.6)), glowMat);
+    glow.position.y = 1.5;
+    g.add(glow);
+    g.position.set(nx, 3.0, nz);
+    kit.add(g);
+    g.updateMatrixWorld(true);
+    kit.solidFrom(pylon);                    // pylons block; the orbs stay pass-through
+    const node = { orb, orbMat, glow, glowMat, i, ci: 0, prevCi: 0, switchAt: -9 };
+    nodes.push(node);
+    const press = () => activateNode(node);
+    const prompt = () => (state.puzzleSolved ? null : `Touch the node (${PUZZLE_NAMES[node.ci]})`);
+    kit.interact(orb, prompt, press);
+    kit.interact(pylon, prompt, press);
+  });
+
+  const panelTex = kit.canvasTexture(512, 256, (g) => drawPanelTo(g));
+  const panelMat = kit.track(createScreenMaterial(panelTex, { color: 0xffffff, power: 1, holo: true }));
+  const panel = new THREE.Mesh(kit.track(new THREE.PlaneGeometry(3.8, 1.9)), panelMat);
+  panel.position.set(0, 6.3, -143.8);
+  panel.rotation.x = -0.25;
+  kit.add(panel);
+
+  function drawPanelTo(g) {
+    g.clearRect(0, 0, 512, 256);
+    g.fillStyle = 'rgba(8, 2, 18, 0.85)'; g.fillRect(0, 0, 512, 256);
+    g.strokeStyle = '#ff5be0'; g.lineWidth = 4; g.strokeRect(8, 8, 496, 240);
+    g.textAlign = 'center';
+    g.fillStyle = '#ff9ae8'; g.font = 'bold 34px sans-serif';
+    g.fillText(state.puzzleSolved ? 'LOCK RELEASED' : 'ENERGY LOCK', 256, 56);
+    g.fillStyle = '#9fd8ff'; g.font = '22px sans-serif';
+    g.fillText(state.puzzleSolved ? 'the containment field is down' : 'touch the nodes in this colour order', 256, 90);
+    for (let i = 0; i < 3; i++) {
+      const x = 74 + i * 146, y = 124, w = 96, h = 74;
+      const done = state.puzzleSolved || i < state.puzzleStep;
+      const active = !state.puzzleSolved && i === state.puzzleStep;
+      g.globalAlpha = done ? 0.35 : active ? 1 : 0.7;
+      g.fillStyle = cssHex(PUZZLE_COLORS[seq[i]]);
+      g.fillRect(x, y, w, h);
+      g.globalAlpha = 1;
+      g.lineWidth = active ? 6 : 3;
+      g.strokeStyle = active ? '#ffffff' : 'rgba(255,255,255,0.35)';
+      g.strokeRect(x, y, w, h);
+      if (done) {
+        g.strokeStyle = '#ffffff'; g.lineWidth = 6;
+        g.beginPath(); g.moveTo(x + 30, y + 42); g.lineTo(x + 44, y + 56); g.lineTo(x + 72, y + 22); g.stroke();
+      }
+      if (i < 2) {
+        g.strokeStyle = '#ff9ae8'; g.lineWidth = 5;
+        g.beginPath();
+        g.moveTo(x + w + 10, y + 37); g.lineTo(x + w + 40, y + 37);
+        g.moveTo(x + w + 30, y + 27); g.lineTo(x + w + 40, y + 37); g.lineTo(x + w + 30, y + 47);
+        g.stroke();
+      }
+    }
+    g.fillStyle = 'rgba(255,255,255,0.5)'; g.font = '18px sans-serif';
+    g.fillText(state.puzzleSolved ? 'take the Neon Core' : 'the highlighted colour is the one to touch now — nodes rotate every few seconds', 256, 234);
+  }
+  function drawPanel() { drawPanelTo(panelTex.image.getContext('2d')); panelTex.needsUpdate = true; }
+
+  function solvePuzzle() {
+    if (state.puzzleSolved) return;
+    state.puzzleSolved = true;
+    state.puzzleStep = 3;
+    drawPanel();
+    kit.removeCollider(containmentProxy);
+    for (const n of nodes) { n.orbMat.emissive.setHex(0xffcc33); n.orbMat.emissiveIntensity = 1.1; n.glowMat.color.setHex(0xffcc33); }
+    api.sound('power-up', { volume: 0.85 });
+    api.shake(0.2);
+    api.message('SIGNAL ACCEPTED — the containment field collapses. Take the Neon Core.', 3200);
+  }
+
+  function activateNode(node) {
+    if (state.puzzleSolved || state.coreTaken || state.puzzleCd > 0) return null;
+    state.puzzleCd = 0.45;                                     // one press per beat
+    const want = seq[state.puzzleStep];
+    // A node that changed colour less than 0.35 s ago still counts with its
+    // previous colour, so a rotation mid-approach can't eat a fair press.
+    const ok = node.ci === want || (node.prevCi === want && api.time - node.switchAt < 0.35);
+    if (!ok) {
+      state.puzzleStep = 0;
+      drawPanel();
+      api.penalize(3, 'The sequence lock resets');
+      api.sound('ui-error', { volume: 0.8 });
+      api.shake(0.12);
+      return null;
+    }
+    state.puzzleStep++;
+    drawPanel();
+    if (state.puzzleStep >= 3) solvePuzzle();
+    else api.sound('switch', { volume: 0.6, rate: 1.25 });
+    return null;
+  }
+
+  kit.update((dt, t) => {
+    if (state.puzzleCd > 0) state.puzzleCd -= dt;
+    panelMat.uniforms.uTime.value = t;
+    containmentMat.uniforms.uTime.value = t;
+    if (state.puzzleSolved) {
+      // The field burns away; nodes settle into a calm gold "accepted" glow.
+      containmentMat.uniforms.uDissolve.value = Math.min(1, containmentMat.uniforms.uDissolve.value + dt * 1.1);
+      containmentMat.uniforms.uActive.value = Math.max(0, containmentMat.uniforms.uActive.value - dt * 2);
+      if (containmentMat.uniforms.uDissolve.value >= 1 && containment.visible) {
+        containment.visible = false;
+        if (fieldSfx && fieldSfx.sound.isPlaying) fieldSfx.sound.pause();
+      }
+      const g = 0.85 + 0.15 * Math.sin(t * 1.6);
+      for (const n of nodes) { n.orb.rotation.y += dt * 0.4; n.glowMat.opacity = g; }
+      return;
+    }
+    const base = Math.floor(t / COLOR_HOLD) % 3;
+    for (const n of nodes) {
+      const ci = (base + n.i) % 3;          // every node a different colour, always
+      if (ci !== n.ci) {
+        n.prevCi = n.ci; n.ci = ci; n.switchAt = t;
+        n.orbMat.emissive.setHex(PUZZLE_COLORS[ci]);
+        n.glowMat.color.setHex(PUZZLE_COLORS[ci]);
+      }
+      n.orb.rotation.y += dt * 1.2;
+      n.glow.lookAt(api.camera.position);   // billboard — reads from across the spire
+    }
   });
 
   /* ===================================================================
@@ -453,19 +636,38 @@ export function build(kit, api) {
     }
   });
 
+  // Ground rings mark the gauntlet / collapse checkpoints (same shared
+  // api.checkpoint flow as every other era). They breathe gently so the
+  // "restart here" point reads from across the walkway.
+  const padMat = kit.track(new THREE.MeshBasicMaterial({ color: 0xff5be0, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
+  for (const cp of [checkpoints[3], checkpoints[4]]) {
+    const ring = new THREE.Mesh(kit.track(new THREE.RingGeometry(0.55, 0.95, 28)), padMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(cp.x, cp.y + 0.03, cp.z);
+    kit.add(ring);
+  }
+  kit.update((dt, t) => { padMat.opacity = 0.34 + 0.18 * (0.5 + 0.5 * Math.sin(t * 2.4)); });
+
   /* ===================================================================
      Checkpoints, hints, marker
      =================================================================== */
   const sectionZ = [-15, -45, -79, -105];
+  // Member 2's shared checkpoint API (api.checkpoint → Player.setCheckpoint)
+  // arms on SOLID GROUND at each section line, and the two harsh sections
+  // get a task-specific label. The pre-collapse pad at z −107 is the one
+  // that matters most: failed runs restart there, not at the level spawn.
+  const CP_LABELS = [undefined, undefined, undefined,
+    'Checkpoint — barriers ahead: catch them dim, or dash straight through.',
+    'Checkpoint — the bridge ahead collapses. Don’t stop.'];
   let markerStep = -1;
   const _m = new THREE.Vector3();
   kit.update(() => {
     const p = api.player.position;
     for (let i = 0; i < sectionZ.length; i++) {
-      if (!state.reached[i + 1] && p.z < sectionZ[i] && p.y > 0) {
+      if (!state.reached[i + 1] && p.z < sectionZ[i] && p.y > 0 && api.player.onGround) {
         state.reached[i + 1] = true;
         state.section = i + 1;
-        api.checkpoint(checkpoints[i + 1], 0);
+        api.checkpoint(checkpoints[i + 1], 0, CP_LABELS[i + 1]);
         beacons[i + 1].pulse = 1;
         if (i + 1 === 4) resetCollapse();
       }
@@ -482,6 +684,7 @@ export function build(kit, api) {
     phase: { kicker: 'Section 3', title: 'Platforms phase out of time', html: '<ul><li>These platforms <b>dissolve and re-form</b> in a wave.</li><li>Wait at the edge, then move <b>as soon as the next one is solid</b>. Don’t stand still on a flickering one.</li></ul>' },
     gauntlet: { kicker: 'Section 4', title: 'Barriers and lasers', html: '<ul><li>Pink <b>energy barriers</b> pulse on and off — run through when they dim, or <b>DASH through</b> them even when they’re on.</li><li><b>Jump</b> over the red laser sweepers.</li></ul>' },
     collapse: { kicker: 'Final section', title: 'Outrun the collapse', html: '<ul><li>The bridge <b>falls away</b> just after you step on it, and a time rift is chasing you.</li><li><b>Don’t stop</b> — sprint, jump the gaps and dash if you need to. The Neon Core is on the spire.</li></ul>' },
+    puzzle: { kicker: 'Final lock', title: 'Break the sequence lock', html: '<ul><li>The Neon Core sits in a <b>containment field</b>; the panel shows a <b>colour order</b>.</li><li>Every few seconds all three nodes rotate their colour — <b>touch the node currently glowing the highlighted colour</b>, three times in a row.</li><li>A wrong touch resets the lock (−3 s).</li></ul>' },
   };
   api.setChecklist(() => {
     const steps = [
@@ -490,6 +693,7 @@ export function build(kit, api) {
       ['Cross the phasing platforms', state.reached[3]],
       ['Get through the barrier gauntlet', state.reached[4]],
       ['Outrun the collapse to the spire', api.player.position.z < -138 || state.coreTaken],
+      ['Break the sequence lock', state.puzzleSolved],
       ['Take the Neon Core', state.coreTaken],
     ];
     const active = steps.findIndex((s) => !s[1]);
@@ -500,6 +704,7 @@ export function build(kit, api) {
     if (state.reached[2]) api.tutorial('phase', CARD.phase, 11);
     if (state.reached[3]) api.tutorial('gauntlet', CARD.gauntlet, 12);
     if (state.reached[4]) api.tutorial('collapse', CARD.collapse, 10);
+    if (state.reached[4] && !state.puzzleSolved && api.player.position.z < -138) api.tutorial('puzzle', CARD.puzzle, 12);
   });
   let introShown = false;
   kit.update((dt, t) => {
@@ -511,6 +716,11 @@ export function build(kit, api) {
   });
   api.setHint(() => {
     if (state.coreTaken) return '';
+    if (state.section >= 4 && api.player.position.z < -138) {
+      return state.puzzleSolved
+        ? 'The field is down — take the Neon Core on the pedestal.'
+        : 'The core is sealed: touch the nodes in the colour order on the panel — the highlighted colour is next.';
+    }
     switch (state.section) {
       case 0: return 'The gap is too wide to jump. Sprint, jump, then DASH (Q / right-click) in mid-air.';
       case 1: return 'Ride the moving platforms — time your jumps as they line up.';
@@ -534,6 +744,22 @@ export function build(kit, api) {
     },
     movers: () => movers.map((m) => ({ x: m.group.position.x, y: m.group.position.y, z: m.group.position.z })),
     phases: () => phases.map((ph) => ({ solid: ph.solid, c: ph.c })),
+    puzzle() {
+      return {
+        solved: state.puzzleSolved, step: state.puzzleStep, seq: [...seq],
+        nodes: nodes.map((n) => ({ ci: n.ci, prevCi: n.prevCi })),
+      };
+    },
+    pressNode(i) { return activateNode(nodes[i]); },
+    solvePuzzle() {
+      for (let s = 0; s < 3 && !state.puzzleSolved; s++) {
+        const idx = nodes.findIndex((n) => n.ci === seq[state.puzzleStep]);
+        if (idx < 0) break;
+        state.puzzleCd = 0;
+        activateNode(nodes[idx]);
+      }
+      return state.puzzleSolved;
+    },
   };
 
   kit.track({ dispose() { state.disposed = true; } });
