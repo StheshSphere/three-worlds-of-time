@@ -20,7 +20,9 @@ resolved by the import map in `index.html` — no CDN, no `npm install` for the 
 
 ```
 index.html               import map, every screen/overlay (loading/title/HUD/pause/options/controls/credits/journal/…)
-src/main.js              renderer, game-state flow (title/playing/paused/overlay/failed/won), render loop, window.__game
+src/main.js              renderer, game-state flow (title/cutscene/playing/paused/overlay/failed/credits/won), loop, window.__game
+src/story.js             story cutscene scripts (prologue, wake-up, arrival lines, epilogue) for src/core/cutscene.js
+src/levels/prologue.js   non-playable cutscene set (the lab on the night of Field Test 7 / the next morning)
 src/player.js            controller: input, physics (AABB walls + ground raycast), camera rig, interact, dash, hurt
 src/character.js         hero GLB + our gear parented to bones + AnimationMixer state machine
 src/timeMachine.js       hierarchical Time Machine — DO NOT flatten the hierarchy

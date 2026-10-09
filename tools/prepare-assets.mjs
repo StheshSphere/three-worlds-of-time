@@ -186,6 +186,7 @@ async function models(only) {
 const HERO_CLIPS = [
   'Idle', 'Walking_A', 'Running_A', 'Jump_Start', 'Jump_Idle', 'Jump_Land',
   'Interact', 'PickUp', 'Hit_A', 'Death_A', 'Cheer', 'Dodge_Forward', 'Use_Item',
+  'Lie_Idle', 'Lie_StandUp', 'Spellcasting',
 ];
 const KAYKIT_URL = 'https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0/archive/672074b73ba276876a19e8816ecdc5241817ab47.zip';
 
@@ -335,10 +336,59 @@ async function fonts() {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Hero, scientist edition: KayKit Mage → young scientist in a lab coat */
+/* (hat, cape, wand, staff and spellbook removed; robe recoloured to a  */
+/* white lab coat; magenta trims → Chronos teal). Goggles and the       */
+/* hourglass pack are modelled in code (src/character.js).              */
+/* ------------------------------------------------------------------ */
+async function scientist() {
+  const io = await makeIO();
+  const zip = await download(KAYKIT_URL, path.join(CACHE, 'kaykit-adventurers.zip'));
+  const unz = path.join(CACHE, 'kaykit');
+  if (!fs.existsSync(unz)) execFileSync('unzip', ['-q', '-o', zip, '-d', unz]);
+  const src = execFileSync('find', [unz, '-name', 'Mage.glb']).toString().trim().split('\n')[0];
+  const doc = await io.read(src);
+  for (const anim of doc.getRoot().listAnimations()) if (!HERO_CLIPS.includes(anim.getName())) anim.dispose();
+  const REMOVE = ['Mage_Hat', 'Mage_Cape', 'Spellbook', 'Spellbook_open', '1H_Wand', '2H_Staff'];
+  for (const node of doc.getRoot().listNodes()) if (REMOVE.includes(node.getName())) node.dispose();
+  // The texture is an 8×4 grid of gradient swatches (128×256 px each at 1024²).
+  const WHITE = [[0, 1], [1, 1]];            // robe → lab coat
+  const TEAL = [[2, 1], [1, 2]];             // magenta trims → teal
+  for (const tex of doc.getRoot().listTextures()) {
+    const { data, info } = await sharp(Buffer.from(tex.getImage())).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const cw = info.width / 8;
+    const ch = info.height / 4;
+    const inCells = (x, y, cells) => cells.some(([c, r]) => x >= c * cw && x < (c + 1) * cw && y >= r * ch && y < (r + 1) * ch);
+    for (let y = 0; y < info.height; y++) {
+      for (let x = 0; x < info.width; x++) {
+        const i = (y * info.width + x) * 4;
+        const v = Math.max(data[i], data[i + 1], data[i + 2]) / 255;
+        if (inCells(x, y, WHITE)) {
+          const l = 0.66 + 0.34 * Math.min(1, v / 0.75);          // keep the cell's shading gradient
+          data[i] = Math.round(l * 236); data[i + 1] = Math.round(l * 242); data[i + 2] = Math.round(l * 248);
+        } else if (inCells(x, y, TEAL)) {
+          data[i] = Math.round(v * 40); data[i + 1] = Math.round(v * 190); data[i + 2] = Math.round(v * 200);
+        }
+      }
+    }
+    const png = await sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } }).png().toBuffer();
+    tex.setImage(new Uint8Array(png)).setMimeType('image/png');
+  }
+  await doc.transform(prune(), dedup(), resample(),
+    textureCompress({ encoder: sharp, targetFormat: 'webp', quality: 92 }),
+    meshopt({ encoder: MeshoptEncoder, level: 'medium' }));
+  const out = path.join(ASSETS, 'models', 'hero', 'scientist.glb');
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  await io.write(out, doc);
+  console.log(`scientist ${(fs.statSync(out).size / 1024).toFixed(0)} KB, nodes: ${doc.getRoot().listNodes().filter((n) => n.getMesh()).map((n) => n.getName()).join(', ')}`);
+}
+
 const what = process.argv[2] || 'all';
 const only = process.argv.slice(3);
 if (what === 'textures' || what === 'all') await textures();
 if (what === 'models' || what === 'all') await models(only.length ? only : null);
-if (what === 'hero' || what === 'all') await hero();
+if (what === 'hero') await hero();
+if (what === 'scientist' || what === 'all') await scientist();
 if (what === 'audio' || what === 'all') await audio();
 if (what === 'fonts' || what === 'all') await fonts();

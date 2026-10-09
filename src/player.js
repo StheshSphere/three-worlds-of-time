@@ -512,7 +512,7 @@ export class Player extends THREE.EventDispatcher {
       // Squeezed against a wall: lift the camera so the hood doesn't fill the screen.
       if (this._camDist < 2.2) this.camera.position.y += (2.2 - this._camDist) * 0.35;
       // Fade the hero out if the camera is jammed against them.
-      this.hero.group.visible = this._camDist > 0.9;
+      this.hero.group.visible = this.frozen || this._camDist > 0.9;
     }
 
     if (this._shake > 0) {

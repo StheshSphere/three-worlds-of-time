@@ -249,5 +249,62 @@ export class UI {
   }
 
   setBestTime(text) { $('best-time').textContent = text || ''; }
+
+  /* ----------------------------- cinematics ------------------------- */
+  cinema(on, letterbox = true) {
+    $('cinema').classList.toggle('hidden', !on);
+    $('cinema').classList.toggle('no-bars', !letterbox);
+  }
+
+  /** Typed-out caption. speaker null/'' → narrator style. Pass speaker=null and text=null to hide. */
+  caption(speaker, text, seconds = 4.5, { inGame = false } = {}) {
+    const box = $('caption');
+    clearInterval(this._typeTimer);
+    clearTimeout(this._capTimer);
+    if (!text) { box.classList.add('hidden'); return; }
+    box.classList.remove('hidden');
+    box.classList.toggle('in-game', inGame);
+    box.classList.toggle('narrator', !speaker);
+    $('caption-speaker').textContent = speaker || '';
+    const el = $('caption-text');
+    el.textContent = '';
+    box.style.animation = 'none'; void box.offsetWidth; box.style.animation = '';
+    let i = 0;
+    this._typeTimer = setInterval(() => {
+      i += 2;
+      el.textContent = text.slice(0, i);
+      if (i >= text.length) clearInterval(this._typeTimer);
+    }, 18);
+    this._capTimer = setTimeout(() => box.classList.add('hidden'), seconds * 1000);
+  }
+
+  /** In-game dialogue (no letterbox): a queue of [speaker, text, seconds] lines. */
+  say(lines) {
+    clearTimeout(this._sayTimer);
+    const next = (k) => {
+      if (k >= lines.length) return;
+      const [sp, tx, sec = 4.5] = lines[k];
+      this.caption(sp, tx, sec, { inGame: true });
+      this._sayTimer = setTimeout(() => next(k + 1), sec * 1000 + 250);
+    };
+    next(0);
+  }
+
+  stopSay() { clearTimeout(this._sayTimer); this.caption(null, null); }
+
+  endCard(on) { $('end-card').classList.toggle('hidden', !on); }
+
+  rollCredits(on) {
+    const roll = $('credits-roll');
+    if (!on) { roll.classList.add('hidden'); roll.classList.remove('rolling'); return; }
+    const inner = roll.querySelector('.roll-inner');
+    inner.innerHTML = '<h2>The Three Worlds of Time</h2><p>The Broken Hourglass</p>'
+      + '<h2>A Wits CGV group project</h2><p>COMS3006A · COMS3025A</p>'
+      + '<h2>Built with</h2>' + document.getElementById('credits-list').outerHTML.replace('id="credits-list"', '')
+      + '<h2>Thank you for playing</h2>';
+    roll.classList.remove('hidden', 'rolling');
+    void roll.offsetWidth;
+    roll.classList.add('rolling');
+  }
   setPauseLevel(text) { $('pause-level').textContent = text; }
 }

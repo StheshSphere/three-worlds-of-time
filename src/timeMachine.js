@@ -182,13 +182,14 @@ export function createTimeMachine() {
   let era = 0;
   let restoring = 0;     // 0 → 1 over the restoration sequence
   let spin = 1;
+  let overload = 0;      // prologue: 0 (stable) → 1 (Field Test 7 tearing the timeline)
   const ROT = [0.35, 0.6, 0.9];
 
   function update(dt) {
     time += dt;
     if (root.userData.isRestoring) restoring = Math.min(1, restoring + dt / 4.2);
     const fixedness = cores / 3;
-    spin += ((1 + restoring * 7) - spin) * Math.min(1, dt * 2);
+    spin += ((1 + restoring * 7 + overload * 12) - spin) * Math.min(1, dt * 2);
     // Broken machine: jittery stutter. Repaired: smooth confident spin.
     const stutter = (1 - fixedness) * (Math.sin(time * 13) > 0.85 ? 0.0 : 1.0) + fixedness;
     gimbal.rotation.y += dt * ROT[0] * spin * stutter;
@@ -199,9 +200,11 @@ export function createTimeMachine() {
 
     const flicker = fixedness < 1 ? 0.75 + 0.25 * Math.sin(time * 31) * Math.sin(time * 7) : 1;
     heartMat.emissive.setHex(cores >= 3 ? 0xffe2a0 : 0xff6a2a).lerp(_tmpColor.setHex(CORE_COLORS[Math.max(0, cores - 1)]), cores > 0 && cores < 3 ? 0.35 : 0);
-    heartMat.emissiveIntensity = (2.2 + cores * 1.2 + restoring * 10) * flicker;
+    const surge = overload > 0 ? 1 + overload * 4 * (0.6 + 0.4 * Math.sin(time * 47)) : 1;
+    if (overload > 0.55) heartMat.emissive.setHex(0xff3a2a);
+    heartMat.emissiveIntensity = (2.2 + cores * 1.2 + restoring * 10) * flicker * surge;
     heartLight.color.copy(heartMat.emissive);
-    heartLight.intensity = (5 + cores * 4 + restoring * 40) * flicker;
+    heartLight.intensity = (5 + cores * 4 + restoring * 40) * flicker * surge;
 
     // Clock: minute hand sweeps, hour hand eases to the era's position.
     minuteHand.rotation.z = -time * (0.4 + restoring * 6);
@@ -219,8 +222,8 @@ export function createTimeMachine() {
 
     fieldMat.uniforms.uTime.value = time;
     fieldMat.uniforms.uCores.value += (cores + restoring * 2 - fieldMat.uniforms.uCores.value) * Math.min(1, dt * 1.5);
-    fieldMat.uniforms.uUnstable.value = (1 - fixedness) + restoring * 0.6;
-    fieldMat.uniforms.uIntensity.value = 0.7 + restoring * 2.5;
+    fieldMat.uniforms.uUnstable.value = (1 - fixedness) + restoring * 0.6 + overload * 2.5;
+    fieldMat.uniforms.uIntensity.value = 0.7 + restoring * 2.5 + overload * 2;
   }
 
   root.userData.isRestoring = false;
@@ -234,12 +237,26 @@ export function createTimeMachine() {
     if (cores === 3) root.userData.isRestoring = true;
   };
   root.setEra = (i) => { era = i; };
+  /** Prologue / epilogue: the machine with all three cores seated (no finale). */
+  root.showAllCores = () => {
+    for (const s of sockets) { s.lit = true; s.pulse = 0.3; s.core.scale.setScalar(1); }
+    cores = 3;
+    root.userData.isRestoring = false;
+  };
+  root.setOverload = (v) => { overload = v; };
+  /** Rips the cores out of their sockets; returns their world positions. */
+  root.ejectCores = () => {
+    const out = sockets.map((s) => s.core.getWorldPosition(new THREE.Vector3()));
+    root.reset();
+    return out;
+  };
   root.getCores = () => cores;
   root.reset = () => {
     for (const s of sockets) { s.lit = false; s.core.scale.setScalar(0.001); s.mat.emissiveIntensity = 0; }
     cores = 0;
     restoring = 0;
     spin = 1;
+    overload = 0;
     root.userData.isRestoring = false;
   };
   root.restoreProgress = () => restoring;

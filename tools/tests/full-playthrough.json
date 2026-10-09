@@ -5,6 +5,24 @@
    "eval": "__game.start(); __game.player.isLocked = true; JSON.stringify(__game.renderer.info.memory)"
   },
   {
+   "wait": 1500
+  },
+  {
+   "eval": "window.dispatchEvent(new KeyboardEvent('keydown',{code:'Space'})); null"
+  },
+  {
+   "wait": 800
+  },
+  {
+   "eval": "window.dispatchEvent(new KeyboardEvent('keydown',{code:'Space'})); null"
+  },
+  {
+   "wait": 800
+  },
+  {
+   "eval": "__game.player.isLocked = true; JSON.stringify({mode: __game.mode(), state: __game.levels.state})"
+  },
+  {
    "wait": 3000
   },
   {
@@ -69,6 +87,24 @@
   },
   {
    "wait": 2500
+  },
+  {
+   "wait": 1500
+  },
+  {
+   "eval": "__game.mode()"
+  },
+  {
+   "eval": "window.dispatchEvent(new KeyboardEvent('keydown',{code:'Space'})); null"
+  },
+  {
+   "wait": 800
+  },
+  {
+   "eval": "window.dispatchEvent(new KeyboardEvent('keydown',{code:'Space'})); null"
+  },
+  {
+   "wait": 800
   },
   {
    "shot": "f4_win"

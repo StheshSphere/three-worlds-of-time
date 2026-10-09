@@ -51,7 +51,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
   let cinematic = null;      // camera override fn(dt, t)
   const levelDisposables = [];
   const stats = { runTime: 0, falls: 0, rewinds: 0, shocks: 0 };
-  const callbacks = { onFail: null, onWin: null, onLoaded: null };
+  const callbacks = { onFail: null, onFinale: null, onLoaded: null, onEraArrive: null };
 
   /* ------------------------------ the level API ------------------------------ */
   const flashState = { on: false, pos: new THREE.Vector3(), dir: new THREE.Vector3() };
@@ -140,11 +140,23 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
   }
 
   /* ------------------------------ loading ------------------------------------ */
-  function load(i, { title = false } = {}) {
+  /**
+   * Mount an era. opts.title → title-screen backdrop; opts.cutscene → mounted
+   * but frozen (no countdown, no era card) until startPlay().
+   */
+  function load(i, opts = {}) { mount(LEVELS[i], LEVELS[i].meta, i, opts); }
+
+  /** Mount a non-playable cutscene set (src/levels/prologue.js). */
+  function loadSet(mod, variant = 'night') {
+    const m = variant === 'morning' ? mod.metaMorning : mod.meta;
+    mount(mod, m, m.eraIndex ?? 1, { cutscene: true, variant });
+    return level;
+  }
+
+  function mount(mod, levelMeta, i, { title = false, cutscene = false, variant } = {}) {
     unload();
     index = i;
-    const mod = LEVELS[i];
-    meta = mod.meta;
+    meta = levelMeta;
     const q = settings.quality();
 
     // Sky dome + image-based lighting rendered from it.
@@ -178,7 +190,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     }
 
     const kit = createKit({ renderer, quality: q, api });
-    level = mod.build(kit, api);
+    level = mod.build(kit, api, { variant });
     for (const o of level.objects) levelGroup.add(o);
     for (const l of level.lights) levelGroup.add(l);
 
@@ -206,10 +218,18 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     stability = stabilityMax;
     audio.playMusic(title ? 'title' : meta.music);
     audio.setAmbience(meta.ambience);
-    state = title ? 'title' : 'playing';
+    state = title ? 'title' : cutscene ? 'cutscene' : 'playing';
     stateTime = 0;
-    if (!title) ui.eraCard(meta.numeral, meta.title, meta.subtitle);
+    if (!title && !cutscene) ui.eraCard(meta.numeral, meta.title, meta.subtitle);
     if (callbacks.onLoaded) callbacks.onLoaded(i);
+  }
+
+  /** After a cutscene: hand control to the player and start the era's clock. */
+  function startPlay() {
+    state = 'playing';
+    stateTime = 0;
+    player.frozen = false;
+    ui.eraCard(meta.numeral, meta.title, meta.subtitle);
   }
 
   /* ------------------------------ core → next era ---------------------------- */
@@ -244,7 +264,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     load(index);
   }
 
-  function restartRun() {
+  function restartRun(opts = {}) {
     timeMachine.reset();
     stats.runTime = 0; stats.falls = 0; stats.rewinds = 0; stats.shocks = 0;
     ui.setCores(0);
@@ -253,7 +273,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     player.frozen = false;
     postfx.u.uFlash.value = 0;
     postfx.u.uWarp.value = 0;
-    load(0);
+    load(0, opts);
   }
 
   function startFinale() {
@@ -296,7 +316,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
       sun.target.updateMatrixWorld();
     }
 
-    if (state === 'playing' || state === 'title') {
+    if (state === 'playing' || state === 'title' || state === 'cutscene') {
       if (level && level.update) level.update(dt, time);
     }
 
@@ -353,7 +373,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
           u.uFlash.value = 0;
           player.frozen = false;
           state = 'playing';
-          ui.message('A socket on the Time Machine burns with recovered time.', 3000);
+          if (callbacks.onEraArrive) callbacks.onEraArrive(index);
         }
       }
     }
@@ -369,7 +389,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
         u.uFlash.value = 0.0;
         u.uWarp.value = 0;
         player.unlock();
-        if (callbacks.onWin) callbacks.onWin({ ...stats });
+        if (callbacks.onFinale) callbacks.onFinale({ ...stats });
       }
     }
   }
@@ -380,6 +400,8 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
   return {
     api,
     load,
+    loadSet,
+    startPlay,
     retryEra,
     restartRun,
     update,
@@ -394,6 +416,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     get marker() { return marker; },
     /** Level-provided QA shortcuts (e.g. solve a puzzle) for automated tests. */
     get debug() { return level && level.debug; },
+    get level() { return level; },
     registerFall() {
       stats.falls++;
       api.penalize(meta?.fallPenalty ?? 15, 'You slipped out of time');

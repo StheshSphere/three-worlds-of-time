@@ -25,7 +25,7 @@ export const MANIFEST = {
     'plastered-wall-04', 'concrete-panels', 'metal-plate', 'metal-plate-02',
   ],
   models: {
-    hero: 'models/hero/time-traveller.glb',
+    hero: 'models/hero/scientist.glb',
     // the Past
     'rock-moss-set-01': 'models/ruins/rock-moss-set-01.glb',
     'rock-moss-set-02': 'models/ruins/rock-moss-set-02.glb',

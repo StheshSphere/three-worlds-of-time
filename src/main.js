@@ -8,6 +8,9 @@ import { Minimap } from './core/minimap.js';
 import { Player } from './player.js';
 import { createTimeMachine } from './timeMachine.js';
 import { createLevelManager } from './levelManager.js';
+import { Cutscene } from './core/cutscene.js';
+import * as prologueSet from './levels/prologue.js';
+import * as story from './story.js';
 
 /* =====================================================================
    Boot: renderer, camera, audio, assets → title screen.
@@ -57,6 +60,10 @@ const timeMachine = createTimeMachine();
 scene.add(timeMachine);
 
 const levels = createLevelManager({ scene, renderer, camera, player, timeMachine, audio, ui, postfx, minimap });
+const cutscene = new Cutscene({ camera, ui });
+const storyCtx = (set) => ({ levels, player, timeMachine, audio, postfx, ui, cs: cutscene, set });
+let creditsTimer = null;
+let pendingStats = null;
 
 /* =====================================================================
    Player events → audio / UI
@@ -79,7 +86,7 @@ player.addEventListener('lock', () => {
   }
 });
 player.addEventListener('unlock', () => {
-  if (mode !== 'playing') return;
+  if (mode !== 'playing') return;      // cutscenes, credits and menus ignore pointer unlocks
   if (ui.panelOpen) { mode = 'overlay'; return; }
   if (levels.state === 'failed' || levels.state === 'won') return;
   pause();
@@ -117,16 +124,60 @@ function showTitle() {
   ui.show('title-screen');
 }
 
+/* Story flow: prologue (lab, 03:07) → wake-up in the Past → play. */
 function startGame() {
   audio.unlock();
   ui.hide('title-screen');
-  ui.show('hud');
+  ui.hide('hud');
   ui.resetJournal();
-  player.frozen = false;
-  player.mode = settings.get('thirdPerson') ? 'third' : 'first';
-  levels.restartRun();
-  mode = 'playing';
+  mode = 'cutscene';
   player.lock();
+  const set = levels.loadSet(prologueSet, 'night');
+  cutscene.play(story.prologue(storyCtx(set)), { onDone: beginPast });
+}
+
+function beginPast() {
+  levels.restartRun({ cutscene: true });
+  player.frozen = true;
+  mode = 'cutscene';
+  cutscene.play(story.wakeUp(storyCtx(levels.level)), { onDone: () => {
+    player.hero.release();
+    player.mode = settings.get('thirdPerson') ? 'third' : 'first';
+    player.yaw = 0;                 // look toward the temple; stay where Ari stood up
+    player.pitch = -0.12;
+    player.velocity.set(0, 0, 0);
+    levels.startPlay();
+    ui.show('hud');
+    mode = 'playing';
+    if (!player.isLocked) { player.lock(); setTimeout(() => { if (!player.isLocked && mode === 'playing') pause(); }, 400); }
+  } });
+}
+
+/* Finale → epilogue (lab, next morning) → credits roll → journey stats. */
+function startEpilogue(stats) {
+  pendingStats = stats;
+  mode = 'cutscene';
+  ui.hide('hud');
+  ui.stopSay();
+  const set = levels.loadSet(prologueSet, 'morning');
+  cutscene.play(story.epilogue(storyCtx(set)), { onDone: startCredits });
+}
+
+function startCredits() {
+  mode = 'credits';
+  ui.endCard(false);
+  ui.cinema(true, true);
+  ui.rollCredits(true);
+  clearTimeout(creditsTimer);
+  creditsTimer = setTimeout(endCredits, 26500);
+}
+
+function endCredits() {
+  clearTimeout(creditsTimer);
+  ui.rollCredits(false);
+  ui.endCard(false);
+  ui.cinema(false);
+  showWinScreen(pendingStats || levels.stats);
 }
 
 levels.callbacks.onFail = (reason) => {
@@ -134,7 +185,10 @@ levels.callbacks.onFail = (reason) => {
   ui.hide('hud');
   ui.showFail(reason);
 };
-levels.callbacks.onWin = (stats) => {
+levels.callbacks.onFinale = (stats) => startEpilogue(stats);
+levels.callbacks.onEraArrive = (i) => { if (story.ARRIVALS[i]) ui.say(story.ARRIVALS[i]); };
+
+function showWinScreen(stats) {
   mode = 'won';
   ui.hide('hud');
   const isBest = records.submit(Math.round(stats.runTime));
@@ -145,7 +199,7 @@ levels.callbacks.onWin = (stats) => {
     ['Eras rewound', String(stats.rewinds)],
   ]);
   audio.play('win', { volume: 0.9 });
-};
+}
 
 document.getElementById('play-button').addEventListener('click', startGame);
 document.getElementById('resume-button').addEventListener('click', resume);
@@ -168,6 +222,8 @@ ui.onPanelClosed = () => {
 };
 
 window.addEventListener('keydown', (e) => {
+  if (mode === 'cutscene' && (e.code === 'Space' || e.code === 'Enter' || e.code === 'Escape')) { cutscene.skip(); return; }
+  if (mode === 'credits' && (e.code === 'Space' || e.code === 'Enter' || e.code === 'Escape')) { endCredits(); return; }
   if (e.code === 'Escape' && ui.panelOpen) { ui.closeTopPanel(); return; }
   if (e.code === 'KeyE' && ui.isOpen('reader-screen') && !ui.justOpened) { ui.closeTopPanel(); return; }
   if (e.code === 'KeyJ' && (mode === 'playing' || mode === 'overlay')) {
@@ -209,13 +265,19 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 0.05);   // clamp: no huge steps after tab-switch
   t += dt;
 
-  const running = mode === 'playing' || mode === 'title';
+  const running = mode === 'playing' || mode === 'title' || mode === 'cutscene' || mode === 'credits';
   if (running) {
     levels.update(dt);
     player.update(dt);
     levels.updateCamera(dt);
+    cutscene.update(dt);
   }
   timeMachine.update(dt);
+  if (mode === 'credits') {
+    titleAngle += dt * 0.06;
+    camera.position.set(Math.sin(titleAngle) * 11, 4.6, Math.cos(titleAngle) * 11);
+    camera.lookAt(0, 2.2, 0);
+  }
 
   if (mode === 'title') {
     titleAngle += dt * 0.08;
@@ -269,7 +331,9 @@ frame();
 window.__game = {
   THREE, scene, renderer, camera, player, timeMachine, levels, audio, ui, postfx, settings,
   start: startGame,
-  skipTo(i) { player.frozen = false; levels.load(i); mode = 'playing'; ui.hide('title-screen'); ui.show('hud'); },
+  skipTo(i) { cutscene.active = false; ui.cinema(false); player.frozen = false; levels.load(i); mode = 'playing'; ui.hide('title-screen'); ui.show('hud'); },
+  cutscene,
+  story: { startGame, beginPast, startEpilogue, endCredits },
   mode: () => mode,
 };
 window.__ready = true;

@@ -6,12 +6,19 @@
 - **The Present (Investigate):** you win with information — a flashlight whose beam reveals invisible ink, logs, a keypad code and a power-routing puzzle that relights the whole lab.
 - **The Future (Survive):** a new ability (the Chrono-Dash) and a timing gauntlet — moving and phasing platforms, barriers you dash through, lasers and a collapsing bridge chased by a rift.
 
-## Story beats
+## Story beats (told in cutscenes — `src/story.js`)
 
-A student inventor's homemade Time Machine overloads during Field Test 7 and flings its three cores across time.
-Same location, three eras: the temple (Past) → the Chronos lab built **on top of** the temple — you can see the
-temple stones through a glass floor panel (Present) → the neon city of 2187 (Future). Each era's core lights a socket
-on the machine; the hero's hourglass pack fills with sand as cores return; the finale restores the machine.
+1. **Prologue (cutscene, skippable):** Chronos lab, 03:07. Ari — Prof. Adeyemi's student inventor (white lab coat,
+   brass goggles) — runs Field Test 7 without the professor. The drive climbs past 100 %, alarms, 140 %… the three cores
+   are torn out of the machine and flung into the past, that very night, and a far future. White-out.
+2. **Wake-up (cutscene):** Ari comes round on the temple floor beside the machine — sockets empty. Goal stated.
+3. **The Past → the Present → the Future:** on arriving, Ari explains where/when they are (in-game captions). Same
+   place in each era — you can see the temple stones through the lab's glass floor panel.
+4. **Finale:** all three cores back, the machine restores itself.
+5. **Epilogue (cutscene):** the lab next morning, sunlight through the windows; the professor on the intercom; Ari's
+   reply; end card; credits roll; journey stats.
+
+The hero's hourglass pack fills with glowing sand as cores return.
 
 ## Level walkthroughs (solutions)
 

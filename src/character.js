@@ -2,10 +2,13 @@ import * as THREE from 'three';
 import { assets } from './core/assets.js';
 
 /**
- * The hero: KayKit's hooded rogue (CC0, rigged + animated), recoloured to a
- * midnight "time-mage" palette by our asset pipeline, plus gear we model
- * ourselves and attach to the skeleton — HIERARCHICAL MODELLING again:
+ * The hero — Ari, Prof. Adeyemi's student inventor. Base model: KayKit's
+ * "Mage" (CC0, rigged + animated); our asset pipeline removes the hat, cape
+ * and props and recolours the robe into a white lab coat. Gear we model
+ * ourselves is attached to the skeleton — HIERARCHICAL MODELLING again:
  *
+ *   head bone
+ *     └─ goggles (strap + two brass rims + tinted lenses), pushed up on the forehead
  *   chest bone
  *     └─ hourglass pack (brass frame)
  *          ├─ glass bulbs (top + bottom)
@@ -22,9 +25,9 @@ import { assets } from './core/assets.js';
 const CLIP = {
   idle: 'Idle', walk: 'Walking_A', run: 'Running_A', jumpStart: 'Jump_Start', jumpAir: 'Jump_Idle',
   land: 'Jump_Land', interact: 'Interact', pickup: 'PickUp', hit: 'Hit_A', death: 'Death_A',
-  cheer: 'Cheer', dash: 'Dodge_Forward', use: 'Use_Item',
+  cheer: 'Cheer', dash: 'Dodge_Forward', use: 'Use_Item', lie: 'Lie_Idle', getUp: 'Lie_StandUp', channel: 'Spellcasting',
 };
-const ONE_SHOTS = new Set(['interact', 'pickup', 'hit', 'death', 'cheer', 'dash', 'use', 'land', 'jumpStart']);
+const ONE_SHOTS = new Set(['interact', 'pickup', 'hit', 'death', 'cheer', 'dash', 'use', 'land', 'jumpStart', 'lie', 'getUp', 'channel']);
 
 export function createHero() {
   const group = new THREE.Group();
@@ -63,6 +66,41 @@ export function createHero() {
   const sandMat = new THREE.MeshStandardMaterial({ color: 0xffd27a, emissive: 0xffa53a, emissiveIntensity: 0.4, roughness: 0.6 });
   const gauntletMat = new THREE.MeshStandardMaterial({ color: 0x1c1d2e, emissive: 0x7ad7ff, emissiveIntensity: 1.6, metalness: 0.6, roughness: 0.3 });
   disposables.push(brass, glass, sandMat, gauntletMat);
+
+  // Goggles: strap ring around the head, two brass rims with tinted lenses.
+  const goggles = new THREE.Group();
+  goggles.name = 'Goggles';
+  const strapMat = new THREE.MeshStandardMaterial({ color: 0x3a2a1e, roughness: 0.8 });
+  const lensMat = new THREE.MeshStandardMaterial({ color: 0x0f2a33, emissive: 0x2fbfd6, emissiveIntensity: 0.35, metalness: 0.3, roughness: 0.08 });
+  disposables.push(strapMat, lensMat);
+  const strapGeo = new THREE.TorusGeometry(0.46, 0.035, 6, 40);
+  const rimGeo = new THREE.TorusGeometry(0.115, 0.032, 10, 24);
+  const lensGeo = new THREE.CircleGeometry(0.105, 24);
+  const bridgeGeo = new THREE.BoxGeometry(0.08, 0.035, 0.04);
+  disposables.push(strapGeo, rimGeo, lensGeo, bridgeGeo);
+  const strap = new THREE.Mesh(strapGeo, strapMat);
+  strap.rotation.x = Math.PI / 2;
+  strap.scale.set(1, 1.08, 1);
+  goggles.add(strap);
+  for (const sx of [-0.15, 0.15]) {
+    const rimMesh = new THREE.Mesh(rimGeo, new THREE.MeshStandardMaterial({ color: 0xd6a24c, metalness: 1, roughness: 0.3 }));
+    disposables.push(rimMesh.material);
+    rimMesh.position.set(sx, 0, 0.47);
+    const lens = new THREE.Mesh(lensGeo, lensMat);
+    lens.position.set(sx, 0, 0.475);
+    goggles.add(rimMesh, lens);
+  }
+  const bridge = new THREE.Mesh(bridgeGeo, strapMat);
+  bridge.position.set(0, 0, 0.48);
+  goggles.add(bridge);
+  goggles.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  const headBone = bone('head');
+  if (headBone) {
+    headBone.add(goggles);
+    // Sits on the forehead (pushed up), tilted back slightly.
+    goggles.position.set(0, 0.62, 0.02);
+    goggles.rotation.x = -0.32;
+  }
 
   const pack = new THREE.Group();
   pack.name = 'HourglassPack';
@@ -136,14 +174,15 @@ export function createHero() {
   }
 
   /** Play a one-shot clip on top of locomotion. hold=true keeps the last frame (death/cheer). */
-  function play(key, { hold = false, speed = 1 } = {}) {
+  function play(key, { hold = false, speed = 1, loop = false } = {}) {
     const a = actions[key];
     if (!a) return;
+    a.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
     if (oneShot && actions[oneShot] && oneShot !== key) actions[oneShot].fadeOut(0.1);
     a.reset().setEffectiveTimeScale(speed).setEffectiveWeight(1).fadeIn(0.08).play();
     if (actions[base]) actions[base].fadeOut(0.08);
     oneShot = key;
-    oneShotUntil = hold ? Infinity : time + a.getClip().duration / speed - 0.12;
+    oneShotUntil = hold || loop ? Infinity : time + a.getClip().duration / speed - 0.12;
   }
 
   let wasGrounded = true;
@@ -187,6 +226,15 @@ export function createHero() {
     setCores(n) { cores = n; },
     setGauntletColor(hex) { gauntletMat.emissive.setHex(hex); },
     setDashGlow() { dashGlow = 1; },
+    /** Back to normal locomotion (ends a held/looping clip). */
+    release() {
+      if (!oneShot) return;
+      actions[oneShot].fadeOut(0.25);
+      oneShot = null;
+      const b = actions[base];
+      if (b) b.reset().fadeIn(0.25).play();
+    },
+    goggles,
     reset() {
       oneShot = null;
       for (const a of Object.values(actions)) a.stop();
