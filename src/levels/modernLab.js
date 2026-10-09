@@ -154,6 +154,14 @@ export function build(kit, api) {
     });
   }
 
+  /**
+   * Member 2 · one-shot Lab SFX hook. Names map to files in
+   * assets/audio/modern-lab/ that the Lab audio pass will supply — until the
+   * shared audio manager has a buffer for a name, api.sound() is a silent
+   * no-op (no console errors, no 404s), so wiring the calls early is safe.
+   */
+  function labSound(name, opts) { api.sound(name, opts); }
+
   /* ===================================================================
      Experiment hall
      =================================================================== */
@@ -601,11 +609,13 @@ export function build(kit, api) {
   const keypad = new THREE.Mesh(kit.boxGeo(0.34, 0.5, 0.08, 1), kit.track(new THREE.MeshStandardMaterial({ color: 0x111111, map: keypadTex, emissiveMap: keypadTex, emissive: 0x6fd3ff, emissiveIntensity: 1.2 })));
   keypad.position.set(2.25, 1.45, -29.66);
   kit.add(keypad);
-  kit.pointLight(0x6fd3ff, 1.5, 3, [2.25, 1.5, -29.2]);
-  kit.interact(keypad, () => (state.doorOpen ? null : 'Use the security keypad'), () => {
+  const keypadLight = kit.pointLight(0x6fd3ff, 1.5, 3, [2.25, 1.5, -29.2]);
+  kit.interact(keypad, () => (state.doorOpen ? null : 'Enter the 4-digit security code'), () => {
     api.keypad((entry) => {
       if (entry === code) {
         state.doorOpen = true;
+        keypadFlash = { t: 0, ok: true };            // Member 2 · green flash on the pad
+        labSound('keypad-ok', { volume: 0.8 });     // silent no-op until Chunk 5
         setTimeout(() => secDoor.open(), 300);
         api.message('ACCESS GRANTED — the Archive door slides open.', 2600);
         api.setObjective('Restore the power');
@@ -613,6 +623,8 @@ export function build(kit, api) {
         return true;
       }
       state.wrongCodes++;
+      keypadFlash = { t: 0, ok: false };            // Member 2 · red flash on the pad
+      labSound('keypad-deny', { volume: 0.8 });     // silent no-op until Chunk 5
       api.penalize(15, 'ACCESS DENIED — security lockout');
       return false;
     });
@@ -673,18 +685,26 @@ export function build(kit, api) {
     const m = new THREE.Mesh(kit.track(new THREE.PlaneGeometry(TS * 0.94, TS * 0.94)), mat);
     m.position.set((c - 1) * TS, 1.95 - (r - 1) * TS, -45.62);
     let rot = Math.floor(Math.random() * 4);
-    const tile = { mesh: m, mat, type, rot, angle: -rot * Math.PI / 2, r, c, solRot };
+    const tile = { mesh: m, mat, type, rot, angle: -rot * Math.PI / 2, r, c, solRot, flash: 0, litBase: 0.05 };
     m.rotation.z = tile.angle;
     kit.add(m);
     kit.interact(m, () => (state.power ? null : 'Rotate the conduit tile'), () => {
       tile.rot = (tile.rot + 1) % 4;
       api.sound('switch', { volume: 0.6, rate: 1.2 });
+      const before = litCount;
       evaluateGrid();
+      // Member 2 · input feedback: a rotation that connects more conduit
+      // bursts white-blue, one that cuts the flow flashes red (sounds land
+      // with the Lab audio pass).
+      if (litCount > before) { tile.flash = 1.4; tile.mat.emissive.setHex(0xdffaff); labSound('breaker-ok', { volume: 0.7 }); }
+      else if (litCount < before) { tile.flash = 1.2; tile.mat.emissive.setHex(0xff4530); labSound('breaker-deny', { volume: 0.7 }); }
+      else tile.flash = 0.7;
     });
     tiles.push(tile);
   }));
   const tileAt = (r, c) => tiles.find((t) => t.r === r && t.c === c);
   const maskOf = (t) => { let m = TYPES[t.type]; for (let i = 0; i < t.rot; i++) m = rotMask(m); return m; };
+  let litCount = 0;   // Member 2 · tiles carrying power, for rotate feedback
   // Make sure the grid doesn't start solved.
   function evaluateGrid() {
     const lit = new Set();
@@ -702,7 +722,8 @@ export function build(kit, api) {
         }
       }
     }
-    tiles.forEach((t) => { t.mat.emissiveIntensity = lit.has(t) ? 1.6 : 0.05; });
+    litCount = lit.size;
+    tiles.forEach((t) => { t.mat.emissiveIntensity = lit.has(t) ? 1.6 : 0.05; t.litBase = t.mat.emissiveIntensity; });
     const out = tileAt(1, 2);
     const solved = lit.has(out) && (maskOf(out) & E);
     if (solved && !state.power) restorePower();
@@ -842,6 +863,97 @@ export function build(kit, api) {
     coreLight.intensity = 0;
     api.completeLevel(core.position);
     return 'pickup';
+  });
+
+  /* ===================================================================
+     Member 2 — puzzle readability polish (completion-guide task 2)
+     · Near-glints: a soft halo pulses over the current clue/interactable
+       while the player is close, then hides once that step is done. One
+       shared texture; per-glint sprite materials are all tracked for
+       disposal, and the update loop allocates nothing per frame.
+     · Correct vs wrong input: the security keypad and the conduit tiles
+       flash green/white-blue or red. Sound calls are silent no-op hooks
+       until the Lab audio pass (Chunk 5) supplies the files.
+     =================================================================== */
+  const glintTex = kit.canvasTexture(128, 128, (g) => {
+    const rg = g.createRadialGradient(64, 64, 4, 64, 64, 62);
+    rg.addColorStop(0, 'rgba(255,255,255,0.9)');
+    rg.addColorStop(0.35, 'rgba(255,255,255,0.35)');
+    rg.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = rg;
+    g.fillRect(0, 0, 128, 128);
+  });
+  const glints = [];
+  function glint(x, y, z, { radius = 6, size = 0.5, max = 0.55, color = 0x9fe8ff, until, when } = {}) {
+    const mat = kit.track(new THREE.SpriteMaterial({ map: glintTex, color, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+    const s = new THREE.Sprite(mat);
+    s.position.set(x, y, z);
+    s.scale.set(size, size, 1);
+    s.visible = false;
+    kit.add(s);
+    glints.push({ sprite: s, mat, x, z, radius, size, max, phase: glints.length * 1.7, o: 0, until, when });
+  }
+  glint(10.55, 1.45, 6.6, { radius: 6.5, until: () => state.readIncident });            // incident laptop, east workbench
+  glint(-18.6, 1.4, -3.9, { radius: 5, until: () => state.flashlight });                // Prof. Adeyemi's laptop
+  glint(2.25, 2.15, -29.66, { until: () => state.doorOpen });                           // security keypad
+  glint(0, 3.35, -45.6, { radius: 7.5, size: 0.7, until: () => state.power });          // power-routing console
+  glint(15.35, 1.95, -3.35, { when: () => state.power, until: () => state.fieldDown }); // vault containment console
+  // The hidden phosphor digits: while the flashlight is on, a faint halo marks
+  // walls worth sweeping — the digit itself still only appears in the beam.
+  for (const mk of marks) {
+    const p = mk.mesh.position;
+    glint(p.x - Math.sign(p.x || 1) * 0.55, p.y + 0.12, p.z,
+      { radius: 4.5, size: 0.3, max: 0.26, when: () => fl.on, until: () => state.marks[mk.pos] });
+  }
+  kit.update((dt, t) => {
+    const px = api.player.position.x;
+    const pz = api.player.position.z;
+    for (const g of glints) {
+      if (g.until && g.until()) { g.sprite.visible = false; g.o = 0; continue; }
+      const near = Math.hypot(px - g.x, pz - g.z) < g.radius && (!g.when || g.when());
+      const target = near ? g.max * (0.62 + 0.38 * Math.sin(t * 3 + g.phase)) : 0;
+      g.o += (target - g.o) * Math.min(1, dt * 9);
+      if (g.o < 0.012 && !near) { g.sprite.visible = false; continue; }
+      g.sprite.visible = true;
+      g.mat.opacity = g.o;
+      const s = g.size * (0.88 + 0.16 * Math.sin(t * 3 + g.phase));
+      g.sprite.scale.set(s, s, 1);
+    }
+  });
+
+  // Keypad entry feedback: the physical keypad (and its little light) pulse
+  // green on the right code, red on a wrong one. The red flash outlasts the
+  // keypad panel so it is still pulsing when the player steps back from it.
+  let keypadFlash = null;
+  kit.update((dt) => {
+    if (!keypadFlash) return;
+    const f = keypadFlash;
+    f.t += dt;
+    if (f.t > (f.ok ? 1.8 : 2.8)) {
+      keypadFlash = null;
+      keypad.material.emissive.setHex(0x6fd3ff);
+      keypad.material.emissiveIntensity = 1.2;
+      keypadLight.color.setHex(0x6fd3ff);
+      keypadLight.intensity = 1.5;
+      return;
+    }
+    const on = Math.sin(f.t * (f.ok ? 8 : 12)) > -0.2 ? 1 : 0;
+    const hex = f.ok ? 0x35ff96 : 0xff3524;
+    keypad.material.emissive.setHex(hex);
+    keypad.material.emissiveIntensity = 1.2 + 2.4 * on;
+    keypadLight.color.setHex(hex);
+    keypadLight.intensity = 1.5 + 2.2 * on;
+  });
+
+  // Conduit tiles: each flash decays back onto the "carrying power" glow
+  // that evaluateGrid() maintains (litBase), so the two never fight.
+  kit.update((dt) => {
+    for (const t of tiles) {
+      if (t.flash <= 0) continue;
+      t.flash = Math.max(0, t.flash - dt * 2.4);
+      t.mat.emissiveIntensity = t.litBase + t.flash * 1.5;
+      if (t.flash === 0) t.mat.emissive.setHex(0x6fd3ff);
+    }
   });
 
   /* ===================================================================
