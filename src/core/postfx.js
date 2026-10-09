@@ -22,7 +22,7 @@ export const ERA_GRADES = [
   // the Present: cool, desaturated, clinical
   { lift: [0.0, 0.003, 0.008], gain: [0.92, 1.0, 1.1], saturation: 0.92, bloom: [0.55, 0.45, 0.82], exposure: 1.15 },
   // the Future: punchy neon
-  { lift: [0.006, 0.0, 0.012], gain: [1.05, 0.95, 1.1], saturation: 1.2, bloom: [1.05, 0.65, 0.62], exposure: 1.05 },
+  { lift: [0.004, 0.0, 0.01], gain: [1.05, 0.95, 1.1], saturation: 1.15, bloom: [0.8, 0.55, 0.7], exposure: 1.0 },
 ];
 
 export class PostFX {

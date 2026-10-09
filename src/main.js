@@ -266,7 +266,7 @@ frame();
 window.__game = {
   THREE, scene, renderer, camera, player, timeMachine, levels, audio, ui, postfx, settings,
   start: startGame,
-  skipTo(i) { levels.load(i); mode = 'playing'; ui.hide('title-screen'); ui.show('hud'); },
+  skipTo(i) { player.frozen = false; levels.load(i); mode = 'playing'; ui.hide('title-screen'); ui.show('hud'); },
   mode: () => mode,
 };
 window.__ready = true;

@@ -17,9 +17,9 @@ const JUMP_BUFFER = 0.12;     // a jump pressed this long before landing still c
 const DASH_SPEED = 19;
 const DASH_TIME = 0.2;
 const DASH_COOLDOWN = 1.0;
-const TP_DISTANCE = 4.0;
-const TP_HEIGHT = 0.45;
-const TP_SHOULDER = 0.5;
+const TP_DISTANCE = 4.4;
+const TP_HEIGHT = 0.55;
+const TP_SHOULDER = 0.6;
 const INTERACT_RANGE = 3.1;
 
 // Scratch objects reused every frame — never allocate inside the loop (brief §6.1).
@@ -123,6 +123,7 @@ export class Player extends THREE.EventDispatcher {
   get object() { return this.rig; }
   get position() { return this.rig.position; }
   get dashReady() { return this.canDash ? 1 - this._dashCooldown / DASH_COOLDOWN : 0; }
+  get isDashing() { return this._dashTime > 0; }
 
   /* ----------------------------- input ------------------------------ */
   lock() { if (!this.isLocked) this.dom.requestPointerLock(); }
@@ -461,8 +462,8 @@ export class Player extends THREE.EventDispatcher {
       let dA = targetFacing - this.facing;
       dA = Math.atan2(Math.sin(dA), Math.cos(dA));
       this.facing += dA * (1 - Math.exp(-14 * dt));
-      this.rig.rotation.y = this.facing;
     }
+    this.rig.rotation.y = this.facing;
 
     this.hero.update(dt, { speed: this.frozen ? 0 : this.speed, grounded: this.onGround || this.frozen, fallSpeed: this._fallSpeed });
     this._placeCamera(dt);
@@ -508,6 +509,8 @@ export class Player extends THREE.EventDispatcher {
       // Snap in fast (never clip through a wall), ease out slowly.
       this._camDist = want < this._camDist ? want : this._camDist + (want - this._camDist) * (1 - Math.exp(-3 * dt));
       this.camera.position.copy(_target).addScaledVector(_camDir, this._camDist);
+      // Squeezed against a wall: lift the camera so the hood doesn't fill the screen.
+      if (this._camDist < 2.2) this.camera.position.y += (2.2 - this._camDist) * 0.35;
       // Fade the hero out if the camera is jammed against them.
       this.hero.group.visible = this._camDist > 0.9;
     }

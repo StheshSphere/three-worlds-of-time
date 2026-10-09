@@ -22,7 +22,7 @@ export const DEFAULTS = {
 /** Per-quality renderer budgets. Low is aimed at older integrated GPUs. */
 export const QUALITY = {
   low: { pixelRatio: 0.75, shadows: false, shadowMapSize: 1024, bloom: false, reflections: false, transmission: false, grass: 0.25 },
-  medium: { pixelRatio: 1, shadows: true, shadowMapSize: 1024, bloom: true, reflections: true, transmission: true, grass: 0.6 },
+  medium: { pixelRatio: 1, shadows: true, shadowMapSize: 1024, bloom: true, reflections: true, transmission: false, grass: 0.6 },
   high: { pixelRatio: 1.5, shadows: true, shadowMapSize: 2048, bloom: true, reflections: true, transmission: true, grass: 1 },
 };
 

@@ -193,6 +193,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
       spawn: level.spawn, spawnYaw: level.spawnYaw ?? 0, bounds: level.bounds ?? 120,
       killY: level.killY ?? -14, surface: meta.surface,
     });
+    player.canDash = !!level.dash;      // the Future's new ability
 
     timeMachine.setEra(i);
     postfx.setEra(i);
@@ -304,6 +305,8 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
       postfx.u.uGlitch.value = frac < 0.25 ? (0.25 - frac) * 4 * (0.5 + 0.5 * Math.sin(time * 2.3)) : 0;
       if (hintFn) ui.setHint(typeof hintFn === 'function' ? hintFn() : hintFn);
       if (stability <= 0) fail('Timeline stability ran out — the era folded in on itself.');
+      // Short warp pulses (dash) fade back out during normal play.
+      postfx.u.uWarp.value = Math.max(0, postfx.u.uWarp.value - dt * 1.6);
     } else {
       postfx.u.uGlitch.value = 0;
     }
