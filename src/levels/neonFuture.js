@@ -418,7 +418,7 @@ export function build(kit, api) {
   kit.update((dt, t) => {
     if (!introShown && t > 0.5) {
       introShown = true;
-      setTimeout(() => api.message('Your gauntlet hums with stolen time — CHRONO-DASH unlocked: Q or right-click. Dashing phases you through energy barriers.', 5200), 4800);
+      setTimeout(() => { if (!state.coreTaken && !state.disposed) api.message('Your gauntlet hums with stolen time — CHRONO-DASH unlocked: Q or right-click. Dashing phases you through energy barriers.', 5200); }, 4800);
     }
   });
   api.setHint(() => {
@@ -437,6 +437,8 @@ export function build(kit, api) {
     goto(i) { api.player.setCheckpoint(checkpoints[i], 0); api.player.reset(); },
     takeCore() { core.userData.onInteract(); },
   };
+
+  kit.track({ dispose() { state.disposed = true; } });
 
   return kit.result({
     spawn: checkpoints[0].clone(),

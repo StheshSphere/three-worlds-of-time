@@ -26,6 +26,9 @@ scene.add(camera);
 
 const audio = new AudioManager(camera);
 const ui = new UI(audio);
+// Browsers keep audio suspended until the first user gesture — resume on the
+// first click/keypress so the title music and menu sounds start right away.
+for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => audio.unlock(), { once: true });
 
 let quality = settings.quality();
 const postfx = new PostFX(renderer, scene, camera, { samples: settings.get('quality') === 'low' ? 0 : 4 });

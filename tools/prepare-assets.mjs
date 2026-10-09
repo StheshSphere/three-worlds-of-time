@@ -100,7 +100,6 @@ const MODELS = [
   ['rock_moss_set_02', 'ruins', 8000, 1024],
   ['fern_02', 'ruins', 6300, 1024],
   ['shrub_02', 'ruins', 9000, 1024],
-  ['stone_fire_pit', 'ruins', 4000, 1024],
   ['gothic_statue', 'ruins', 9000, 1024],
   ['lion_head', 'ruins', 5000, 512],
   ['antique_ceramic_vase_01', 'ruins', 4000, 512],
@@ -116,7 +115,6 @@ const MODELS = [
   ['circuit_board', 'lab', 4000, 512],
   ['classic_laptop', 'lab', 6000, 512],
   ['security_camera_01', 'lab', 4000, 512],
-  ['mounted_fluorescent_lights', 'lab', 6000, 512],
   ['hanging_industrial_lamp', 'lab', 5000, 512],
   ['portable_generator', 'lab', 9000, 1024],
   ['power_box_01', 'lab', 7000, 1024],
@@ -131,7 +129,6 @@ const MODELS = [
   ['SchoolChair_01', 'lab', 5100, 512],
   ['utility_box_01', 'lab', 4400, 512],
   ['modular_pipes', 'lab', 12000, 1024],
-  ['Television_01', 'lab', 2000, 512],
 ];
 
 function triangleCount(doc) {

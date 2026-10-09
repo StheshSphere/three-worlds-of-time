@@ -31,7 +31,6 @@ export const MANIFEST = {
     'rock-moss-set-02': 'models/ruins/rock-moss-set-02.glb',
     'fern-02': 'models/ruins/fern-02.glb',
     'shrub-02': 'models/ruins/shrub-02.glb',
-    'stone-fire-pit': 'models/ruins/stone-fire-pit.glb',
     'gothic-statue': 'models/ruins/gothic-statue.glb',
     'lion-head': 'models/ruins/lion-head.glb',
     'antique-ceramic-vase-01': 'models/ruins/antique-ceramic-vase-01.glb',
@@ -47,7 +46,6 @@ export const MANIFEST = {
     'circuit-board': 'models/lab/circuit-board.glb',
     'classic-laptop': 'models/lab/classic-laptop.glb',
     'security-camera-01': 'models/lab/security-camera-01.glb',
-    'mounted-fluorescent-lights': 'models/lab/mounted-fluorescent-lights.glb',
     'hanging-industrial-lamp': 'models/lab/hanging-industrial-lamp.glb',
     'portable-generator': 'models/lab/portable-generator.glb',
     'power-box-01': 'models/lab/power-box-01.glb',
@@ -62,7 +60,6 @@ export const MANIFEST = {
     'schoolchair-01': 'models/lab/schoolchair-01.glb',
     'utility-box-01': 'models/lab/utility-box-01.glb',
     'modular-pipes': 'models/lab/modular-pipes.glb',
-    'television-01': 'models/lab/television-01.glb',
   },
   music: ['title', 'ruins', 'lab', 'neon'],
   sfx: [

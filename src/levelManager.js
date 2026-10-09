@@ -196,6 +196,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     player.canDash = !!level.dash;      // the Future's new ability
 
     timeMachine.setEra(i);
+    player.hero.setGauntletColor(meta.accent);
     postfx.setEra(i);
     minimap.setAccent(meta.accent);
     ui.setEra(i, meta.name);
@@ -257,6 +258,8 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
 
   function startFinale() {
     state = 'finale';
+    ui.hide('hud');
+    ui.clearMessage();
     stateTime = 0;
     player.frozen = true;
     player.reset();                            // stand at the machine
