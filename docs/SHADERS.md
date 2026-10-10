@@ -60,3 +60,32 @@ Every member should be able to talk through **at least the first five** below. E
 - *Performance?* Instancing (grass, city, traffic, leaves) keeps draw calls low; particles and traffic animate on the GPU;
   stars and distant city lights are one GPU-animated `Points` draw each and also scale down on Low quality;
   reflections render at ⅓–½ resolution and are off on Low quality.
+
+## The Future clip — re-record it and what to narrate
+
+The trailer clip for the Future era is scripted, not hand-captured:
+
+```bash
+# serve the game first (python3 -m http.server 8000), then:
+CHROME="/path/to/chrome" node tools/record.mjs tools/clips/future.json tools/out
+# → tools/out/clip-future.webm (~1 min, 1280×720, silent)
+```
+
+`tools/record.mjs` drives the real level with the same script format as `tools/play.mjs` and records the WebGL canvas
+(`captureStream` → MediaRecorder, VP9). The clip is **canvas-only: no HUD, no cards, no audio** — mute-friendly B-roll,
+add music + voice-over in the edit. `tools/clips/future.json` teleports between checkpoints (it never walks off a ledge
+or touches the collapse bridge), so re-recording is safe and repeatable. The shaders, in the order the camera shows them:
+
+| Clip time | On screen | Shaders to name |
+|---|---|---|
+| 0:00–0:07 | Plaza: the Time Machine, night skyline, flying traffic | force field (3) + warp ripple, idle (20), sky (5), stars (18), distant lights (19), city (14), traffic (16) |
+| 0:07–0:12 | The dash gap: towers, grid floor far below, holo billboard + chevrons | city (14), grid (15), holo screens (13) |
+| 0:12–0:26 | Moving + phasing platforms over the void — tiles dissolve in a wave | phase injection (17) — PBR kept, `uPhase` discards by noise |
+| 0:26–0:38 | Barrier gauntlet (pulses on a 2.9 s cycle), then the intact bridge + core beam | barrier (4), beams (10), beacons (21) |
+| 0:38–0:48 | Sequence lock: containment field burns away when the colour order is right | barrier in `uDissolve` mode (4), holo panel (13) |
+| 0:48–1:00 | Take the core → era-out warp → finale orbit; the machine restores | time-warp post-process (1) + warp ripple charged by restoration (20) |
+
+One sentence to say over the gap shot: *"Every tower window is invented in the fragment shader from world position — the
+city is one instanced box mesh and still lights up window by window."* Over the finale: *"The ripple is the Time
+Machine's state as a shockwave — `uCharge` is driven by the restoration, so the ground ring charges up as the cores
+return."*

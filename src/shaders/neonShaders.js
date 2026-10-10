@@ -9,6 +9,8 @@ import { NOISE_GLSL } from './noise.glsl.js';
    whether that window is lit, its colour (cyan / magenta / amber), and
    when it flickers. Roof edges get a neon trim band. No textures at all —
    a whole city from arithmetic. Fog makes far towers fade into the haze.
+   Uniforms: uTime (window flicker); fogColor/fogDensity are copied from
+   scene.fog in update().
    ===================================================================== */
 export function createCity({ count = 220, inner = 26, outer = 140, avoid } = {}) {
   const geometry = new THREE.BoxGeometry(1, 1, 1);
@@ -105,6 +107,7 @@ export function createCity({ count = 220, inner = 26, outer = 140, avoid } = {})
    Grid lines come from fract() of world position (with fwidth() for
    constant-width antialiased lines at any distance); the grid scrolls
    toward the horizon over time and fades out with distance.
+   Uniforms: uTime (scroll), uColor.
    ===================================================================== */
 export function createGridFloor() {
   const geometry = new THREE.PlaneGeometry(900, 900).rotateX(-Math.PI / 2);
@@ -143,6 +146,8 @@ export function createGridFloor() {
    mod(time × speed + offset, length): JavaScript never updates a car.
    Head/tail lights are just emissive colour chosen by which end of the
    box a vertex is on.
+   Uniforms: uTime, uLength (lane length), uZ (street centre); each car's
+   lane/offset/speed rides in the per-instance aLane attribute.
    ===================================================================== */
 export function createTraffic({ count = 140, length = 400, zCenter = -60 } = {}) {
   const geometry = new THREE.BoxGeometry(0.9, 0.35, 2.2);
@@ -197,7 +202,8 @@ export function createTraffic({ count = 140, length = 400, zCenter = -60 } = {})
      fragment → noise(worldPos) > uPhase ⇒ discard (the platform has holes
                 eaten out of it), and pixels just inside the dissolve edge
                 get a hot neon rim added to the emissive light.
-   uPhase 1 = solid, 0 = gone; the level animates it on a timer.
+   uPhase 1 = solid, 0 = gone; the level animates it on a timer, and uEdge
+   is the colour of the rim that glows along the dissolve boundary.
    ===================================================================== */
 export function phaseMaterial(base, edgeColor = 0x6ff0ff) {
   const m = base.clone();
@@ -231,6 +237,8 @@ export function phaseMaterial(base, edgeColor = 0x6ff0ff) {
    point sprite into a round glow, and tints ~¼ of the stars warm so the
    sky doesn't read as monochrome. Additive + depthWrite off = one cheap
    transparent draw call that bloom lifts into a proper night sky.
+   Uniforms: uTime + uSize (per-star aSeed carries phase, rate, size class
+   and warm/cool tint).
    ===================================================================== */
 export function createStars({ count = 650, radius = 520, center = [0, 20, -70], minElevation = 0.04 } = {}) {
   const pos = new Float32Array(count * 3);
@@ -301,6 +309,7 @@ export function createStars({ count = 650, radius = 520, center = [0, 20, -70], 
    halo over a tight hot core, so each point reads as a lamp, not a dot.
    Point size uses the standard 300/-mv.z perspective attenuation, so the
    lamps shrink with distance for free. Static, GPU-animated, one draw.
+   Uniforms: uTime + uSize (per-lamp aSeed paces the pulse, aColor tints).
    ===================================================================== */
 export function createDistantLights({ count = 110, center = [0, 0, -70], inner = 30, outer = 165, yMin = -100, yMax = 40, avoid } = {}) {
   const PALETTE = [[0.24, 0.9, 1.0], [1.0, 0.3, 0.85], [1.0, 0.72, 0.38], [1.0, 0.25, 0.3]];

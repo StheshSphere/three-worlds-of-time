@@ -21,6 +21,13 @@ import { NOISE_GLSL } from './noise.glsl.js';
  * The same dome is also rendered once into a PMREM cube map, so the sky
  * LIGHTS the scene (image-based lighting / reflections) — what you see in
  * the sky is what metal and water reflect.
+ *
+ * UNIFORMS: the mood is set once from a PRESETS entry (uZenith/uHorizon/
+ * uGround gradient, uSunDir/uSunColor/uSunSize, uCloudCover/uCloudColor/
+ * uCloudShadow, uStars, uNebula/uNebulaA/uNebulaB, uCityGlow/uCityColor);
+ * only uTime and uFlash are written per frame (sky.update and the lab's
+ * lightning timer). All uniforms are used in the FRAGMENT stage — the
+ * vertex stage only places the dome and passes the direction through.
  */
 const vertexShader = /* glsl */`
   varying vec3 vDir;

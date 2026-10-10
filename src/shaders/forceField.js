@@ -18,6 +18,8 @@ import { NOISE_GLSL } from './noise.glsl.js';
  *   - The colour blends from crackling red-orange (broken) to the restored
  *     gold-white as uCores rises.
  * Additive blending + no depth write keeps it a glowing overlay.
+ * uIntensity scales the whole shell (fades it to nothing); uBrokenColor /
+ * uFixedColor are the two ends of the uCores colour ramp.
  */
 const vertexShader = /* glsl */`
   uniform float uTime;

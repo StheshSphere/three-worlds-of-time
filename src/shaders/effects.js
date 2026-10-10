@@ -11,6 +11,8 @@ import { NOISE_GLSL } from './noise.glsl.js';
    scrolling UPWARD (uv.y - time) eats into the mask so tongues of flame
    lick and flicker, and the colour ramps white → yellow → orange → red by
    intensity. Additive blending + bloom makes it glow.
+   Uniforms: uTime (update loop), uSize (billboard world-size) and the
+   uSeed/uColorA→uColorB pair set per flame at spawn.
    ===================================================================== */
 const flameVertex = /* glsl */`
   uniform float uSize;
@@ -64,6 +66,8 @@ export function createFlame({ size = 0.9, colorA = 0xffa83a, colorB = 0xff2a06, 
    CPU never touches them after creation. Point size shrinks with distance
    (perspective). The FRAGMENT stage turns each square point into a soft
    round glow (gl_PointCoord distance) that blinks on its own rhythm.
+   Uniforms: uTime (update loop), uSize, uColor, uBox (drift volume) and
+   uRise (upward speed); variety rides in the per-particle aSeed attribute.
    ===================================================================== */
 const particleVertex = /* glsl */`
   attribute vec4 aSeed;
@@ -130,6 +134,8 @@ export function createParticles({ count = 120, center = [0, 1, 0], box = [20, 3,
      motes = noise scrolling along the beam's length (uv.y × length − time)
      so energy visibly flows from the source toward the target.
    uIntensity is game state: beams fade in when a mirror is aligned.
+   Other uniforms: uLength (set together with the transform by set()) and
+   uTime/uColor (update loop / build).
    ===================================================================== */
 const beamVertex = /* glsl */`
   varying vec2 vUv;

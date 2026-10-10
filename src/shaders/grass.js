@@ -17,6 +17,10 @@ import { NOISE_GLSL } from './noise.glsl.js';
  * FRAGMENT stage: root-to-tip colour gradient, per-blade colour variation
  * (hash of world position), a simple sun term with back-lit translucency, and
  * exponential fog matching the scene.
+ *
+ * UNIFORMS: uPlayer ← the player's world position (copied in update, so the
+ * blades part around you), uTime (wind); the uBase/uTip/uDry colour ramp,
+ * uSunDir/uSunColor/uAmbient light and the fog pair are set once at build.
  */
 const vertexShader = /* glsl */`
   uniform float uTime;

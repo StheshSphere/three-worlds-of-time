@@ -18,6 +18,10 @@ import { NOISE_GLSL } from './noise.glsl.js';
  *   - Scene fog is applied so the pool fades into the distance with the rest
  *     of the level.
  * Low quality preset: no mirror render; a glossy standard material is used.
+ *
+ * UNIFORMS: uDeep (water colour), uSunDir/uSunColor (kept in sync with the
+ * sky), uTime (scrolls the ripple noise), fogColor/fogDensity (copied from
+ * scene.fog in update) — plus the Reflector's own textureMatrix/tDiffuse.
  */
 const WaterShader = {
   name: 'TempleWater',

@@ -1,0 +1,72 @@
+{
+  "comment": "FUTURE era B-roll clip for the trailer / devlog (task 7). Scripted with tools/record.mjs — canvas-only capture, no HUD. Route is fully safe: it teleports between checkpoints (never walks off a ledge, never steps on the collapse bridge, never triggers the time rift) and shows the era's custom shaders in order: star dome + distant city lights + traffic (plaza), city towers + holo billboards (gap), phasing platforms (dissolve wave), pulsing energy barriers + sweeping lasers (gauntlet), the collapse bridge + Neon Core beam (pre-bridge), the containment field + colour-cycling nodes (sequence lock), then the real ending: warp-ripple restoration + flash. Camera control: __tp(x,y,z,yaw,pitch) teleports+framing, __panTo(yaw,pitch,ms) smooth-pans. yaw 0 faces -Z (down the course); positive pitch looks up.",
+  "url": "http://127.0.0.1:8000/",
+  "size": "1280x720",
+  "steps": [
+    { "comment": "PRIME — mount the real Future level through levels.load() and hold the pointer-lock flag so no stray event can pause the sim mid-record." },
+    { "eval": "__game.skipTo(2); __game.player.isLocked = true; null" },
+    { "wait": 3200 },
+
+    { "comment": "Inject the camera helpers: teleport+framing, smooth pan (smoothstep over ms), and a state peek for the log." },
+    { "eval": "(() => { window.__tp = (x, y, z, yaw, pitch) => { const p = window.__game.player; p.rig.position.set(x, y, z); p.velocity.set(0, 0, 0); p.yaw = yaw; p.pitch = (pitch === undefined ? -0.12 : pitch); p.facing = yaw + Math.PI; return true; }; window.__panTo = (yaw, pitch, ms) => new Promise((res) => { const p = window.__game.player; const y0 = p.yaw, q0 = p.pitch, t0 = performance.now(); const id = setInterval(() => { const k = Math.min(1, (performance.now() - t0) / ms); const e = k * k * (3 - 2 * k); p.yaw = y0 + (yaw - y0) * e; p.pitch = q0 + (pitch - q0) * e; if (k >= 1) { clearInterval(id); res(true); } }, 16); }); window.__state = () => JSON.stringify({ state: window.__game.levels.state, z: +window.__game.player.position.z.toFixed(1), mode: window.__game.mode() }); 'helpers-ready'; })()" },
+
+    { "comment": "Opening framing BEFORE recStart: on the plaza looking up-left at the skyline (star dome + distant lights + traffic in frame from the first captured frame)." },
+    { "eval": "__tp(0, 0, 4, 0.85, 0.14)" },
+    { "wait": 800 },
+
+    { "comment": "=========================== RECORDING ===========================" },
+    { "recStart": true },
+
+    { "comment": "SHOT A — plaza: pan down from the night sky / skyline to straight down the course (city towers + grid floor + star dome)." },
+    { "eval": "__panTo(0.0, 0.02, 3600)" },
+    { "wait": 1600 },
+
+    { "comment": "SHOT B — the dash gap: stand on the plaza edge (never jump it), sweep across the second pad and the mover field beyond." },
+    { "eval": "__tp(0, 0, -6.0, 0.0, -0.10)" },
+    { "wait": 700 },
+    { "eval": "__panTo(-0.5, -0.02, 2400)" },
+    { "wait": 1400 },
+
+    { "comment": "SHOT C — moving platforms: from the catch pad, watch the sine-riding pads carry nothing but light (holo billboards behind)." },
+    { "eval": "__tp(0, 1.0, -44.0, Math.PI, -0.06)" },
+    { "wait": 600 },
+    { "eval": "__panTo(Math.PI - 0.35, -0.10, 2600)" },
+    { "wait": 3600 },
+
+    { "comment": "SHOT D — phase platforms: from the far catch pad, watch the dissolve/re-form wave travel tile to tile (phase shader)." },
+    { "eval": "__tp(0, 1.5, -78.5, Math.PI, -0.04)" },
+    { "wait": 600 },
+    { "eval": "__panTo(Math.PI + 0.25, -0.08, 2600)" },
+    { "wait": 4000 },
+
+    { "comment": "SHOT E — barrier gauntlet: watch the pulsing energy barriers + sweeping lasers for two full pulse cycles (2.9 s each)." },
+    { "eval": "__tp(1.2, 1.5, -84.0, 0.0, -0.04)" },
+    { "wait": 600 },
+    { "eval": "__panTo(-0.35, -0.10, 2400)" },
+    { "wait": 3400 },
+
+    { "comment": "SHOT F — pre-bridge: the intact collapse bridge (never stepped on, so no rift) and the Neon Core's light beam on the spire ahead." },
+    { "eval": "__tp(0, 1.5, -106.2, 0.0, -0.02)" },
+    { "wait": 600 },
+    { "eval": "__panTo(0.4, -0.06, 2800)" },
+    { "wait": 1600 },
+
+    { "comment": "SHOT G — sequence lock: containment field around the core, three colour-cycling nodes. Watch one 3.5 s colour beat, then solve it for the dissolve." },
+    { "eval": "__tp(-2.0, 3.2, -138.4, 0.18, 0.10)" },
+    { "wait": 800 },
+    { "eval": "__panTo(0.0, 0.02, 2200)" },
+    { "wait": 3800 },
+    { "eval": "__state()" },
+    { "eval": "__game.levels.debug.solvePuzzle(); JSON.stringify(__game.levels.debug.puzzle())" },
+    { "wait": 2600 },
+
+    { "comment": "TAKE THE CORE — the pickup chime + core-get fanfare; the level's transition-out warp ripple charges, then the finale orbit begins." },
+    { "eval": "__game.levels.debug.takeCore(); null" },
+    { "comment": "Block until the finale actually starts (state flips to 'finale' ~1.55 s after takeCore), with a 30 s safety timeout." },
+    { "eval": "new Promise((res) => { const t0 = performance.now(); const id = setInterval(() => { const s = window.__game.levels.state; if (s === 'finale' || s === 'won' || performance.now() - t0 > 30000) { clearInterval(id); res('finale-poll: ' + s); } }, 100); })" },
+
+    { "comment": "SHOT H — the real ending: restoration ramp (ripple charge = max(warp, restoring·0.75)), the 5.2–6.4 s final surge, ending on the white flash peak at ≈6.5 s (state flips to 'won' at 6.6 s — we stop just before)." },
+    { "wait": 6500 },
+    { "recStop": "clip-future" }
+  ]
+}

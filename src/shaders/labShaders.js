@@ -15,6 +15,9 @@ import { NOISE_GLSL } from './noise.glsl.js';
    smoothstep between the inner and outer cone gives a soft edge, and the
    glow fades with distance. Built-in materials can't do this — the
    visibility of a surface depends on a game object's state, per pixel.
+   Uniforms: map + uColor (build); uLightPos/uLightDir/uOn ← the player's
+   flashlight every frame; uTime (ink shimmer); uCosInner/uCosOuter bound
+   the cone (inner/outer angle cosines).
    ===================================================================== */
 export function createRevealInkMaterial(map, color = 0x7dffd0) {
   return new THREE.ShaderMaterial({
@@ -76,6 +79,8 @@ export function createRevealInkMaterial(map, color = 0x7dffd0) {
    the (normally lit) tiled floor and ADDS it, scaled by Fresnel (stronger
    at grazing angles) and broken up by the tiles' own normal map, so it
    reads as wet, waxed lab flooring that still reacts to every light.
+   Uniforms: textureMatrix/tDiffuse (the Reflector's), tNormal (the tile
+   normal map), uStrength (overlay mix) and uTile (normal-map scale).
    ===================================================================== */
 const FloorReflectShader = {
   name: 'FloorReflect',
@@ -146,6 +151,8 @@ export function createFloorReflection(width, depth, { normalMap, quality, tile =
    fract(uv.y + time × speed) — leaving a thin trail. A second static layer
    adds beaded droplets. uFlash (driven by the lightning timer) lights the
    glass up white for a split second.
+   Uniforms: uTime (drops), uFlash ← the lab's lightning timer, uTint (night
+   glass colour).
    ===================================================================== */
 export function createRainGlassMaterial() {
   return new THREE.ShaderMaterial({
@@ -194,6 +201,8 @@ export function createRainGlassMaterial() {
    uPower (game state) switches the screen from static noise (no power) to
    its content texture with scanlines, a rolling refresh bar, flicker and
    slight barrel-shaped vignette. Used for lab monitors and Neon billboards.
+   Uniforms: map (content), uPower ← game state, uTime (roll/jitter/static),
+   uHolo (additive billboard mode), uColor.
    ===================================================================== */
 export function createScreenMaterial(map, { color = 0x9fe8ff, power = 1, holo = false } = {}) {
   return new THREE.ShaderMaterial({
@@ -246,7 +255,8 @@ export function createScreenMaterial(map, { color = 0x9fe8ff, power = 1, holo = 
    value is below uDissolve are discarded, with a hot rim at the
    dissolve boundary — so the barrier visibly burns away when it switches
    off instead of popping out of existence.
-   uActive / uDissolve are driven by game state (power, timing cycles).
+   uActive / uDissolve are driven by game state (power, timing cycles);
+   uWarn is the pre-switch blink; uColor tints each barrier.
    ===================================================================== */
 export function createBarrierMaterial(color = 0xff4fd8) {
   return new THREE.ShaderMaterial({

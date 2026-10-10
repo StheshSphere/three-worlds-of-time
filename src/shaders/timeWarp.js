@@ -21,6 +21,10 @@ import { NOISE_GLSL } from './noise.glsl.js';
  *
  * Chromatic aberration: R, G and B are sampled at slightly different UVs,
  * further apart near the screen edges, like a cheap lens.
+ *
+ * Constant tuning uniforms (set at build/quality time, not per frame):
+ * uVignette, uGrain, uChroma, uSaturation and the per-era uLift/uGain pair;
+ * uResolution keeps the film grain pixel-sized.
  */
 export const TimeWarpShader = {
   name: 'TimeWarpShader',
