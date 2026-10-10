@@ -6,7 +6,7 @@ short — if a rule stops mattering, delete it rather than letting it pile up.
 ## What this project is
 
 A 3D browser game for a university CGV group project, built with Three.js r160, **no bundler**. Three eras of the same
-place (Ancient Ruins / Modern Lab / Neon Future); recover a core in each and restore the Time Machine. Five people.
+place (Ancient Ruins / Modern Lab / Neon Future); recover a core in each and restore the Time Machine. Four members.
 
 ## Run it
 
@@ -34,10 +34,9 @@ src/levels/*.js          ancientRuins.js / modernLab.js / neonFuture.js (+ glyph
 tools/                   dev only (asset pipeline, deploy build, headless tests) — never shipped
 ```
 
-Ownership (ask in the group chat before rewriting someone else's file):
-Person 1 → `levels/ancientRuins.js` · Person 2 → `levels/modernLab.js` · Person 3 → `levels/neonFuture.js` ·
-Person 4 → `player.js`, `character.js`, `timeMachine.js`, `levelManager.js` · Person 5 → `index.html`, `style.css`,
-`src/shaders/`, `src/core/postfx.js`, `src/core/ui.js`, deployment.
+Ownership follows the four-member completion guide: Members 1–3 own the Ancient, Lab and Future work respectively;
+Member 4 owns final integration, controls/camera polish, UI consistency, performance/cleanup, credits and release/LAMP.
+Preserve completed shared systems and each member's level. Ask before rewriting someone else's level.
 
 ## Conventions an agent must follow
 
@@ -58,6 +57,8 @@ Person 4 → `player.js`, `character.js`, `timeMachine.js`, `levelManager.js` ·
 - `main` is protected — work on `feature/<short-description>` branches, merge via PR with one review.
 - Commit messages: present tense, specific.
 - Before a PR: serve locally, play the change, run `bash tools/build-deploy.sh` (pre-flight checks must pass).
+- Node logic checks: `node tools/test-integration.mjs` and `node tools/test-audio.mjs` (render/audio doubles).
+- Browser QA hook is available only with `?qa=1`. See `docs/RELEASE-INSTRUCTIONS.md` and the verification report.
 
 ## Ask before doing, don't just do it
 

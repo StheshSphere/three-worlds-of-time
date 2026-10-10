@@ -33,6 +33,7 @@ export function createKit(ctx) {
   const walkables = [];
   const interactables = [];
   const updaters = [];
+  const timers = [];
   const materialCache = new Map();
 
   const track = (...items) => { items.forEach((i) => i && disposables.push(i)); return items[0]; };
@@ -52,7 +53,7 @@ export function createKit(ctx) {
       normalMap: t.normal || null,
       aoMap: t.arm || null,
       roughnessMap: t.arm || null,
-      metalnessMap: opts.metal ? t.arm : null,
+      metalnessMap: opts.metal ? (t.arm || null) : null,
       color: opts.tint !== undefined ? opts.tint : 0xffffff,
       roughness: opts.roughness ?? 1,
       metalness: opts.metalness ?? (opts.metal ? 1 : 0),
@@ -289,6 +290,9 @@ export function createKit(ctx) {
   /* ---------------------------- misc --------------------------------- */
   function update(fn) { updaters.push(fn); }
 
+  // Era-owned game-time delays: pause with gameplay and vanish on unload.
+  function after(fn, milliseconds) { timers.push({ remaining: milliseconds / 1000, fn }); }
+
   /** CanvasTexture helper for signs, notes, screens, rune tablets. */
   function canvasTexture(w, h, draw) {
     const c = document.createElement('canvas');
@@ -305,7 +309,14 @@ export function createKit(ctx) {
   function result(extra = {}) {
     return {
       objects, lights, disposables, colliders, walkables, interactables,
-      update: (dt, t) => { for (const fn of updaters) fn(dt, t); },
+      update: (dt, t) => {
+        for (let i = timers.length - 1; i >= 0; i--) {
+          const timer = timers[i];
+          timer.remaining -= dt;
+          if (timer.remaining <= 0) { timers.splice(i, 1); timer.fn(); }
+        }
+        for (const fn of updaters) fn(dt, t);
+      },
       ...extra,
     };
   }
@@ -313,7 +324,7 @@ export function createKit(ctx) {
   return {
     ctx, track, material, basic, boxGeo, cylGeo, planeGeo, place, add, solidFrom,
     refreshSolid, removeCollider, addCollider, mapShape, box, proxy, invisible, prop,
-    scatter, light, pointLight, interact, removeInteract, update, canvasTexture, result,
+    scatter, light, pointLight, interact, removeInteract, update, after, canvasTexture, result,
     colliders, walkables, interactables, objects, lights,
   };
 }

@@ -40,7 +40,7 @@ export function createHero() {
     const m = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 1, 6, 12), new THREE.MeshStandardMaterial({ color: 0x3b3f8f }));
     m.position.y = 0.85;
     group.add(m);
-    return { group, update() {}, play() {}, setCores() {}, setDashGlow() {}, reset() {}, gauntletWorld: new THREE.Vector3() };
+    return { group, update() {}, play() {}, release() {}, setGauntletColor() {}, setCores() {}, setDashGlow() {}, reset() {}, gauntletWorld: new THREE.Vector3() };
   }
 
   const model = assets.prop('hero');

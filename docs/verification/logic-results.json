@@ -1,0 +1,83 @@
+{
+  "suite": "Node logic integration (renderer, DOM and audio doubles)",
+  "passed": 19,
+  "failed": 0,
+  "results": [
+    {
+      "name": "Era game-time delay waits, fires once and stays paused without updates",
+      "status": "PASS"
+    },
+    {
+      "name": "Read panel opening is guarded from the same E event and duplicate stack entries",
+      "status": "PASS"
+    },
+    {
+      "name": "Closing all panels drops a stale keypad submission callback",
+      "status": "PASS"
+    },
+    {
+      "name": "Input clears on blur, freeze and full reset (including buffered jump and dash)",
+      "status": "PASS"
+    },
+    {
+      "name": "Dash cannot tunnel through a 0.02 m wall at the maximum 50 ms frame step",
+      "status": "PASS"
+    },
+    {
+      "name": "Third-person camera respects physics-only wall and switches view without changing yaw",
+      "status": "PASS"
+    },
+    {
+      "name": "Jump lands on a thin floor and moving-platform carry changes player position",
+      "status": "PASS"
+    },
+    {
+      "name": "first: Ancient plates, mirrors, tablets and drums unlock core; progress 1/3",
+      "status": "PASS"
+    },
+    {
+      "name": "first: Lab investigation, wrong/right keypad, conduit power, field and core; progress 2/3",
+      "status": "PASS"
+    },
+    {
+      "name": "first: Future hazards animate, checkpoint respawns, sequence gates core, finale reaches 3/3",
+      "status": "PASS"
+    },
+    {
+      "name": "first: Restart clears all core/puzzle/checkpoint/flashlight/dash state",
+      "status": "PASS"
+    },
+    {
+      "name": "third: Ancient plates, mirrors, tablets and drums unlock core; progress 1/3",
+      "status": "PASS"
+    },
+    {
+      "name": "third: Lab investigation, wrong/right keypad, conduit power, field and core; progress 2/3",
+      "status": "PASS"
+    },
+    {
+      "name": "third: Future hazards animate, checkpoint respawns, sequence gates core, finale reaches 3/3",
+      "status": "PASS"
+    },
+    {
+      "name": "third: Restart clears all core/puzzle/checkpoint/flashlight/dash state",
+      "status": "PASS"
+    },
+    {
+      "name": "Retry keeps previous cores and resets the current era",
+      "status": "PASS"
+    },
+    {
+      "name": "Old hurt-respawn cannot move a player in a newly loaded era",
+      "status": "PASS"
+    },
+    {
+      "name": "Repeated level swaps dispose owned resources and retain shared sentinels",
+      "status": "PASS"
+    },
+    {
+      "name": "Cutscene finish releases old set closures and cancellation does not run completion",
+      "status": "PASS"
+    }
+  ]
+}

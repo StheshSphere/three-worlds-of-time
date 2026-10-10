@@ -68,7 +68,8 @@ Falling costs 12 s; shocks 6–10 s; a wrong lock touch 3 s.
 - **Physics:** gravity, jump with coyote time and buffering, AABB circle-vs-box walls, ground raycast, moving-platform
   carry, push-blocks.
 - **Fail/succeed:** timeline stability per era (runs out → era collapses → rewind), falls, hazards, checkpoints.
-- **Disposal:** everything a level creates goes through `kit` and is disposed on unload; GPU memory stays flat.
+- **Disposal:** era-owned resources are disposed on unload; asset-cache resources survive. Node ownership tests pass;
+  GPU memory stability still requires repeated runs in a real browser (see the verification report).
 
 ## Suggested demo split (match the ownership in AGENTS.md)
 
@@ -77,10 +78,11 @@ Falling costs 12 s; shocks 6–10 s; a wrong lock touch 3 s.
 | 1 | The Past: block grid logic, mirror beam tracing (axis-aligned ray marching + reflection formula), randomised rune code |
 | 2 | The Present: reveal-ink shader + cone test, keypad flow, conduit graph search (DFS over tile connection bitmasks), power-on sequence |
 | 3 | The Future: dash, moving/phase platforms, barrier timing + dash phasing, laser hit test, collapse/rift |
-| 4 | Player controller, cameras, Time Machine hierarchy, hero animation blending, level manager & disposal |
-| 5 | Post-processing (bloom + time-warp pass), sky shader, UI/HUD/menus, audio, deployment build |
+| 4 | Final integration: controls/camera and collision fixes, UI consistency, resource/audio cleanup, credits, regression checks and release/LAMP. Explain the existing Time Machine, shaders and shared systems without claiming their original authorship. |
 
 ## Handy console commands (Chrome DevTools, while playing)
+
+Open the game with `?qa=1` to enable these development shortcuts.
 
 ```js
 __game.skipTo(1)                    // jump to an era (0, 1, 2)

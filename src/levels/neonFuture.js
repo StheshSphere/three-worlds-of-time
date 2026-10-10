@@ -460,7 +460,7 @@ export function build(kit, api) {
       riftMat.uniforms.uActive.value = 1;
       if (riftZ < player.position.z + 0.6 && player.position.z > -138) {
         api.hurt({ from: new THREE.Vector3(0, player.position.y, riftZ + 3), power: 4, respawn: true, penalty: 10, reason: 'The rift caught you' });
-        setTimeout(resetCollapse, 500);
+        kit.after(resetCollapse, 500);
         state.riftActive = false;
       }
       if (player.position.z < -138) {
@@ -778,7 +778,7 @@ export function build(kit, api) {
     if (!introShown && t > 0.5) {
       introShown = true;
       beacons[0].pulse = 1;
-      setTimeout(() => { if (!state.coreTaken && !state.disposed) api.message('Your gauntlet hums with stolen time — CHRONO-DASH unlocked: Q or right-click. Dashing phases you through energy barriers.', 5200); }, 4800);
+      kit.after(() => { if (!state.coreTaken && !state.disposed) api.message('Your gauntlet hums with stolen time — CHRONO-DASH unlocked: Q or right-click. Dashing phases you through energy barriers.', 5200); }, 4800);
     }
   });
   api.setHint(() => {

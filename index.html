@@ -37,7 +37,7 @@
   <!-- ============================ TITLE ============================== -->
   <div id="title-screen" class="screen hidden">
     <div class="title-wrap">
-      <p class="kicker">A CGV Three.js adventure</p>
+      <p class="kicker">A CGV Three.js adventure · Final release</p>
       <h1 class="game-title title-font">The Three Worlds<br />of Time</h1>
       <h2 class="game-subtitle title-font">— The Broken Hourglass —</h2>
       <p class="tagline">Past: <b>Solve</b> · Present: <b>Investigate</b> · Future: <b>Survive</b></p>
@@ -83,6 +83,7 @@
       <div id="stability-time">5:00</div>
     </div>
     <div class="hud-top-right">
+      <div id="core-count" role="status" aria-live="polite">Cores 0 / 3</div>
       <div class="core-slots">
         <span class="core-slot" data-core="0" title="Ancient Core"></span>
         <span class="core-slot" data-core="1" title="Lab Core"></span>
@@ -210,10 +211,10 @@
     <div class="panel controls">
       <h2 class="title-font">Controls</h2>
       <dl>
-        <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Move</dd>
+        <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows</dt><dd>Move in the direction you are looking</dd>
         <dt>Mouse</dt><dd>Look around</dd>
         <dt><kbd>Shift</kbd></dt><dd>Sprint</dd>
-        <dt><kbd>Space</kbd></dt><dd>Jump</dd>
+        <dt><kbd>Space</kbd></dt><dd>Jump — hold for a higher jump</dd>
         <dt><kbd>E</kbd> / Left click</dt><dd>Interact — push, rotate, read, take</dd>
         <dt><kbd>F</kbd></dt><dd>Flashlight (once found)</dd>
         <dt><kbd>Q</kbd> / Right click</dt><dd>Chrono-dash (the Future only)</dd>
@@ -239,7 +240,8 @@
            force field, warp ripple, energy barriers, phase dissolve, checkpoint beacons, star dome, reveal-ink,
            water, grass, holograms, light beams, the procedural city and flying traffic),
            the Time Machine model, all architecture — built by the team.
-           Built with the assistance of AI tooling (Claude Code, Anthropic, Claude Opus) for code generation and editing.</p>
+           The supplied main branch declares assistance from Claude Code / Claude Opus (Anthropic).
+           Member 4 integration, release preparation and verification were assisted by ChatGPT / Codex (OpenAI).</p>
         <ul id="credits-list">
           <li><b>Three.js r160</b> — mrdoob &amp; contributors — MIT Licence — threejs.org (incl. GLTFLoader, PointerLockControls,
               EffectComposer, UnrealBloomPass, OutputPass, Reflector, RoomEnvironment, SkeletonUtils, BufferGeometryUtils,
@@ -258,16 +260,15 @@
               cardboard_box_01, WetFloorSign_01, vintage_grandfather_clock_01, SchoolChair_01, utility_box_01, modular_pipes
               (simplified and recompressed by our asset pipeline)</li>
           <li><b>Sound effects</b> — Kenney (kenney.nl) — CC0: Impact Sounds, Interface Sounds, Sci-Fi Sounds, RPG Audio, Music Jingles</li>
-          <li><b>Modern Lab cue sounds</b> — PLACEHOLDER (Member 2): fill in the source and licence here once the files in
-              assets/audio/modern-lab/ are supplied (keypad-ok, keypad-deny, breaker-ok, breaker-deny, power-restored,
-              core-pickup, generator-hum) — remove this line if those files do not ship</li>
           <li><b>Music</b> — OpenGameArt.org — CC0:
               “Mysterious Ambience (song21)” by cynicmusic / pixelsphere.org (title);
               “Zeal Soul” by Chris Murphy (zesona) (the Past);
               “Elevator To Reactor (Loop)” by Hazmat Harry (the Present);
-              “Space Synth Wave / Cool 80's Synth Wave” by Pro Sensory (the Future)</li>
+              “Space Synth Wave / Cool 80's Synth Wave” by Alex McCulloch / Pro Sensory (the Future)</li>
           <li><b>Fonts</b> — Cinzel by Natanael Gama and Rajdhani by Indian Type Foundry — SIL Open Font Licence — Google Fonts</li>
-          <li><b>Asset tooling (not shipped)</b> — glTF-Transform (MIT), meshoptimizer (MIT), sharp (Apache-2.0), ffmpeg (LGPL)</li>
+          <li><b>Noise filter</b> — pink-noise coefficients adapted from Paul Kellett’s economy filter (musicdsp.org).</li>
+          <li><b>Source links &amp; notices</b> — <a href="./credits.html" target="_blank" rel="noopener">Full asset audit and licence notices</a></li>
+
         </ul>
       </div>
       <button class="menu-btn" data-close>Back</button>

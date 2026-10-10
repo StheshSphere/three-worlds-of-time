@@ -1,0 +1,150 @@
+{
+  "url": "http://127.0.0.1:8000/index.html",
+  "size": "1280x720",
+  "steps": [
+    {
+      "comment": "Begin through the actual menu; skip both story scenes using the documented key.",
+      "click": "#play-button"
+    },
+    {
+      "press": "Space"
+    },
+    {
+      "wait": 250
+    },
+    {
+      "press": "Space"
+    },
+    {
+      "until": "__game.mode() === 'playing' && __game.levels.state === 'playing'"
+    },
+    {
+      "assert": "__game.player.mode === window.__testView && __game.timeMachine.getCores() === 0",
+      "shot": "01-start"
+    },
+    {
+      "comment": "Real keyboard input and V toggle (physical puzzle traversal remains manual).",
+      "keys": [
+        "KeyW"
+      ],
+      "hold": 300
+    },
+    {
+      "assert": "__game.player.isLocked && !__game.player.keys.forward"
+    },
+    {
+      "press": "v"
+    },
+    {
+      "assert": "__game.player.mode !== window.__testView"
+    },
+    {
+      "press": "v"
+    },
+    {
+      "comment": "Ancient puzzle integration; shortcuts do not claim spatial playtesting.",
+      "eval": "{ const d=__game.levels.debug; d.solveBlocks(); d.alignMirrors(); d.readTablets(); d.solveDrums(); }"
+    },
+    {
+      "click": "#reader-screen [data-close]"
+    },
+    {
+      "until": "__game.mode() === 'playing' && __game.levels.debug.state.dialsSolved && __game.levels.debug.state.crystalLit"
+    },
+    {
+      "eval": "__game.levels.debug.takeCore()"
+    },
+    {
+      "until": "__game.levels.index === 1 && __game.levels.state === 'playing'",
+      "timeout": 240000
+    },
+    {
+      "assert": "__game.timeMachine.getCores() === 1 && document.getElementById('core-count').textContent === 'Cores 1 / 3'",
+      "shot": "02-lab"
+    },
+    {
+      "eval": "__game.levels.debug.readLogs()"
+    },
+    {
+      "click": "#reader-screen [data-close]"
+    },
+    {
+      "until": "__game.mode() === 'playing'"
+    },
+    {
+      "eval": "{ const d=__game.levels.debug; d.takeFlashlight(); d.revealAll(); d.openDoor(); d.solveGrid(); }"
+    },
+    {
+      "until": "__game.levels.debug.state.power && __game.levels.debug.state.doorOpen"
+    },
+    {
+      "eval": "__game.levels.debug.dropField()"
+    },
+    {
+      "until": "__game.levels.debug.state.fieldDown"
+    },
+    {
+      "eval": "__game.levels.debug.takeCore()"
+    },
+    {
+      "until": "__game.levels.index === 2 && __game.levels.state === 'playing'",
+      "timeout": 240000
+    },
+    {
+      "assert": "__game.timeMachine.getCores() === 2 && !__game.player.hasCheckpoint",
+      "shot": "03-future"
+    },
+    {
+      "eval": "__game.levels.debug.takeCore()"
+    },
+    {
+      "assert": "!__game.levels.debug.state.coreTaken"
+    },
+    {
+      "eval": "__game.levels.debug.solvePuzzle()"
+    },
+    {
+      "assert": "__game.levels.debug.puzzle().solved"
+    },
+    {
+      "eval": "__game.levels.debug.takeCore()"
+    },
+    {
+      "until": "__game.levels.state === 'finale'"
+    },
+    {
+      "assert": "__game.timeMachine.getCores() === 3 && __game.player.mode === 'third'",
+      "shot": "04-restoration"
+    },
+    {
+      "until": "__game.mode() === 'cutscene'",
+      "timeout": 240000
+    },
+    {
+      "press": "Space"
+    },
+    {
+      "until": "__game.mode() === 'credits'"
+    },
+    {
+      "press": "Space"
+    },
+    {
+      "until": "__game.mode() === 'won'",
+      "shot": "05-victory"
+    },
+    {
+      "click": "#win-restart-button"
+    },
+    {
+      "until": "__game.mode() === 'playing' && __game.levels.index === 0"
+    },
+    {
+      "assert": "__game.timeMachine.getCores() === 0 && !__game.player.hasCheckpoint && !__game.levels.debug.state.gateOpen && !__game.player.canDash && !__game.player.flashlight",
+      "shot": "06-restart"
+    },
+    {
+      "eval": "({memory:__game.renderer.info.memory,render:__game.renderer.info.render,music:__game.audio.musicTracks.size,positionals:__game.audio.positionals.size})"
+    }
+  ]
+}

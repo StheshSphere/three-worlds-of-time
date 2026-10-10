@@ -3,6 +3,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createKit } from './core/kit.js';
 import { createSky } from './shaders/sky.js';
 import { settings } from './core/settings.js';
+import { assets } from './core/assets.js';
 import { ERA_CARDS } from './story.js';
 import * as ancientRuins from './levels/ancientRuins.js';
 import * as modernLab from './levels/modernLab.js';
@@ -54,6 +55,8 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
   let time = 0;
   let cinematic = null;      // camera override fn(dt, t)
   const levelDisposables = [];
+  const timers = [];
+  const after = (milliseconds, fn) => timers.push({ remaining: milliseconds / 1000, fn });
   const stats = { runTime: 0, falls: 0, rewinds: 0, shocks: 0 };
   const callbacks = { onFail: null, onFinale: null, onLoaded: null, onEraArrive: null };
 
@@ -101,14 +104,14 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
         ui.damage();
         audio.play('zap', { volume: 0.9 });
         if (opts.penalty) api.penalize(opts.penalty, opts.reason);
-        if (opts.respawn) setTimeout(() => { if (state === 'playing') player.reset(); }, 450);
+        if (opts.respawn) after(450, () => player.reset());
       }
     },
     sound: (name, opts) => audio.play(name, opts),
     positional: (name, obj, opts) => { const h = audio.positional(name, obj, opts); levelDisposables.push(h); return h; },
     journal: (html, key) => ui.addJournal(html, key),
-    reader: (opts) => { player.unlock(); ui.openReader(opts); },
-    keypad: (onSubmit) => { player.unlock(); ui.openKeypad(onSubmit); },
+    reader: (opts) => ui.openReader(opts),
+    keypad: (onSubmit) => ui.openKeypad(onSubmit),
     grantFlashlight: () => { player.addFlashlight(); },
     flashlight: () => player.getFlashlightState(flashState),
     enableDash: () => { player.canDash = true; },
@@ -119,35 +122,47 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
   };
 
   /* ------------------------------ disposal ----------------------------------- */
-  function disposeObject(root) {
+  function disposeObject(root, dispose) {
+    if (root.userData?.persistent) return;
     root.traverse((o) => {
-      if (o.userData && o.userData.persistent) return;
-      if (o.isMesh || o.isPoints || o.isLine) {
-        if (o.geometry) o.geometry.dispose();
+      if (o.isMesh || o.isPoints || o.isLine || o.isSprite) {
+        dispose(o.geometry);
         const mats = Array.isArray(o.material) ? o.material : [o.material];
         for (const m of mats) {
-          if (!m) continue;
-          for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap']) if (m[key]) m[key].dispose();
-          m.dispose();
+          if (!m || assets.isShared(m)) continue;
+          for (const value of Object.values(m)) if (value?.isTexture) dispose(value);
+          dispose(m);
         }
-        if (o.isInstancedMesh) o.dispose();
+        if (o.isInstancedMesh) dispose(o);
       }
-      if (o.isLight && o.shadow && o.shadow.map) o.shadow.map.dispose();
-      if (typeof o.dispose === 'function' && !o.isMesh && !o.isLight && !o.isScene) { try { o.dispose(); } catch { /* */ } }
+      if (o.isSkinnedMesh) dispose(o.skeleton);
+      if (o.isLight) dispose(o.shadow);
     });
   }
 
   function unload() {
+    audio.stopEffects();
+    timers.length = 0;
+    cinematic = null;
+    pending = null;
+    ui.resetTransient();
+    const disposed = new Set();
+    const dispose = (resource) => {
+      if (!resource?.dispose || assets.isShared(resource) || disposed.has(resource)) return;
+      disposed.add(resource);
+      resource.dispose();
+    };
+    // Disconnect audio before removing its owning objects.
+    for (const d of levelDisposables.splice(0)) dispose(d);
     if (level) {
-      for (const o of level.objects) disposeObject(o);
-      for (const l of level.lights) disposeObject(l);
-      for (const d of level.disposables) if (d && d.dispose) d.dispose();
+      for (const o of level.objects) disposeObject(o, dispose);
+      for (const l of level.lights) disposeObject(l, dispose);
+      for (const d of level.disposables) dispose(d);
     }
-    for (const d of levelDisposables.splice(0)) if (d && d.dispose) d.dispose();
     levelGroup.clear();
     if (sky) { scene.remove(sky.mesh); sky.dispose(); sky = null; }
     if (envRT) { envRT.dispose(); envRT = null; }
-    if (sun) { scene.remove(sun, sun.target); sun.shadow.map?.dispose(); sun.dispose(); sun = null; }
+    if (sun) { scene.remove(sun, sun.target); sun.dispose(); sun = null; }
     scene.environment = null;
     scene.fog = null;
     player.clearAttachments();
@@ -171,6 +186,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
 
   /** Mount a non-playable cutscene set (src/levels/prologue.js). */
   function loadSet(mod, variant = 'night') {
+    player.mode = 'third';
     const m = variant === 'morning' ? mod.metaMorning : mod.meta;
     mount(mod, m, m.eraIndex ?? 1, { cutscene: true, variant });
     return level;
@@ -247,7 +263,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
       showEraCard();
       // The how-to-play card waits for the era card (4.7s) to finish so the
       // story line gets the screen to itself first.
-      if (meta.introCard) setTimeout(() => { if (state === 'playing') api.tutorial('intro', meta.introCard, 16); }, 5200);
+      if (meta.introCard) after(5200, () => api.tutorial('intro', meta.introCard, 16));
     }
     if (callbacks.onLoaded) callbacks.onLoaded(i);
   }
@@ -264,7 +280,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     stateTime = 0;
     player.frozen = false;
     showEraCard();
-    if (meta.introCard) setTimeout(() => { if (state === 'playing') api.tutorial('intro', meta.introCard, 16); }, 5600);
+    if (meta.introCard) after(5600, () => api.tutorial('intro', meta.introCard, 16));
   }
 
   /* ------------------------------ core → next era ---------------------------- */
@@ -274,6 +290,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     stateTime = 0;
     pending = { phase: 'out', next: index + 1 };
     player.frozen = true;
+    player._clearKeys();
     audio.play('core-get', { volume: 0.9 });
     audio.duck(0.25, 3);
     ui.message(index < 2 ? 'The core is yours — the Time Machine calls it home…' : 'The final core! Hold on — the machine is pulling you back…', 3000);
@@ -295,6 +312,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     player.frozen = false;
     postfx.u.uFlash.value = 0;
     postfx.u.uWarp.value = 0;
+    timeMachine.setWarp(0);
     // Cores earned in this era are lost; earlier eras keep theirs.
     load(index);
   }
@@ -309,6 +327,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     postfx.u.uFlash.value = 0;
     postfx.u.uWarp.value = 0;
     load(0, opts);
+    if (!opts.cutscene) player.mode = settings.get('thirdPerson') ? 'third' : 'first';
   }
 
   function startFinale() {
@@ -317,6 +336,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     ui.clearMessage();
     stateTime = 0;
     player.frozen = true;
+    player.mode = 'third';
     player.reset();                            // stand at the machine
     const pos = new THREE.Vector3(0, timeMachine.daisTop, 5.2);
     player.rig.position.copy(pos);
@@ -339,6 +359,13 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
   function update(dt) {
     time += dt;
     stateTime += dt;
+    if (state === 'playing') {
+      for (let i = timers.length - 1; i >= 0; i--) {
+        const timer = timers[i];
+        timer.remaining -= dt;
+        if (timer.remaining <= 0) { timers.splice(i, 1); timer.fn(); }
+      }
+    }
     if (sky) sky.update(camera, time);
     if (sun) {
       // Follow the player; snap to shadow-map texels so shadows don't shimmer.
@@ -395,7 +422,8 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
             ui.setCores(cores);
             player.hero.setCores(cores);
             player.frozen = false;
-            load(pending.next);
+            load(pending.next, { cutscene: true });
+            showEraCard();
             player.frozen = true;
             state = 'transition';
             pending = { phase: 'in' };
@@ -412,7 +440,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
           player.frozen = false;
           state = 'playing';
           if (callbacks.onEraArrive) callbacks.onEraArrive(index);
-          if (meta.introCard) setTimeout(() => { if (state === 'playing') api.tutorial('intro', meta.introCard, 16); }, 5600);
+          if (meta.introCard) after(5600, () => api.tutorial('intro', meta.introCard, 16));
         }
       }
     }

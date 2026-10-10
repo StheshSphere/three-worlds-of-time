@@ -1,0 +1,9 @@
+{
+  "suite": "Extracted static release at HTTP /game/ subfolder",
+  "status": "PASS",
+  "files_http_200_and_exact_bytes": 180,
+  "glb_dependency_checks": 33,
+  "zip_root_integrity_case_and_module_mime": "PASS",
+  "browser_execution": "NOT VERIFIED",
+  "lamp_deployment": "NOT VERIFIED"
+}

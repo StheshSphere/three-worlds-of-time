@@ -375,7 +375,7 @@ export function build(kit, api) {
   let boltT = -1;
   kit.update((dt, t) => {
     nextBolt -= dt;
-    if (nextBolt <= 0) { boltT = 0; nextBolt = 7 + Math.random() * 9; setTimeout(() => api.sound('warp', { volume: 0.45, rate: 0.45 }), 700 + Math.random() * 900); }
+    if (nextBolt <= 0) { boltT = 0; nextBolt = 7 + Math.random() * 9; kit.after(() => api.sound('warp', { volume: 0.45, rate: 0.45 }), 700 + Math.random() * 900); }
     let flash = 0;
     if (boltT >= 0) {
       boltT += dt;
@@ -617,7 +617,7 @@ export function build(kit, api) {
         state.doorOpen = true;
         keypadFlash = { t: 0, ok: true };            // Member 2 · green flash on the pad
         labSound('keypad-ok', { volume: 0.8 });     // silent no-op until Chunk 5
-        setTimeout(() => secDoor.open(), 300);
+        kit.after(() => secDoor.open(), 300);
         api.message('ACCESS GRANTED — the Archive door slides open.', 2600);
         api.setObjective('Restore the power');
         api.checkpoint(new THREE.Vector3(0, 0, -29), 0, null);
@@ -823,7 +823,7 @@ export function build(kit, api) {
     for (const b of beacons) { b.spot.visible = false; b.lamp.material.emissiveIntensity = 0; }
     moon.intensity = 0.15;
     for (const s of strips) s.material.emissiveIntensity = 0.3;
-    setTimeout(() => vaultDoor.open(), 2200);
+    kit.after(() => vaultDoor.open(), 2200);
   }
   kit.update((dt) => {
     if (powerT < 0 || powerT > 4) return;

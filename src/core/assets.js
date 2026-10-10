@@ -8,12 +8,9 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
  * screen (byte-weighted real progress — see loadAll), so era transitions
  * never hitch.
  *
- * Disposal model: levels CLONE what they use. When a level unloads, the
- * level manager disposes the clones' geometries/materials/textures — that
- * frees the GPU copies only. The decoded source data stays in this cache, and
- * three.js transparently re-uploads it the next time a clone is rendered
- * (e.g. after "Restart journey"). Memory therefore stays flat across the
- * three levels instead of climbing (brief §6.1).
+ * Scene-graph clones SHARE cached geometry, materials and textures. These
+ * resources live for the application lifetime; unloading an era must only
+ * dispose its own procedural resources, never these shared GPU allocations.
  *
  * Paths are relative to index.html — never absolute (brief §6.2).
  */
@@ -75,17 +72,25 @@ export const MANIFEST = {
   ],
   /** Member 2 · the Present — optional era-specific cues from audio/modern-lab/.
    *  Registered as 'modern-lab:<name>'; a missing file is skipped silently. */
-  'modern-lab': ['keypad-ok', 'keypad-deny', 'breaker-ok', 'breaker-deny', 'power-restored', 'core-pickup', 'generator-hum'],
+  'modern-lab': [], // No extra recordings ship; modernLab uses the shared SFX fallbacks.
 };
 
 const textures = new Map();   // name -> { color, normal, arm }
 const gltfs = new Map();      // name -> gltf
 const audio = new Map();      // name -> AudioBuffer
+const shared = new WeakSet();
+
+function retainMaterial(material) {
+  if (!material) return;
+  shared.add(material);
+  for (const value of Object.values(material)) if (value?.isTexture) shared.add(value);
+}
 
 let anisotropy = 4;
 
 export const assets = {
   setAnisotropy(a) { anisotropy = a; },
+  isShared(resource) { return shared.has(resource); },
 
   /**
    * Load everything in MANIFEST. onProgress(fraction, label) drives the
@@ -133,6 +138,7 @@ export const assets = {
           t.colorSpace = map === 'color' ? THREE.SRGBColorSpace : THREE.NoColorSpace;
           t.anisotropy = anisotropy;
           set[map] = t;
+          shared.add(t);
         }).catch((e) => console.warn('[assets] texture', name, map, e)).finally(() => tick(url, `texture ${name}`)));
       }
       textures.set(name, set);
@@ -144,10 +150,12 @@ export const assets = {
       jobs.push(gltfLoader.loadAsync(file, (ev) => track(file, ev)).then((g) => {
         g.scene.traverse((o) => {
           if (o.isMesh) {
+            shared.add(o.geometry);
             o.castShadow = true;
             o.receiveShadow = true;
             const mats = Array.isArray(o.material) ? o.material : [o.material];
             mats.forEach((m) => { if (m && m.map) m.map.anisotropy = anisotropy; });
+            mats.forEach(retainMaterial);
           }
         });
         gltfs.set(name, g);

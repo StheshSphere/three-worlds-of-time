@@ -247,3 +247,39 @@ kbd {
 #tut-body ul { margin: 0.3rem 0 0; padding-left: 1.2rem; }
 #tut-body li { margin: 0.2rem 0; }
 .tut-foot { margin: 0.6rem 0 0; font-size: 0.85rem; color: var(--muted); text-align: right; }
+
+/* Final integration: readable HUD, compact panels and keyboard focus. */
+#core-count { margin-bottom: 9px; color: var(--text); font-size: 0.85rem; letter-spacing: 0.12em; text-transform: uppercase; text-shadow: 0 2px 6px #000; }
+.hud-top-left { max-width: min(340px, 29vw); padding: 12px 16px; border-left: 2px solid var(--accent); border-radius: 0 10px 10px 0; background: linear-gradient(90deg, rgba(5, 8, 14, 0.78), rgba(5, 8, 14, 0.30)); }
+.hud-top-center { width: min(320px, 28vw); }
+.title-wrap { max-height: 94vh; overflow-y: auto; padding: 16px 0; }
+.panel a, .credits-scroll a { color: var(--gold); text-underline-offset: 3px; }
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; }
+#interact-prompt { max-width: 90vw; white-space: normal; text-align: center; }
+.era-card-text { padding: 0 5vw; }
+@media (max-width: 760px) {
+  .title-wrap { margin: 0 6vw; width: 88vw; }
+  .game-title { font-size: clamp(2rem, 8vw, 3.2rem); }
+  .panel { min-width: 0; width: 94vw; padding: 1.3rem; }
+  .menu-btn { min-width: min(260px, 100%); max-width: 100%; }
+  .options label { flex-wrap: wrap; gap: 0.5rem; }
+  .options input[type="range"] { width: min(220px, 100%); }
+  .hud-top-center { top: 12px; left: 16px; transform: none; width: 52vw; text-align: left; }
+  .hud-top-left { top: 88px; left: 12px; max-width: 64vw; padding: 8px 10px; }
+  .hud-top-right { top: 12px; right: 14px; }
+  .core-slot { width: 18px; height: 27px; }
+  #objective { font-size: 1.08rem; }
+  #hint, #checklist { font-size: 0.9rem; }
+  #tutorial-card { max-width: 90vw; }
+  #era-card-tag { letter-spacing: 0.18em; gap: 0.6em; }
+  #era-card-tag::before, #era-card-tag::after { width: 24px; }
+  #era-card-sub { font-size: 1rem; letter-spacing: 0.14em; }
+  .controls dl { grid-template-columns: 1fr; gap: 0.2rem; }
+  .controls dt { text-align: left; margin-top: 0.5rem; }
+}
+@media (max-height: 650px) {
+  .panel { padding-top: 1rem; padding-bottom: 1rem; max-height: 96vh; }
+  .title-wrap .menu { gap: 0.35rem; }
+  .title-wrap .menu-btn { padding: 0.48rem 1.4rem; }
+  .game-title { font-size: clamp(2rem, 7vh, 3.5rem); }
+}

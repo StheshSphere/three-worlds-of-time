@@ -1,0 +1,22 @@
+# Asset and source audit
+
+Member 4 audit, 10 October 2026. The supplied ZIP is the provenance baseline; all **125 existing asset files are byte-identical**. No models, textures, music or SFX were replaced or regenerated. Public credits are available from the game's Credits panel and `credits.html`.
+
+| Material | Evidence and disposition |
+|---|---|
+| Three.js r160 and imported add-ons | Vendored headers and [upstream r160](https://github.com/mrdoob/three.js/tree/r160); original MIT notice included in `libs/three/LICENSE`. Release contains only the imported graph. SimplexNoise retains Stefan Gustavson/Sean McCullough attribution. |
+| meshoptimizer decoder | Bundled decoder retains Arseny Kapoulkine's header; [upstream MIT notice](https://github.com/zeux/meshoptimizer/blob/v0.19/LICENSE.md) included in `licenses/meshoptimizer-mit.txt`. |
+| GLSL hash12/hash13 | Exact formulas match David Hoskins' [Hash without Sine](https://www.shadertoy.com/view/4djSRW). The original page could not be retrieved here. [pySSV's published source](https://pyssv.readthedocs.io/en/stable/_modules/random.glsl.html) reproduces those formulas and the 2014 MIT notice; that notice and attribution are now included. No shader algorithm changed. |
+| Synthesised pink noise | Economy-filter coefficients in `src/core/audio.js` match Paul Kellett's [MusicDSP source](https://www.musicdsp.org/en/latest/Filters/76-pink-noise-filter.html). **Manual review remains:** the retrieved source contains no explicit licence; attribution alone does not establish permission. |
+| Hero | Asset pipeline pins [KayKit Character Pack: Adventurers 1.0](https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0), commit `672074b73ba276876a19e8816ecdc5241817ab47`, CC0. Existing Mage adaptation and team-added gear retained. |
+| Environment | 32 prop GLBs and 12 PBR sets mapped by `tools/prepare-assets.mjs` to individual [Poly Haven](https://polyhaven.com/) IDs; [CC0 policy](https://polyhaven.com/license). Per-asset source links are in `credits.html`. |
+| Music | Pipeline URL mappings and source pages: [Mysterious Ambience (song21)](https://opengameart.org/content/mysterious-ambience-song21), cynicmusic / pixelsphere.org; [Zeal Soul](https://opengameart.org/content/zeal-soul), Chris Murphy / zesona; [Elevator To Reactor (Loop)](https://opengameart.org/content/elevator-to-reactor-loop), Hazmat Harry; [Space Synth Wave](https://opengameart.org/content/space-synth-wave), Alex McCulloch / Pro Sensory. All four source pages offer CC0. Future author credit corrected. |
+| Sound effects | Existing pipeline maps 47 outputs to Kenney's CC0 [Impact](https://kenney.nl/assets/impact-sounds), [Interface](https://kenney.nl/assets/interface-sounds), [Sci-fi](https://kenney.nl/assets/sci-fi-sounds), [RPG](https://kenney.nl/assets/rpg-audio), and [Music Jingles](https://kenney.nl/assets/music-jingles). Output-to-pack/source-filename mapping is in `credits.html`. The absent optional Lab recordings are no longer requested; existing shared fallbacks remain. |
+| Fonts | Cinzel and Rajdhani, local WOFF2s. Original notices from [Google Fonts Cinzel](https://github.com/google/fonts/blob/main/ofl/cinzel/OFL.txt) and [Rajdhani](https://github.com/google/fonts/blob/main/ofl/rajdhani/OFL.txt) included under `licenses/` (SIL OFL 1.1). |
+| UI images and game-specific code | Existing CSS, canvas glyphs/signage and procedural assets retained. Team attribution describes the supplied project's work, not a new independent authorship finding. No evidence of additional third-party image files was found. |
+| Development tooling | Asset pipeline dependencies remain in the source project; `tools/`, npm files and caches are excluded from release. No claim is made about the licence configuration of an unshipped local FFmpeg binary. |
+| AI assistance | Inherited Claude Code/Anthropic disclosure retained; OpenAI ChatGPT/Codex Member 4 assistance added. |
+
+**Limits:** public licences and pipeline mappings were checked; original download receipts and every historical tutorial/source are not available. Team members should confirm any additional borrowed code or tutorial use and resolve the Kellett permission item before treating the audit as fully closed. This audit does not certify legal clearance. Credits do not invent member names or original authorship.
+
+A targeted source scan found no private-key blocks, common token patterns or user-specific home-directory paths. This is a bounded check, not a guarantee against every possible secret format.

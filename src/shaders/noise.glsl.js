@@ -1,5 +1,8 @@
 /**
  * Shared GLSL noise helpers, pasted into shaders as a string chunk.
+ * hash12/hash13: David Hoskins, Hash without Sine (MIT, copyright 2014).
+ * Source: https://www.shadertoy.com/view/4djSRW
+ * Full notice: licenses/hash-without-sine-mit.txt.
  *
  * hash()  — cheap pseudo-random number from a coordinate (no texture needed).
  * noise() — "value noise": random values on a grid, smoothly interpolated

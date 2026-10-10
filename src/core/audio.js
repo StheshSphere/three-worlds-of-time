@@ -32,13 +32,17 @@ export class AudioManager {
 
     this.music = null;          // { source, gain, name }
     this.ambience = null;       // { nodes[], gain }
+    this.musicTracks = new Set();
+    this.effects = new Set();
+    this.positionals = new Set();
+    this._ambienceTail = null;
     this._noise = null;
     this.applyVolumes();
     settings.onChange((k) => { if (/Volume$/.test(k)) this.applyVolumes(); });
   }
 
   /** Browsers start AudioContexts suspended until a user gesture. */
-  unlock() { if (this.ctx.state !== 'running') this.ctx.resume(); }
+  unlock() { if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {}); }
 
   applyVolumes() {
     this.listener.setMasterVolume(settings.get('masterVolume'));
@@ -51,6 +55,8 @@ export class AudioManager {
   /* ------------------------------ music ------------------------------ */
   playMusic(name, fade = 2.5) {
     if (this.music && this.music.name === name) return;
+    // Rapid restarts may interrupt a crossfade. Keep only its current track.
+    for (const track of this.musicTracks) if (track !== this.music) this._disposeTrack(track);
     const buffer = assets.audio(`music:${name}`);
     const t = this.ctx.currentTime;
     if (this.music) {
@@ -70,7 +76,18 @@ export class AudioManager {
     gain.gain.linearRampToValueAtTime(1, t + fade);
     source.connect(gain).connect(this.musicBus);
     source.start(t + 0.05);
-    this.music = { source, gain, name };
+    const track = { source, gain, name };
+    this.musicTracks.add(track);
+    source.onended = () => this._disposeTrack(track);
+    this.music = track;
+  }
+
+  _disposeTrack(track) {
+    if (!this.musicTracks.delete(track)) return;
+    track.source.onended = null;
+    try { track.source.stop(); } catch { /* already ended */ }
+    track.source.disconnect();
+    track.gain.disconnect();
   }
 
   stopMusic(fade = 1.5) {
@@ -106,9 +123,12 @@ export class AudioManager {
     const gain = this.ctx.createGain();
     gain.gain.value = opts.volume ?? 1;
     source.connect(gain).connect(this.sfxBus);
+    this.effects.add(source);
     source.start();
-    source.onended = () => { source.disconnect(); gain.disconnect(); };
+    source.onended = () => { this.effects.delete(source); source.disconnect(); gain.disconnect(); };
   }
+
+  stopEffects() { for (const source of this.effects) { try { source.stop(); } catch { /* ended */ } } }
 
   /** Random variant: playVariant('step-grass', 4) → step-grass-0..3 */
   playVariant(prefix, count, opts) {
@@ -122,6 +142,8 @@ export class AudioManager {
   positional(name, object, { volume = 1, refDistance = 3, rolloff = 1.6, loop = true, rate = 1 } = {}) {
     const buffer = assets.audio(name);
     const sound = new THREE.PositionalAudio(this.listener);
+    let disposed = false;
+    const start = () => { if (!disposed && this.ctx.state === 'running' && sound.buffer && !sound.isPlaying && sound.parent) sound.play(); };
     sound.gain.disconnect();
     sound.gain.connect(this.sfxBus);
     if (buffer) {
@@ -132,10 +154,11 @@ export class AudioManager {
       sound.setVolume(volume);
       sound.setPlaybackRate(rate);
       if (this.ctx.state === 'running') sound.play();
-      else this.ctx.addEventListener('statechange', () => { if (this.ctx.state === 'running' && sound.buffer && !sound.isPlaying && sound.parent) sound.play(); }, { once: true });
+      else this.ctx.addEventListener('statechange', start);
     }
     object.add(sound);
-    let disposed = false;
+    const manager = this;
+    this.positionals.add(sound);
     return {
       sound,
       dispose() {
@@ -146,8 +169,12 @@ export class AudioManager {
         // and abort the rest of the unload disposal loop.
         if (disposed) return;
         disposed = true;
+        manager.ctx.removeEventListener('statechange', start);
+        manager.positionals.delete(sound);
         try { if (sound.isPlaying) sound.stop(); } catch { /* already stopped */ }
         try { sound.disconnect(); } catch { /* audio graph already torn down */ }
+        sound.gain.disconnect();
+        sound.buffer = null;
         if (sound.parent) sound.parent.remove(sound);
       },
     };
@@ -159,7 +186,7 @@ export class AudioManager {
     const len = this.ctx.sampleRate * 4;
     const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     const d = buf.getChannelData(0);
-    // Pink-ish noise (Paul Kellet's economy filter) — softer than white noise.
+    // Pink-ish noise (Paul Kellett's economy filter) — softer than white noise.
     let b0 = 0, b1 = 0, b2 = 0;
     for (let i = 0; i < len; i++) {
       const w = Math.random() * 2 - 1;
@@ -174,11 +201,14 @@ export class AudioManager {
 
   /** era: 'ruins' | 'lab' | 'neon' | null */
   setAmbience(era) {
+    if (this.ambience?.era === era) return;
     const t = this.ctx.currentTime;
+    if (this._ambienceTail) this._disposeAmbience(this._ambienceTail);
     if (this.ambience) {
       const old = this.ambience;
       old.gain.gain.setTargetAtTime(0, t, 0.6);
-      setTimeout(() => old.nodes.forEach((n) => { try { n.stop && n.stop(); } catch { /* */ } n.disconnect(); }), 3000);
+      old.timer = setTimeout(() => this._disposeAmbience(old), 3000);
+      this._ambienceTail = old;
       this.ambience = null;
     }
     if (!era) return;
@@ -258,6 +288,15 @@ export class AudioManager {
       lfo(0.031, 0.05, g4.gain);
       nodes.push(vp, g4);
     }
-    this.ambience = { nodes, gain };
+    this.ambience = { nodes, gain, era };
+  }
+
+  _disposeAmbience(ambience) {
+    clearTimeout(ambience.timer);
+    for (const node of ambience.nodes) {
+      try { node.stop?.(); } catch { /* already stopped */ }
+      node.disconnect();
+    }
+    if (this._ambienceTail === ambience) this._ambienceTail = null;
   }
 }

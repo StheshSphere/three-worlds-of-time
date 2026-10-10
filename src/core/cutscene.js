@@ -59,7 +59,21 @@ export class Cutscene {
     this.ui.caption(null);
     const cb = this.onDone;
     this.onDone = null;
+    this.steps = [];
+    this.shot = null;
+    this.ctx = null;
     if (cb) cb();
+  }
+
+  cancel() {
+    this.active = false;
+    this.steps = [];
+    this.tweens = [];
+    this.shot = null;
+    this.ctx = null;
+    this.onDone = null;
+    this.ui.cinema(false);
+    this.ui.caption(null);
   }
 
   update(dt) {

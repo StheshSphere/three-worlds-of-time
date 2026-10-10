@@ -1,0 +1,23 @@
+{
+  "suite": "Audio lifecycle with Web Audio double",
+  "passed": 4,
+  "failed": 0,
+  "results": [
+    {
+      "name": "Rapid era music changes retain at most two tracks; ended tracks disconnect",
+      "status": "PASS"
+    },
+    {
+      "name": "One-shot effects stop on unload and release their connections",
+      "status": "PASS"
+    },
+    {
+      "name": "Disposed positional audio cannot start later when the context unlocks",
+      "status": "PASS"
+    },
+    {
+      "name": "Ambience reuse/crossfade is bounded and volume settings route to every bus",
+      "status": "PASS"
+    }
+  ]
+}

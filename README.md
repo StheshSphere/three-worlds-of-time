@@ -105,16 +105,33 @@ the in-game **Credits** screen.
 
 ## Automated checks (dev only)
 
-`tools/play.mjs` drives the game in headless Chrome from a JSON script (start, teleport, solve puzzles via
-`window.__game.levels.debug`, take screenshots) and fails on any page error — handy before a demo.
+Requires Node 20+ and Python 3.10+ for development checks; neither is needed on the static host.
+
+```bash
+node tools/test-integration.mjs
+node tools/test-audio.mjs
+bash tools/build-deploy.sh
+python3 tools/test-release.py
+```
+
+The first two execute real gameplay/audio lifecycle code with DOM, renderer and Web Audio doubles.
+The release check extracts the ZIP independently and verifies every file over HTTP at a subfolder URL.
+These checks do **not** verify visuals, GPU memory, real input, audible output or a complete spatial playthrough.
+
+For installed Chrome, `tools/play.mjs` runs assertions and captures screenshots; it fails on console exceptions,
+asset warnings, missing resources and timeouts. The QA hook is opt-in with `?qa=1` (the runner adds it).
+See [release instructions](docs/RELEASE-INSTRUCTIONS.md), [Member 4 report](docs/member4-completion-report.md)
+and [verification results](docs/final-verification-summary.md) for the remaining manual browser/LAMP checks.
 
 ## AI assistance
 
 Large parts of this remaster were produced with AI assistance (Claude Code, Anthropic). This is declared in the in-game
-credits; every team member should still be able to explain the code they present.
+credits. Member 4 integration and release work also used OpenAI ChatGPT/Codex. Every team member should still be able
+to explain the code they present.
 
 ```bash
-python3 -m http.server 8000 &            # from the repo root
-cd tools && npm install
-node play.mjs tests/full-playthrough.json /tmp/shots   # all three eras → win screen, fails on any page error
+# Serve the extracted release in one terminal. In another, from the source root:
+npm --prefix tools install
+VIEW=third node tools/play.mjs tools/tests/member4-release.json out/third
+VIEW=first node tools/play.mjs tools/tests/member4-release.json out/first
 ```

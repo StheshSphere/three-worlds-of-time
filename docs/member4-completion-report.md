@@ -1,0 +1,27 @@
+# Member 4 completion report
+
+**The Three Worlds of Time — 10 October 2026**
+
+The supplied main snapshot has been updated with targeted Member 4 fixes and packaged as a full source project and independent static release. Existing level designs, media, controls, story and shader effects are preserved. **Implementation is delivered; browser acceptance and hosted acceptance remain incomplete.**
+
+| Responsibility | Actual work delivered |
+|---|---|
+| 1. Integration/regression | Era-owned delays replace stale callbacks; reset clears input, dash, camera transients and interaction targets. Restart honours the configured camera preference. Panels now set overlay state before pointer unlock; duplicate panel entries and stale keypad callbacks are cleared. Regression checks exercise all three puzzle state flows, cores 0→1→2→3, finale state, retry and restart in both view configurations. |
+| 2. Controls/camera/collision | Horizontal substeps prevent dash tunnelling through thin walls. Third-person camera checks physics-only blockers across the full shoulder path. V preserves yaw and clamps pitch. Blur/hidden-tab/frozen input is cleared or ignored; pointer-lock errors return to a usable pause screen. |
+| 3. UI consistency | Final-release label, numeric accessible core counter, clearer controls, objective/prompt contrast, responsive HUD/panel spacing, keyboard focus styling, synchronised volume/options and mute state. Existing visual language retained. Visual inspection is pending. |
+| 4. Performance/cleanup | Shared cached geometry/materials/textures survive era unload; owned sprites, skeletons, shadows and scene resources are disposed. Audio crossfade tails are bounded, finished sounds disconnect, old positional listeners are removed. Cutscene closures and timed callbacks are released. Raycast result arrays are reused, hidden-tab rendering is skipped and the hidden narrow-screen minimap no longer renders. FPS calculations now use real elapsed time. |
+| 5. Credits/assets | Public source credits and bundled MIT/OFL notices added; Future music author corrected; missing optional Lab audio requests removed while preserving shared fallbacks. Hoskins hash helpers attributed. Kellett pink-noise permission remains explicitly unresolved. All 125 inherited asset files are byte-identical. |
+| 6. Release build/test | Import-graph packaging validates 30 source JS modules, paths and case. Clean ZIP includes 48 runtime modules and 180 files. Independent extraction under an HTTP subfolder verifies every file's bytes/status and JS MIME; 33 GLB dependency checks pass. |
+| 7. LAMP preparation | Root-level index.html ZIP ready for the course upload route; exact local/hosted test and Git handoff steps included. No external deployment, push, PR or merge is claimed. |
+
+**Important fixes:** shared assets were previously disposed during era swaps; level delays could survive a restart; rapid audio transitions could retain sources/listeners; player state survived some resets; physics-only walls were absent from the camera ray test; optional missing sounds caused avoidable HTTP requests. Source inspection identified these risks; executable checks verify the corrected logic within their stated scope.
+
+**Evidence:** 19 gameplay/controller/UI/cleanup logic checks and four audio lifecycle/routing checks pass. The test doubles replace DOM/rendering and Web Audio; puzzle debug helpers accelerate progression. They do not establish a visual playthrough or audible quality. The independently served release passes all 180 file checks. Full results and all 23 acceptance criteria are in `final-verification-summary.md`; raw results are in the source ZIP under `docs/verification/`.
+
+**Performance scope:** the 36 standalone PBR maps remain 1024×1024. Existing quality settings, shadows, instancing, particles and shader algorithms are retained. Tests verify bounded audio tracking and disposal ownership; no measured FPS gain, GPU-memory plateau or absence of all leaks is claimed.
+
+**Changed files:** `index.html`, `credits.html`; `src/main.js`, `player.js`, `character.js`, `levelManager.js`, `style.css`; `src/core/{assets,audio,cutscene,kit,ui}.js`; only delayed-callback integration lines in `src/levels/{modernLab,neonFuture}.js`; attribution comment in `src/shaders/noise.glsl.js`; release/browser tooling, new Node/HTTP tests, licence notices, README, AGENTS and handoff/audit documents. Ancient gameplay, the Time Machine model, all media and shader algorithms are unchanged.
+
+**Remaining acceptance work:** Chrome could not launch in this environment and the cloud browser could not reach the local server. Consequently real start-to-win playthroughs, UI screenshots, pointer-lock behaviour, sound, shader compilation, GPU memory and FPS are NOT VERIFIED. LAMP access was unavailable. Resolve the pink-noise permission question and confirm acceptance of the supplied Lab's keypad/conduit design: the older guide describes a keycard and BLUE→RED→GREEN breaker variant that is absent from the supplied main. The implemented Lab was preserved, not rebuilt.
+
+**Contribution summary:** “I completed final integration and release preparation: strengthened movement/camera handling, reset and overlay behaviour, shared-resource and audio cleanup, HUD consistency, credits and static packaging. I added repeatable regression checks and documented the remaining browser and hosted acceptance work.” AI assistance is disclosed in the game.

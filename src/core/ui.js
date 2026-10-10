@@ -12,6 +12,7 @@ export class UI {
     this.audio = audio;
     this.stack = [];               // open panel screens (options/controls/credits…)
     this.onPanelClosed = null;
+    this.onPanelOpened = null;
     this._cache = {};
     this._messageTimer = null;
     this.journal = [];
@@ -33,9 +34,13 @@ export class UI {
   isOpen(id) { return !$(id).classList.contains('hidden'); }
 
   openPanel(id) {
+    if (this.stack.includes(id)) return;
     this.openedAt = performance.now();
+    this._panelFocus = document.activeElement;
     this.stack.push(id);
     this.show(id);
+    $(id).querySelector('button, input, select')?.focus({ preventScroll: true });
+    if (this.onPanelOpened) this.onPanelOpened(id);
     this.audio.play('ui-open', { volume: 0.4 });
   }
 
@@ -43,13 +48,31 @@ export class UI {
     const id = this.stack.pop();
     if (!id) return null;
     this.hide(id);
+    if (id === 'keypad-screen') { clearTimeout(this._keypadTimer); this.onKeypadSubmit = null; }
     this.audio.play('ui-close', { volume: 0.4 });
     if (this.onPanelClosed) this.onPanelClosed(id);
+    if (!document.pointerLockElement && this._panelFocus?.isConnected) this._panelFocus.focus({ preventScroll: true });
     return id;
   }
 
-  closeAllPanels() { while (this.stack.length) this.hide(this.stack.pop()); }
+  closeAllPanels() {
+    while (this.stack.length) this.hide(this.stack.pop());
+    clearTimeout(this._keypadTimer);
+    this.onKeypadSubmit = null;
+    this._panelFocus = null;
+  }
   get panelOpen() { return this.stack.length > 0; }
+
+  resetTransient() {
+    this.closeAllPanels();
+    this.stopSay();
+    this.clearMessage();
+    this.hideTutorial();
+    clearTimeout(this._eraTimer);
+    this.hide('era-card');
+    this.setPrompt(null);
+    this.setHint('');
+  }
   /** True just after a panel opened — stops the opening keypress from also closing it. */
   get justOpened() { return performance.now() - (this.openedAt || 0) < 300; }
 
@@ -126,7 +149,7 @@ export class UI {
     if (this._tutorial) this.tutorial(this._tutorial, 15);
   }
 
-  hideTutorial() { $('tutorial-card').classList.add('hidden'); this._tutorial = null; }
+  hideTutorial() { clearTimeout(this._tutTimer); $('tutorial-card').classList.add('hidden'); this._tutorial = null; }
 
   /** Screen-space waypoint. edgeAngle (radians) set → pinned to the screen edge, arrow pointing out. */
   setWaypoint(visible, x = 0, y = 0, dist = 0, edgeAngle = null) {
@@ -150,6 +173,7 @@ export class UI {
 
   setCores(n) {
     document.querySelectorAll('.core-slot').forEach((el, i) => el.classList.toggle('lit', i < n));
+    this._set('core-count', 'text', `Cores ${n} / 3`);
   }
 
   setPrompt(text) {
@@ -169,7 +193,7 @@ export class UI {
     this._messageTimer = setTimeout(() => el.classList.remove('active'), ms);
   }
 
-  clearMessage() { $('message-banner').classList.remove('active'); }
+  clearMessage() { clearTimeout(this._messageTimer); $('message-banner').classList.remove('active'); }
 
   setDash(visible, ready) {
     this._set('dash-meter', 'hidden', !visible);
@@ -266,7 +290,10 @@ export class UI {
         disp.classList.add(ok ? 'ok' : 'error');
         this.audio.play(ok ? 'ui-confirm' : 'ui-error');
         if (!ok) this._keypadValue = '';
-        else setTimeout(() => { if (this.isOpen('keypad-screen')) this.closeTopPanel(); }, 700);
+        else {
+          clearTimeout(this._keypadTimer);
+          this._keypadTimer = setTimeout(() => { if (this.isOpen('keypad-screen')) this.closeTopPanel(); }, 700);
+        }
       } else if (this._keypadValue.length < 4) this._keypadValue += k;
       this.audio.play('keypad', { volume: 0.6 });
       disp.textContent = (this._keypadValue + '____').slice(0, 4);
@@ -281,6 +308,7 @@ export class UI {
   }
 
   openKeypad(onSubmit) {
+    clearTimeout(this._keypadTimer);
     this._keypadValue = '';
     $('keypad-display').textContent = '____';
     $('keypad-display').classList.remove('error', 'ok');
@@ -298,6 +326,10 @@ export class UI {
         const val = input.type === 'checkbox' ? input.checked : (input.type === 'range' ? Number(input.value) : input.value);
         settings.set(key, val);
       });
+    });
+    settings.onChange((key, value) => {
+      const input = document.querySelector(`[data-setting="${key}"]`);
+      if (input) { if (input.type === 'checkbox') input.checked = !!value; else input.value = value; }
     });
   }
 

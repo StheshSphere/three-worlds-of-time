@@ -96,24 +96,43 @@ player.addEventListener('unlock', () => {
   if (levels.state === 'failed' || levels.state === 'won') return;
   pause();
 });
+player.addEventListener('lockerror', () => {
+  if (mode === 'playing' || mode === 'paused') {
+    pause();
+    ui.setPauseLevel('Click Resume to capture the mouse and continue.');
+  }
+});
+const loseFocus = () => {
+  player._clearKeys();
+  if (mode === 'playing') pause();
+};
+window.addEventListener('blur', loseFocus);
+document.addEventListener('visibilitychange', () => { if (document.hidden) loseFocus(); });
 
 /* =====================================================================
    Game flow
    ===================================================================== */
 function pause() {
   mode = 'paused';
+  player._clearKeys();
+  player.unlock();
+  ui.setPrompt(null);
   ui.setPauseLevel(`You are in ${levels.meta ? levels.meta.title.toLowerCase() : 'the timeline'} — ${levels.meta ? levels.meta.subtitle : ''}.`);
   ui.show('pause-screen');
 }
 
 function resume() {
   ui.closeAllPanels();
-  ui.hide('pause-screen');
   player.lock();
 }
 
 function showTitle() {
   mode = 'title';
+  clearTimeout(creditsTimer);
+  cutscene.cancel();
+  ui.rollCredits(false);
+  ui.endCard(false);
+  player.unlock();
   for (const id of ['hud', 'pause-screen', 'fail-screen', 'win-screen']) ui.hide(id);
   ui.closeAllPanels();
   timeMachine.reset();
@@ -241,6 +260,7 @@ function syncVolumeUI(value) {
   for (const b of muteButtons) {
     b.textContent = muted ? 'Unmute' : 'Mute';
     b.classList.toggle('muted', muted);
+    b.setAttribute('aria-pressed', String(muted));
     b.title = muted ? 'Sound is muted — click to restore volume' : 'Mute all sound';
   }
 }
@@ -256,7 +276,15 @@ syncVolumeUI(settings.get('masterVolume'));
 // Focusing the slider can never leave movement keys stuck: keys are cleared
 // whenever pointer lock is lost, and focus is dropped the moment play
 // resumes so arrow keys never nudge the volume mid-game.
-player.addEventListener('lock', () => { for (const el of [...muteButtons, ...quickVolumeSliders]) el.blur(); });
+player.addEventListener('lock', () => document.activeElement?.blur());
+
+ui.onPanelOpened = () => {
+  if (mode === 'playing' || mode === 'overlay') {
+    mode = 'overlay';
+    player._clearKeys();
+    player.unlock();
+  }
+};
 
 // Closing a level overlay (note, terminal, keypad, journal) returns to play.
 ui.onPanelClosed = () => {
@@ -275,7 +303,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyE' && ui.isOpen('reader-screen') && !ui.justOpened) { ui.closeTopPanel(); return; }
   if (e.code === 'KeyJ' && (mode === 'playing' || mode === 'overlay')) {
     if (ui.isOpen('journal-screen')) ui.closeTopPanel();
-    else if (mode === 'playing') { player.unlock(); ui.openPanel('journal-screen'); }
+    else if (mode === 'playing') ui.openPanel('journal-screen');
   }
   if (e.code === 'KeyM' && mode === 'playing') settings.set('minimap', !settings.get('minimap'));
   if (e.code === 'KeyH' && mode === 'playing') ui.toggleTutorial();
@@ -342,7 +370,9 @@ let titleAngle = 0;
 
 function frame() {
   requestAnimationFrame(frame);
-  const dt = Math.min(clock.getDelta(), 0.05);   // clamp: no huge steps after tab-switch
+  const elapsed = clock.getDelta();
+  const dt = Math.min(elapsed, 0.05);   // physics clamp; FPS uses real elapsed time
+  if (document.hidden) return;
   t += dt;
 
   const running = mode === 'playing' || mode === 'title' || mode === 'cutscene' || mode === 'credits';
@@ -371,8 +401,8 @@ function frame() {
     const prompt = obj ? (typeof obj.userData.prompt === 'function' ? obj.userData.prompt() : obj.userData.prompt) : null;
     ui.setPrompt(levels.state === 'playing' ? prompt : null);
     ui.setDash(player.canDash, player.dashReady);
-    ui.setMinimapVisible(settings.get('minimap'));
-    minimap.enabled = settings.get('minimap');
+    minimap.enabled = settings.get('minimap') && window.innerWidth > 760;
+    ui.setMinimapVisible(minimap.enabled);
   }
 
   updateWaypoint();
@@ -381,14 +411,15 @@ function frame() {
 
   // FPS counter + one-time automatic downgrade on slow lab machines.
   fpsFrames++;
-  fpsTime += dt;
+  fpsTime += elapsed;
   if (fpsTime >= 0.5) {
     const fps = Math.round(fpsFrames / fpsTime);
     ui.setFps(fps);
     // Measure only after 8 s of uninterrupted play (shader compilation and
     // asset uploads stutter right after an era loads), then judge on the
     // MEDIAN of 10 s of samples so one hitch can't trigger a downgrade.
-    if (mode === 'playing' && levels.state === 'playing') playSeconds += 0.5; else playSeconds = 0;
+    if (mode === 'playing' && levels.state === 'playing') playSeconds += fpsTime;
+    else { playSeconds = 0; perfSamples.length = 0; }
     if (playSeconds > 8 && !userPickedQuality && settings.get('quality') !== 'low') {
       perfSamples.push(fps);
       if (perfSamples.length >= 20) {
@@ -415,12 +446,12 @@ frame();
 
 /* =====================================================================
    Debug / QA hook — lets automated tests and the team drive the game from
-   the browser console (e.g. __game.skipTo(2)). Harmless in production.
+   the browser console (e.g. __game.skipTo(2)). Opt in with ?qa=1.
    ===================================================================== */
-window.__game = {
+if (new URLSearchParams(location.search).get('qa') === '1') window.__game = {
   THREE, scene, renderer, camera, player, timeMachine, levels, audio, ui, postfx, settings,
   start: startGame,
-  skipTo(i) { cutscene.active = false; ui.cinema(false); player.frozen = false; levels.load(i); mode = 'playing'; ui.hide('title-screen'); ui.show('hud'); },
+  skipTo(i) { cutscene.cancel(); player.frozen = false; levels.load(i); mode = 'playing'; ui.hide('title-screen'); ui.show('hud'); },
   cutscene,
   story: { startGame, beginPast, startEpilogue, endCredits },
   mode: () => mode,

@@ -34,6 +34,9 @@ const _target = new THREE.Vector3();
 const _camDir = new THREE.Vector3();
 const _euler = new THREE.Euler(0, 0, 0, 'YXZ');
 const _prev = new THREE.Vector3();
+const _cameraBox = new THREE.Box3();
+const _cameraHit = new THREE.Vector3();
+const _cameraPath = new THREE.Vector3();
 
 /**
  * Player controller: mouse-look, movement physics, collisions, camera rig,
@@ -120,6 +123,9 @@ export class Player extends THREE.EventDispatcher {
     this._groundRay = new THREE.Raycaster();
     this._interactRay = new THREE.Raycaster();
     this._camRay = new THREE.Raycaster();
+    this._groundHits = [];
+    this._cameraHits = [];
+    this._interactionHits = [];
 
     this._bindInput();
   }
@@ -130,10 +136,19 @@ export class Player extends THREE.EventDispatcher {
   get isDashing() { return this._dashTime > 0; }
 
   /* ----------------------------- input ------------------------------ */
-  lock() { if (!this.isLocked) this.dom.requestPointerLock(); }
+  lock() {
+    if (this.isLocked) return;
+    try {
+      const request = this.dom.requestPointerLock();
+      request?.catch(() => this.dispatchEvent({ type: 'lockerror' }));
+    } catch { this.dispatchEvent({ type: 'lockerror' }); }
+  }
   unlock() { if (document.pointerLockElement) document.exitPointerLock(); }
 
   _bindInput() {
+    document.addEventListener('pointerlockerror', () => this.dispatchEvent({ type: 'lockerror' }));
+    window.addEventListener('blur', () => this._clearKeys());
+    document.addEventListener('visibilitychange', () => { if (document.hidden) this._clearKeys(); });
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === this.dom;
       if (locked === this.isLocked) return;
@@ -142,7 +157,7 @@ export class Player extends THREE.EventDispatcher {
       this.dispatchEvent({ type: locked ? 'lock' : 'unlock' });
     });
     document.addEventListener('mousemove', (e) => {
-      if (!this.isLocked || !this.inputEnabled) return;
+      if (!this.isLocked || !this.inputEnabled || this.frozen) return;
       const s = 0.0022 * settings.get('sensitivity');
       this.yaw -= e.movementX * s;
       this.pitch -= e.movementY * s * (settings.get('invertY') ? -1 : 1);
@@ -151,7 +166,7 @@ export class Player extends THREE.EventDispatcher {
       this.pitch = THREE.MathUtils.clamp(this.pitch, lo, hi);
     });
     this.dom.addEventListener('mousedown', (e) => {
-      if (!this.isLocked || !this.inputEnabled) return;
+      if (!this.isLocked || !this.inputEnabled || this.frozen) return;
       if (e.button === 0) this.tryInteract();
       if (e.button === 2) this.tryDash();
     });
@@ -160,10 +175,16 @@ export class Player extends THREE.EventDispatcher {
     window.addEventListener('keyup', (e) => this._key(e, false));
   }
 
-  _clearKeys() { for (const k of Object.keys(this.keys)) this.keys[k] = false; }
+  _clearKeys() {
+    for (const k in this.keys) this.keys[k] = false;
+    this._jumpBuffer = 0;
+    this._pushTimer = 0;
+    this._pushTarget = null;
+  }
 
   _key(e, down) {
-    if (!this.isLocked || !this.inputEnabled) { if (!down) this._key2(e.code, false); return; }
+    if (!this.isLocked || !this.inputEnabled || this.frozen) { if (!down) this._key2(e.code, false); return; }
+    if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
     this._key2(e.code, down, e.repeat);
   }
 
@@ -184,6 +205,7 @@ export class Player extends THREE.EventDispatcher {
       case 'KeyV': case 'KeyC':
         if (down && !repeat) {
           this.mode = this.mode === 'first' ? 'third' : 'first';
+          this.pitch = THREE.MathUtils.clamp(this.pitch, this.mode === 'third' ? -0.95 : -1.45, this.mode === 'third' ? 0.9 : 1.45);
           this.dispatchEvent({ type: 'view', mode: this.mode });
         }
         break;
@@ -296,6 +318,18 @@ export class Player extends THREE.EventDispatcher {
   }
 
   reset() {
+    this._clearKeys();
+    this._coyote = 0;
+    this._dashCooldown = 0;
+    this._airDashUsed = false;
+    this._pushCooldown = 0;
+    this._stepDist = 0;
+    this._fallSpeed = 0;
+    this._shake = 0;
+    this._fovKick = 0;
+    this._camDist = TP_DISTANCE;
+    this.speed = 0;
+    this.nearbyInteractable = null;
     if (this.hasCheckpoint) {
       this.rig.position.copy(this.checkpoint);
       this.yaw = this.checkpointYaw;
@@ -354,6 +388,7 @@ export class Player extends THREE.EventDispatcher {
   _resolveCollisions(dt) {
     const p = this.rig.position;
     let pushed = null;
+    let pushNX = 0, pushNZ = 0;
     for (const obj of this.colliders) {
       const box = obj.userData.solidBox;
       if (!box) continue;
@@ -383,16 +418,16 @@ export class Player extends THREE.EventDispatcher {
       const into = this.velocity.x * nx + this.velocity.z * nz;
       if (into < 0) { this.velocity.x -= into * nx; this.velocity.z -= into * nz; }
       // Pushing: keep walking into a pushable for a moment → it moves one tile.
-      if (obj.userData.onPush && _move.lengthSq() > 0.25 && (-nx * _move.x - nz * _move.z) > 0.7) pushed = { obj, nx, nz };
+      if (obj.userData.onPush && _move.lengthSq() > 0.25 && (-nx * _move.x - nz * _move.z) > 0.7) { pushed = obj; pushNX = nx; pushNZ = nz; }
       if (obj.userData.onTouch) obj.userData.onTouch(this);
     }
     if (pushed && this._pushCooldown <= 0) {
-      if (this._pushTarget !== pushed.obj) { this._pushTarget = pushed.obj; this._pushTimer = 0; }
+      if (this._pushTarget !== pushed) { this._pushTarget = pushed; this._pushTimer = 0; }
       this._pushTimer += dt;
       if (this._pushTimer > 0.22) {
-        const ax = Math.abs(pushed.nx) > Math.abs(pushed.nz) ? -Math.sign(pushed.nx) : 0;
-        const az = ax === 0 ? -Math.sign(pushed.nz) : 0;
-        pushed.obj.userData.onPush(ax, az, this);
+        const ax = Math.abs(pushNX) > Math.abs(pushNZ) ? -Math.sign(pushNX) : 0;
+        const az = ax === 0 ? -Math.sign(pushNZ) : 0;
+        pushed.userData.onPush(ax, az, this);
         this.hero.play('use', { speed: 1.8 });
         this._pushTimer = 0;
         this._pushCooldown = 0.5;
@@ -447,12 +482,15 @@ export class Player extends THREE.EventDispatcher {
 
       // 4. integrate
       _prev.copy(p);
-      p.x += this.velocity.x * dt;
-      p.z += this.velocity.z * dt;
       p.y += this.velocity.y * dt;
 
-      // 5. walls
-      this._resolveCollisions(dt);
+      // Short horizontal sweeps prevent a dash tunnelling through thin doors.
+      const steps = Math.max(1, Math.ceil(Math.hypot(this.velocity.x, this.velocity.z) * dt / 0.2));
+      for (let step = 0; step < steps; step++) {
+        p.x += this.velocity.x * dt / steps;
+        p.z += this.velocity.z * dt / steps;
+        this._resolveCollisions(dt / steps);
+      }
       p.x = THREE.MathUtils.clamp(p.x, -this.bounds, this.bounds);
       p.z = THREE.MathUtils.clamp(p.z, -this.bounds, this.bounds);
 
@@ -464,7 +502,8 @@ export class Player extends THREE.EventDispatcher {
       _origin.set(p.x, originY, p.z);
       this._groundRay.set(_origin, _down);
       this._groundRay.far = originY - p.y + (wasGrounded ? 0.35 : 0.05);
-      const hit = this.walkables.length ? this._groundRay.intersectObjects(this.walkables, false)[0] : null;
+      this._groundHits.length = 0;
+      const hit = this._groundRay.intersectObjects(this.walkables, false, this._groundHits)[0];
       if (hit && this.velocity.y <= 0.01) {
         if (!wasGrounded) {
           this._fallSpeed = -this.velocity.y;
@@ -546,17 +585,26 @@ export class Player extends THREE.EventDispatcher {
       let want = TP_DISTANCE;
       this._camRay.set(_target, _camDir);
       this._camRay.far = TP_DISTANCE + 0.3;
-      const hits = this._camRay.intersectObjects(this.walkables, false);
-      const hits2 = this._camRay.intersectObjects(this.colliders, false);
-      const h = [hits[0], hits2[0]].filter(Boolean).sort((a, b) => a.distance - b.distance)[0];
+      this._cameraHits.length = 0;
+      const h = this._camRay.intersectObjects(this.walkables, false, this._cameraHits)[0];
       if (h) want = Math.max(0.6, h.distance - 0.3);
       // Snap in fast (never clip through a wall), ease out slowly.
       this._camDist = want < this._camDist ? want : this._camDist + (want - this._camDist) * (1 - Math.exp(-3 * dt));
       this.camera.position.copy(_target).addScaledVector(_camDir, this._camDist);
-      // Squeezed against a wall: lift the camera so the hood doesn't fill the screen.
-      if (this._camDist < 2.2) this.camera.position.y += (2.2 - this._camDist) * 0.35;
+      // Physics-only proxies and Object3D blockers have no raycast mesh.
+      // Sweep the full head-to-camera path, including the shoulder offset.
+      _cameraPath.subVectors(this.camera.position, _head);
+      let distance = _cameraPath.length();
+      _cameraPath.normalize();
+      this._camRay.set(_head, _cameraPath);
+      for (const obj of this.colliders) {
+        if (!obj.userData.solidBox) continue;
+        _cameraBox.copy(obj.userData.solidBox).expandByScalar(0.18);
+        if (this._camRay.ray.intersectBox(_cameraBox, _cameraHit)) distance = Math.min(distance, Math.max(0.05, _cameraHit.distanceTo(_head) - 0.05));
+      }
+      this.camera.position.copy(_head).addScaledVector(_cameraPath, distance);
       // Fade the hero out if the camera is jammed against them.
-      this.hero.group.visible = this.frozen || this._camDist > 0.9;
+      this.hero.group.visible = this.frozen || distance > 0.9;
     }
 
     if (this._shake > 0) {
@@ -572,7 +620,8 @@ export class Player extends THREE.EventDispatcher {
     if (!this.interactables.length || this.frozen) return;
     this._interactRay.set(this.camera.position, _look);
     this._interactRay.far = (this.mode === 'third' ? this._camDist + 0.6 : 0) + INTERACT_RANGE;
-    const hits = this._interactRay.intersectObjects(this.interactables, true);
+    this._interactionHits.length = 0;
+    const hits = this._interactRay.intersectObjects(this.interactables, true, this._interactionHits);
     for (const hit of hits) {
       if (hit.point.distanceTo(_head) > INTERACT_RANGE + 0.4) continue;
       let o = hit.object;
