@@ -102,11 +102,11 @@ kbd {
 
 /* ----------------------------- era card ---------------------------- */
 #era-card { position: fixed; inset: 0; z-index: 25; pointer-events: none; display: flex; align-items: center; justify-content: center; }
-#era-card .letterbox { position: absolute; left: 0; right: 0; height: 11vh; background: #000; animation: bars 4.6s ease both; }
+#era-card .letterbox { position: absolute; left: 0; right: 0; height: 11vh; background: #000; animation: bars 0.55s ease both; }
 #era-card .letterbox.top { top: 0; } #era-card .letterbox.bottom { bottom: 0; }
-@keyframes bars { 0% { transform: scaleY(0); } 12%, 82% { transform: scaleY(1); } 100% { transform: scaleY(0); } }
-.era-card-text { text-align: center; animation: cardText 4.6s ease both; text-shadow: 0 0 30px rgba(0, 0, 0, 0.8); }
-@keyframes cardText { 0% { opacity: 0; letter-spacing: 0.6em; } 18%, 78% { opacity: 1; letter-spacing: 0.08em; } 100% { opacity: 0; } }
+@keyframes bars { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.era-card-text { text-align: center; animation: cardText 0.8s ease both; text-shadow: 0 0 30px rgba(0, 0, 0, 0.8); pointer-events: auto; cursor: pointer; }
+@keyframes cardText { from { opacity: 0; letter-spacing: 0.6em; } to { opacity: 1; letter-spacing: 0.08em; } }
 #era-card-numeral { font-size: 1.4rem; color: var(--accent); margin: 0; }
 #era-card-title { font-size: clamp(2.4rem, 6vw, 4.4rem); margin: 0.2rem 0; color: #fff; }
 #era-card-sub { font-size: 1.3rem; letter-spacing: 0.3em; text-transform: uppercase; color: var(--accent); margin: 0; }
@@ -203,15 +203,24 @@ kbd {
 .cine-bar.top { top: 0; } .cine-bar.bottom { bottom: 0; }
 #cinema.no-bars .cine-bar { transform: scaleY(0); }
 #skip-hint { position: absolute; right: 28px; bottom: calc(11vh + 14px); color: var(--muted); font-size: 0.95rem; letter-spacing: 0.1em; opacity: 0.8; }
-#caption { position: fixed; left: 50%; bottom: 15vh; transform: translateX(-50%); z-index: 27; pointer-events: none;
+#caption { position: fixed; left: 50%; bottom: 15vh; transform: translateX(-50%); z-index: 27; pointer-events: auto; cursor: pointer;
   max-width: min(860px, 88vw); padding: 0.9rem 1.6rem 1rem; border-radius: 12px; background: rgba(4, 6, 12, 0.72);
   border: 1px solid var(--line); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); text-align: left; animation: capIn 0.35s ease both; }
 #caption.in-game { bottom: 21vh; }
+#caption { max-height: 65vh; overflow-y: auto; }
+.era-card-text { max-height: 75vh; overflow-y: auto; }
 @keyframes capIn { from { opacity: 0; transform: translateX(-50%) translateY(8px); } to { opacity: 1; transform: translateX(-50%); } }
 #caption-speaker { font-family: 'Cinzel', serif; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-size: 0.9rem; margin-bottom: 0.25rem; }
 #caption-speaker:empty { display: none; }
 #caption-text { font-size: 1.35rem; line-height: 1.4; color: #fff; text-shadow: 0 1px 4px #000; min-height: 1.4em; }
 #caption.narrator #caption-text { font-style: italic; color: #f4e6c8; }
+.dialogue-instruction { color: var(--gold); font-size: 1.05rem; margin: 0.7rem 0 0; font-weight: 600; }
+.dialogue-continue { display: block; margin: 0.65rem 0 0; padding: 0.4rem 0.6rem; color: var(--accent); background: rgba(4, 6, 12, 0.7); border: 1px solid var(--line); border-radius: 5px; font: 600 0.82rem 'Rajdhani', sans-serif; letter-spacing: 0.12em; cursor: pointer; }
+.era-card-text .dialogue-continue { margin: 0.75rem auto 0; }
+.dialogue-continue:hover, .dialogue-continue:focus-visible { color: #fff; border-color: var(--gold); outline: 2px solid var(--accent); outline-offset: 2px; }
+.dialogue-reminder { color: var(--gold); margin: 0.55rem 0 0; font-size: 0.95rem; animation: dialogueReminder 0.65s ease both; }
+@keyframes dialogueReminder { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .dialogue-reminder { animation: none; } }
 #end-card { position: fixed; inset: 0; z-index: 29; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; animation: rise 2s ease both; text-shadow: 0 0 30px rgba(0, 0, 0, 0.8); }
 #end-card h1 { font-size: clamp(2.6rem, 6vw, 4.8rem); margin: 0; color: #fff3d6; }
 #end-card p { margin: 0.6rem 0 0; color: var(--gold); font-size: 1.4rem; }

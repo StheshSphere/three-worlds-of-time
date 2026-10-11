@@ -260,10 +260,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     state = title ? 'title' : cutscene ? 'cutscene' : 'playing';
     stateTime = 0;
     if (!title && !cutscene) {
-      showEraCard();
-      // The how-to-play card waits for the era card (4.7s) to finish so the
-      // story line gets the screen to itself first.
-      if (meta.introCard) after(5200, () => api.tutorial('intro', meta.introCard, 16));
+      startPlay();
     }
     if (callbacks.onLoaded) callbacks.onLoaded(i);
   }
@@ -275,12 +272,19 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
   }
 
   /** After a cutscene: hand control to the player and start the era's clock. */
-  function startPlay() {
-    state = 'playing';
+  function startPlay({ arrival = false } = {}) {
+    state = 'arrival';
     stateTime = 0;
-    player.frozen = false;
+    player.frozen = true;
+    player._clearKeys();
     showEraCard();
-    if (meta.introCard) after(5600, () => api.tutorial('intro', meta.introCard, 16));
+    if (arrival && callbacks.onEraArrive) callbacks.onEraArrive(index);
+    ui.afterDialogue(() => {
+      state = 'playing';
+      stateTime = 0;
+      player.frozen = false;
+      if (meta.introCard) after(600, () => api.tutorial('intro', meta.introCard, 16));
+    });
   }
 
   /* ------------------------------ core → next era ---------------------------- */
@@ -288,17 +292,22 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     if (state !== 'playing') return;
     state = 'transition';
     stateTime = 0;
-    pending = { phase: 'out', next: index + 1 };
+    pending = { phase: 'dialogue', next: index + 1 };
     player.frozen = true;
     player._clearKeys();
-    audio.play('core-get', { volume: 0.9 });
-    audio.duck(0.25, 3);
-    ui.message(index < 2 ? 'The core is yours — the Time Machine calls it home…' : 'The final core! Hold on — the machine is pulling you back…', 3000);
+    ui.afterDialogue(() => {
+      pending.phase = 'out';
+      stateTime = 0;
+      audio.play('core-get', { volume: 0.9 });
+      audio.duck(0.25, 3);
+      ui.message(index < 2 ? 'The core is yours — the Time Machine calls it home…' : 'The final core! Hold on — the machine is pulling you back…', 3000);
+    });
   }
 
   function fail(reason) {
     if (state !== 'playing') return;
     state = 'failing';
+    ui.stopSay();
     stateTime = 0;
     player.frozen = true;
     player.hero.play('death', { hold: true });
@@ -423,7 +432,6 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
             player.hero.setCores(cores);
             player.frozen = false;
             load(pending.next, { cutscene: true });
-            showEraCard();
             player.frozen = true;
             state = 'transition';
             pending = { phase: 'in' };
@@ -437,10 +445,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
         if (stateTime > 1.6) {
           u.uWarp.value = 0;
           u.uFlash.value = 0;
-          player.frozen = false;
-          state = 'playing';
-          if (callbacks.onEraArrive) callbacks.onEraArrive(index);
-          if (meta.introCard) after(5600, () => api.tutorial('intro', meta.introCard, 16));
+          startPlay({ arrival: true });
         }
       }
     }

@@ -1,0 +1,83 @@
+{
+  "suite": "Focused dialogue logic (DOM/render doubles; fake reminder clock)",
+  "passed": 19,
+  "failed": 0,
+  "results": [
+    {
+      "name": "Initial instruction appears once; full text stays until acknowledgement",
+      "status": "PASS"
+    },
+    {
+      "name": "Enter and NumpadEnter each advance exactly one line, held/repeated keys do not",
+      "status": "PASS"
+    },
+    {
+      "name": "A held final Enter cannot activate unrelated controls or a new sequence",
+      "status": "PASS"
+    },
+    {
+      "name": "Caption click and accessible Continue activation advance once",
+      "status": "PASS"
+    },
+    {
+      "name": "Locked-pointer clicks advance and are consumed before game actions",
+      "status": "PASS"
+    },
+    {
+      "name": "The gameplay click opening dialogue cannot also advance its first line",
+      "status": "PASS"
+    },
+    {
+      "name": "Reminder appears at 10 seconds once, never dismisses or advances text",
+      "status": "PASS"
+    },
+    {
+      "name": "Advancing hides reminder immediately and starts a fresh 10-second timer",
+      "status": "PASS"
+    },
+    {
+      "name": "Pause/resume preserves remaining reminder time and blocks dialogue input",
+      "status": "PASS"
+    },
+    {
+      "name": "Reader/keypad overlays suspend captions, leave Enter for the keypad, then restore",
+      "status": "PASS"
+    },
+    {
+      "name": "Tab visibility and focus each suspend timing without dismissing text",
+      "status": "PASS"
+    },
+    {
+      "name": "Overlapping gameplay thoughts append in order instead of replacing unread lines",
+      "status": "PASS"
+    },
+    {
+      "name": "Clearing/restarting drops queued text, reminders and stale completion callbacks",
+      "status": "PASS"
+    },
+    {
+      "name": "Era narrative cards use the same instruction, reminder and click progression",
+      "status": "PASS"
+    },
+    {
+      "name": "Normal HUD notifications expire independently without advancing or blocking dialogue",
+      "status": "PASS"
+    },
+    {
+      "name": "prologue: every original line stays in order; later events and ending wait for acknowledgement",
+      "status": "PASS"
+    },
+    {
+      "name": "wakeUp: every original line stays in order; later events and ending wait for acknowledgement",
+      "status": "PASS"
+    },
+    {
+      "name": "epilogue: every original line stays in order; later events and ending wait for acknowledgement",
+      "status": "PASS"
+    },
+    {
+      "name": "Cancelling a waiting cinematic never runs its completion or later actions",
+      "status": "PASS"
+    }
+  ]
+}

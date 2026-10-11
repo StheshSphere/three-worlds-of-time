@@ -15,6 +15,7 @@ class Element extends EventTarget {
   toDataURL() { return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2iO0AAAAASUVORK5CYII='; }
   append(...items) { this.children.push(...items); }
   appendChild(item) { this.append(item); }
+  contains(item) { return item === this || this.children.some(child => child.contains?.(item)); }
   querySelector() { return new Element(); }
   querySelectorAll() { return []; }
   focus() { document.activeElement = this; }

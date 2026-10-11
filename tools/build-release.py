@@ -43,9 +43,9 @@ class Links(HTMLParser):
 for name in ('index.html', 'credits.html'):
     p = require(ROOT / name)
     if p.is_file():
-        Links().feed(p.read_text(encoding="utf-8"))
+        Links().feed(p.read_text())
 
-html = (ROOT / 'index.html').read_text(encoding="utf-8")
+html = (ROOT / 'index.html').read_text()
 imports = json.loads(re.search(r'<script type="importmap">(.*?)</script>', html, re.S)[1])['imports']
 seen = set()
 
@@ -55,7 +55,7 @@ def module(path):
     if path in seen or not path.is_file():
         return
     seen.add(path)
-    source = re.sub(r'/\*.*?\*/', '', path.read_text(encoding="utf-8"), flags=re.S)
+    source = re.sub(r'/\*.*?\*/', '', path.read_text(), flags=re.S)
     source = re.sub(r'^\s*//.*$', '', source, flags=re.M)
     for spec in re.findall(r'(?:^|\n)\s*(?:import|export)\s+(?:[^;]*?\s+from\s+)?[\'"]([^\'"]+)[\'"]', source):
         if spec.startswith('.'):
@@ -77,14 +77,14 @@ for p in (ROOT / 'src').rglob('*.js'):
     check = subprocess.run(['node', '--check', '--input-type=module'], input=p.read_bytes(), capture_output=True)
     if check.returncode:
         errors.append(f'Syntax error: {p.relative_to(ROOT)}\n{check.stderr.decode()}')
-    if re.search(r'''(?:from\s*['"][/]|(?:load|fetch)\w*\(\s*['"](?:/|https?://|file://))''', p.read_text(encoding="utf-8")):
+    if re.search(r'''(?:from\s*['"][/]|(?:load|fetch)\w*\(\s*['"](?:/|https?://|file://))''', p.read_text()):
         errors.append(f'Absolute runtime import/asset path: {p.relative_to(ROOT)}')
 
 css = require(ROOT / 'src/style.css')
-for url in re.findall(r'url\([\'"]?([^\)\'\"]+)', css.read_text(encoding="utf-8")):
+for url in re.findall(r'url\([\'"]?([^\)\'\"]+)', css.read_text()):
     relative_url(url, css.parent)
 
-manifest = (ROOT / 'src/core/assets.js').read_text(encoding="utf-8")
+manifest = (ROOT / 'src/core/assets.js').read_text()
 for path in re.findall(r"['\"](models/[^'\"]+\.glb)['\"]", manifest):
     require(ROOT / 'assets' / path)
 for key, folder, suffix in [('textures', 'textures', None), ('music', 'audio/music', '.ogg'), ('sfx', 'audio/sfx', '.ogg'), ("'modern-lab'", 'audio/modern-lab', '.ogg')]:

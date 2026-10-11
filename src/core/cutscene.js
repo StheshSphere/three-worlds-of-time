@@ -1,15 +1,15 @@
 import * as THREE from 'three';
 
 /**
- * Tiny cutscene engine: a script is a list of timed steps.
+ * Timed camera/action beats with player-acknowledged dialogue gates.
  *
  *   { at: 4,  cam: { pos:[x,y,z], look:[x,y,z], toPos?, toLook?, dur? } }  camera shot (eased dolly)
- *   { at: 4,  say: ['Ari', 'Line of dialogue', 4.5] }                        caption (typed out)
+ *   { at: 4,  say: ['Ari', 'Line of dialogue', 4.5] }                        caption (legacy duration ignored)
  *   { at: 9,  run: (ctx) => { … } }                                          any game event
  *   { at: 30, end: true }                                                    finish
  *
  * Camera positions may also be functions returning a Vector3 (to follow a
- * moving actor). Space / Enter / Esc skips the whole scene.
+ * moving actor). The shared dialogue controller owns Enter/click; Esc pauses.
  */
 const _p = new THREE.Vector3();
 const _l = new THREE.Vector3();
@@ -28,12 +28,14 @@ export class Cutscene {
   }
 
   play(steps, { onDone = null, letterbox = true, ctx = {} } = {}) {
+    this.ui.stopSay();
     this.steps = steps.map((s) => ({ ...s, fired: false })).sort((a, b) => a.at - b.at);
     this.t = 0;
     this.shot = null;
     this.onDone = onDone;
     this.ctx = ctx;
     this.active = true;
+    this.waiting = false;
     this.shakeAmount = 0;
     this.tweens = [];
     this.end = Math.max(...this.steps.map((s) => s.at + (s.cam?.dur || 0)));
@@ -55,6 +57,7 @@ export class Cutscene {
     // Run any unfinished tweens to their end state.
     if (this.tweens) { for (const tw of this.tweens) tw(999); this.tweens = []; }
     this.active = false;
+    this.waiting = false;
     this.ui.cinema(false);
     this.ui.caption(null);
     const cb = this.onDone;
@@ -67,29 +70,43 @@ export class Cutscene {
 
   cancel() {
     this.active = false;
+    this.waiting = false;
     this.steps = [];
     this.tweens = [];
     this.shot = null;
     this.ctx = null;
     this.onDone = null;
     this.ui.cinema(false);
+    this.ui.endCard(false);
     this.ui.caption(null);
   }
 
   update(dt) {
     if (!this.active) return;
-    this.t += dt;
+    if (!this.waiting) this.t += dt;
     if (this.tweens && this.tweens.length) this.tweens = this.tweens.filter((tw) => !tw(dt));
     for (const s of this.steps) {
+      if (this.waiting) break;
       if (s.fired || s.at > this.t) continue;
       s.fired = true;
-      if (s.cam) this.shot = { ...s.cam, start: s.at };
-      if (s.say) this.ui.caption(s.say[0], s.say[1], s.say[2] || 4.5);
+      if (s.cam) this.shot = { ...s.cam, elapsed: 0 };
       if (s.run) s.run(this.ctx);
+      if (s.say) {
+        this.t = s.at;
+        this.waiting = true;
+        this.ui.caption(s.say[0], s.say[1], s.say[2], { onDone: () => {
+          this.waiting = false;
+          // The old subtitle reading delay is now supplied by the player.
+          // Resume at the next beat, without an extra automatic reading wait.
+          const next = this.steps.find(step => !step.fired);
+          if (next) this.t = next.at;
+        } });
+      }
     }
     if (this.shot) {
       const sh = this.shot;
-      const k = sh.dur ? ease(Math.min(1, (this.t - sh.start) / sh.dur)) : 1;
+      sh.elapsed += dt;
+      const k = sh.dur ? ease(Math.min(1, sh.elapsed / sh.dur)) : 1;
       vec(sh.pos, _a);
       vec(sh.toPos || sh.pos, _b);
       _p.lerpVectors(_a, _b, k);
@@ -106,6 +123,6 @@ export class Cutscene {
       this.camera.lookAt(_l);
       if (sh.fov && Math.abs(this.camera.fov - sh.fov) > 0.01) { this.camera.fov = sh.fov; this.camera.updateProjectionMatrix(); }
     }
-    if (this.t >= this.end) this.finish();
+    if (!this.waiting && this.t >= this.end) this.finish();
   }
 }

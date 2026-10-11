@@ -1,4 +1,5 @@
 import { settings } from './settings.js';
+import { Dialogue } from './dialogue.js';
 
 /**
  * DOM UI controller: screens, HUD, overlays. The 3D game never touches the
@@ -8,7 +9,7 @@ import { settings } from './settings.js';
 const $ = (id) => document.getElementById(id);
 
 export class UI {
-  constructor(audio) {
+  constructor(audio, { dialogueClock } = {}) {
     this.audio = audio;
     this.stack = [];               // open panel screens (options/controls/credits…)
     this.onPanelClosed = null;
@@ -16,6 +17,7 @@ export class UI {
     this._cache = {};
     this._messageTimer = null;
     this.journal = [];
+    this.dialogue = new Dialogue({ render: entry => this._renderDialogue(entry), clock: dialogueClock });
 
     // Generic open/close buttons.
     document.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => this.openPanel(b.dataset.open)));
@@ -38,6 +40,7 @@ export class UI {
     this.openedAt = performance.now();
     this._panelFocus = document.activeElement;
     this.stack.push(id);
+    this.dialogue.setPaused('panel', true);
     this.show(id);
     $(id).querySelector('button, input, select')?.focus({ preventScroll: true });
     if (this.onPanelOpened) this.onPanelOpened(id);
@@ -48,6 +51,7 @@ export class UI {
     const id = this.stack.pop();
     if (!id) return null;
     this.hide(id);
+    this.dialogue.setPaused('panel', this.panelOpen);
     if (id === 'keypad-screen') { clearTimeout(this._keypadTimer); this.onKeypadSubmit = null; }
     this.audio.play('ui-close', { volume: 0.4 });
     if (this.onPanelClosed) this.onPanelClosed(id);
@@ -60,6 +64,7 @@ export class UI {
     clearTimeout(this._keypadTimer);
     this.onKeypadSubmit = null;
     this._panelFocus = null;
+    this.dialogue.setPaused('panel', false);
   }
   get panelOpen() { return this.stack.length > 0; }
 
@@ -68,8 +73,6 @@ export class UI {
     this.stopSay();
     this.clearMessage();
     this.hideTutorial();
-    clearTimeout(this._eraTimer);
-    this.hide('era-card');
     this.setPrompt(null);
     this.setHint('');
   }
@@ -222,22 +225,10 @@ export class UI {
 
   /**
    * Era transition card: { numeral, title, sub, tag, verb, line } — the era
-   * word of play (e.g. "The Past — Solve") and one line of story, tinted by
-   * the era accent. Pure DOM + CSS animations and pointer-events:none, so it
-   * can never disturb pointer lock, the loading screen or the render loop.
+   * word of play and narrative line remain until acknowledged, like captions.
    */
   eraCard(card) {
-    const el = $('era-card');
-    $('era-card-numeral').textContent = card.numeral;
-    $('era-card-title').textContent = card.title;
-    $('era-card-sub').textContent = card.sub;
-    $('era-card-tag').textContent = card.verb ? `${card.tag || ''} — ${card.verb}` : (card.tag || '');
-    $('era-card-line').textContent = card.line || '';
-    el.classList.add('hidden');
-    void el.offsetWidth; // restart CSS animations
-    el.classList.remove('hidden');
-    clearTimeout(this._eraTimer);
-    this._eraTimer = setTimeout(() => el.classList.add('hidden'), 4700);
+    this.dialogue.enqueue([{ view: 'era-card', card }]);
   }
 
   /* ----------------------------- journal ---------------------------- */
@@ -353,46 +344,43 @@ export class UI {
   setBestTime(text) { $('best-time').textContent = text || ''; }
 
   /* ----------------------------- cinematics ------------------------- */
-  cinema(on, letterbox = true) {
+  cinema(on, letterbox = true, hint = 'ESC pause') {
     $('cinema').classList.toggle('hidden', !on);
     $('cinema').classList.toggle('no-bars', !letterbox);
+    $('skip-hint').textContent = hint;
   }
 
-  /** Typed-out caption. speaker null/'' → narrator style. Pass speaker=null and text=null to hide. */
-  caption(speaker, text, seconds = 4.5, { inGame = false } = {}) {
-    const box = $('caption');
-    clearInterval(this._typeTimer);
-    clearTimeout(this._capTimer);
-    if (!text) { box.classList.add('hidden'); return; }
-    box.classList.remove('hidden');
-    box.classList.toggle('in-game', inGame);
-    box.classList.toggle('narrator', !speaker);
-    $('caption-speaker').textContent = speaker || '';
-    const el = $('caption-text');
-    el.textContent = '';
-    box.style.animation = 'none'; void box.offsetWidth; box.style.animation = '';
-    let i = 0;
-    this._typeTimer = setInterval(() => {
-      i += 2;
-      el.textContent = text.slice(0, i);
-      if (i >= text.length) clearInterval(this._typeTimer);
-    }, 18);
-    this._capTimer = setTimeout(() => box.classList.add('hidden'), seconds * 1000);
+  /** Legacy durations are accepted for unchanged story scripts, never used to dismiss text. */
+  caption(speaker, text, seconds = 4.5, { inGame = false, onDone = null } = {}) {
+    if (!text) { this.stopSay(); return; }
+    this.dialogue.enqueue([{ view: 'caption', speaker, text, inGame, onDone }]);
   }
 
-  /** In-game dialogue (no letterbox): a queue of [speaker, text, seconds] lines. */
+  /** New thoughts append: an unread line is never replaced by another trigger. */
   say(lines) {
-    clearTimeout(this._sayTimer);
-    const next = (k) => {
-      if (k >= lines.length) return;
-      const [sp, tx, sec = 4.5] = lines[k];
-      this.caption(sp, tx, sec, { inGame: true });
-      this._sayTimer = setTimeout(() => next(k + 1), sec * 1000 + 250);
-    };
-    next(0);
+    this.dialogue.enqueue(lines.map(([speaker, text]) => ({ view: 'caption', speaker, text, inGame: true })));
   }
 
-  stopSay() { clearTimeout(this._sayTimer); this.caption(null, null); }
+  stopSay() { this.dialogue.clear(); }
+  afterDialogue(fn) { this.dialogue.whenIdle(fn); }
+
+  _renderDialogue(entry) {
+    if (entry.view === 'era-card') {
+      const card = entry.card;
+      $('era-card-numeral').textContent = card.numeral;
+      $('era-card-title').textContent = card.title;
+      $('era-card-sub').textContent = card.sub;
+      $('era-card-tag').textContent = card.verb ? `${card.tag || ''} — ${card.verb}` : (card.tag || '');
+      $('era-card-line').textContent = card.line || '';
+    } else {
+      const box = $('caption');
+      box.classList.toggle('in-game', !!entry.inGame);
+      box.classList.toggle('narrator', !entry.speaker);
+      $('caption-speaker').textContent = entry.speaker || '';
+      $('caption-text').textContent = entry.text;
+      box.style.animation = 'none'; void box.offsetWidth; box.style.animation = '';
+    }
+  }
 
   endCard(on) { $('end-card').classList.toggle('hidden', !on); }
 

@@ -63,6 +63,15 @@ try {
       for (const k of step.keys) await page.keyboard.up(k);
     }
     if (step.wait) await new Promise(r => setTimeout(r, step.wait));
+    if (step.dialogueUntil) {
+      const deadline = Date.now() + (step.timeout || 120000);
+      while (!await page.evaluate(step.dialogueUntil)) {
+        if (Date.now() > deadline) throw new Error('Dialogue flow timed out: ' + step.dialogueUntil);
+        if (await page.evaluate('!!__game.ui.dialogue.enabled')) await page.keyboard.press('Enter');
+        await new Promise(r => setTimeout(r, 150));
+      }
+      assertions++;
+    }
     if (step.until) { await page.waitForFunction(step.until, { timeout: step.timeout || 120000 }); assertions++; }
     if (step.assert) {
       if (!await page.evaluate(step.assert)) throw new Error('Assertion failed at step ' + (i + 1) + ': ' + step.assert);

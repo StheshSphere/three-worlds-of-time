@@ -49,6 +49,7 @@ applyQuality();
 const minimap = new Minimap(renderer, scene);
 
 let mode = 'loading';         // loading | title | playing | paused | overlay | failed | won
+let pausedMode = 'playing';
 let userPickedQuality = false;
 
 ui.show('loading-screen');
@@ -85,26 +86,27 @@ player.addEventListener('flashlight', (e) => audio.play('switch', { volume: 0.6,
 
 player.addEventListener('lock', () => {
   if (mode === 'paused' || mode === 'overlay') {
-    mode = 'playing';
+    mode = mode === 'paused' ? pausedMode : 'playing';
     ui.hide('pause-screen');
-    ui.show('hud');
+    if (mode === 'playing') ui.show('hud');
   }
+  if (mode === 'playing' || mode === 'cutscene') ui.dialogue.setPaused('game', false);
 });
 player.addEventListener('unlock', () => {
-  if (mode !== 'playing') return;      // cutscenes, credits and menus ignore pointer unlocks
+  if (mode !== 'playing' && mode !== 'cutscene') return;
   if (ui.panelOpen) { mode = 'overlay'; return; }
   if (levels.state === 'failed' || levels.state === 'won') return;
   pause();
 });
 player.addEventListener('lockerror', () => {
-  if (mode === 'playing' || mode === 'paused') {
+  if (mode === 'playing' || mode === 'cutscene' || mode === 'paused') {
     pause();
     ui.setPauseLevel('Click Resume to capture the mouse and continue.');
   }
 });
 const loseFocus = () => {
   player._clearKeys();
-  if (mode === 'playing') pause();
+  if (mode === 'playing' || mode === 'cutscene') pause();
 };
 window.addEventListener('blur', loseFocus);
 document.addEventListener('visibilitychange', () => { if (document.hidden) loseFocus(); });
@@ -113,11 +115,16 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) loseF
    Game flow
    ===================================================================== */
 function pause() {
+  if (mode === 'paused') return;
+  pausedMode = mode === 'cutscene' ? 'cutscene' : 'playing';
   mode = 'paused';
+  ui.dialogue.setPaused('game', true);
   player._clearKeys();
   player.unlock();
   ui.setPrompt(null);
   ui.setPauseLevel(`You are in ${levels.meta ? levels.meta.title.toLowerCase() : 'the timeline'} — ${levels.meta ? levels.meta.subtitle : ''}.`);
+  // A story set is not a playable era; restarting the journey remains available.
+  document.getElementById('retry-era-button').classList.toggle('hidden', pausedMode === 'cutscene');
   ui.show('pause-screen');
 }
 
@@ -130,6 +137,7 @@ function showTitle() {
   mode = 'title';
   clearTimeout(creditsTimer);
   cutscene.cancel();
+  ui.dialogue.setPaused('game', false);
   ui.rollCredits(false);
   ui.endCard(false);
   player.unlock();
@@ -155,6 +163,7 @@ function startGame() {
   ui.hide('hud');
   ui.resetJournal();
   mode = 'cutscene';
+  ui.dialogue.setPaused('game', false);
   player.lock();
   const set = levels.loadSet(prologueSet, 'night');
   cutscene.play(story.prologue(storyCtx(set)), { onDone: beginPast });
@@ -190,7 +199,7 @@ function startEpilogue(stats) {
 function startCredits() {
   mode = 'credits';
   ui.endCard(false);
-  ui.cinema(true, true);
+  ui.cinema(true, true, 'SPACE / ENTER / ESC — skip credits');
   ui.rollCredits(true);
   clearTimeout(creditsTimer);
   creditsTimer = setTimeout(endCredits, 26500);
@@ -227,8 +236,8 @@ function showWinScreen(stats) {
 
 document.getElementById('play-button').addEventListener('click', startGame);
 document.getElementById('resume-button').addEventListener('click', resume);
-document.getElementById('retry-era-button').addEventListener('click', () => { ui.hide('pause-screen'); levels.retryEra(); mode = 'playing'; player.lock(); });
-document.getElementById('restart-button').addEventListener('click', () => { ui.hide('pause-screen'); ui.resetJournal(); levels.restartRun(); mode = 'playing'; player.lock(); });
+document.getElementById('retry-era-button').addEventListener('click', () => { ui.hide('pause-screen'); cutscene.cancel(); levels.retryEra(); mode = 'playing'; ui.show('hud'); player.lock(); });
+document.getElementById('restart-button').addEventListener('click', () => { ui.hide('pause-screen'); cutscene.cancel(); ui.resetJournal(); levels.restartRun(); mode = 'playing'; ui.show('hud'); player.lock(); });
 document.getElementById('quit-button').addEventListener('click', () => { audio.stopMusic(0.5); showTitle(); });
 document.getElementById('fail-retry-button').addEventListener('click', () => { ui.hide('fail-screen'); ui.show('hud'); levels.retryEra(); mode = 'playing'; player.lock(); });
 document.getElementById('fail-quit-button').addEventListener('click', showTitle);
@@ -297,8 +306,8 @@ ui.onPanelClosed = () => {
 };
 
 window.addEventListener('keydown', (e) => {
-  if (mode === 'cutscene' && (e.code === 'Space' || e.code === 'Enter' || e.code === 'Escape')) { cutscene.skip(); return; }
-  if (mode === 'credits' && (e.code === 'Space' || e.code === 'Enter' || e.code === 'Escape')) { endCredits(); return; }
+  if (mode === 'cutscene' && e.code === 'Escape') { e.preventDefault(); pause(); return; }
+  if (mode === 'credits' && !e.repeat && (e.code === 'Space' || e.code === 'Enter' || e.code === 'Escape')) { endCredits(); return; }
   if (e.code === 'Escape' && ui.panelOpen) { ui.closeTopPanel(); return; }
   if (e.code === 'KeyE' && ui.isOpen('reader-screen') && !ui.justOpened) { ui.closeTopPanel(); return; }
   if (e.code === 'KeyJ' && (mode === 'playing' || mode === 'overlay')) {

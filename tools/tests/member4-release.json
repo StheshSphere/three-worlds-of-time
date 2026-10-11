@@ -3,20 +3,11 @@
   "size": "1280x720",
   "steps": [
     {
-      "comment": "Begin through the actual menu; skip both story scenes using the documented key.",
+      "comment": "Begin through the actual menu and acknowledge every story line and era card.",
       "click": "#play-button"
     },
     {
-      "press": "Space"
-    },
-    {
-      "wait": 250
-    },
-    {
-      "press": "Space"
-    },
-    {
-      "until": "__game.mode() === 'playing' && __game.levels.state === 'playing'"
+      "dialogueUntil": "__game.mode() === 'playing' && __game.levels.state === 'playing'"
     },
     {
       "assert": "__game.player.mode === window.__testView && __game.timeMachine.getCores() === 0",
@@ -55,8 +46,8 @@
       "eval": "__game.levels.debug.takeCore()"
     },
     {
-      "until": "__game.levels.index === 1 && __game.levels.state === 'playing'",
-      "timeout": 240000
+      "timeout": 240000,
+      "dialogueUntil": "__game.levels.index === 1 && __game.levels.state === 'playing'"
     },
     {
       "assert": "__game.timeMachine.getCores() === 1 && document.getElementById('core-count').textContent === 'Cores 1 / 3'",
@@ -87,8 +78,8 @@
       "eval": "__game.levels.debug.takeCore()"
     },
     {
-      "until": "__game.levels.index === 2 && __game.levels.state === 'playing'",
-      "timeout": 240000
+      "timeout": 240000,
+      "dialogueUntil": "__game.levels.index === 2 && __game.levels.state === 'playing'"
     },
     {
       "assert": "__game.timeMachine.getCores() === 2 && !__game.player.hasCheckpoint",
@@ -110,7 +101,7 @@
       "eval": "__game.levels.debug.takeCore()"
     },
     {
-      "until": "__game.levels.state === 'finale'"
+      "dialogueUntil": "__game.levels.state === 'finale'"
     },
     {
       "assert": "__game.timeMachine.getCores() === 3 && __game.player.mode === 'third'",
@@ -121,7 +112,7 @@
       "timeout": 240000
     },
     {
-      "press": "Space"
+      "dialogueUntil": "__game.mode() === 'credits'"
     },
     {
       "until": "__game.mode() === 'credits'"
@@ -137,7 +128,7 @@
       "click": "#win-restart-button"
     },
     {
-      "until": "__game.mode() === 'playing' && __game.levels.index === 0"
+      "dialogueUntil": "__game.mode() === 'playing' && __game.levels.index === 0 && __game.levels.state === 'playing'"
     },
     {
       "assert": "__game.timeMachine.getCores() === 0 && !__game.player.hasCheckpoint && !__game.levels.debug.state.gateOpen && !__game.player.canDash && !__game.player.flashlight",

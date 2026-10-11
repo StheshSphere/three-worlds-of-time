@@ -1,0 +1,12 @@
+{
+  "status": "NOT VERIFIED",
+  "reason": "Chrome exited before opening a page in this environment.",
+  "executed_browser_game_tests": 0,
+  "remaining": [
+    "Native Enter/click and pointer-lock behaviour",
+    "Visual layout in both camera views",
+    "Pause/resume and full real-browser journey",
+    "Browser console errors",
+    "Published LAMP URL"
+  ]
+}

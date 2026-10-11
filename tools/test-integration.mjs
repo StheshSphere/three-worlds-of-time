@@ -17,6 +17,7 @@ const { createKit } = await import('../src/core/kit.js');
 const { UI } = await import('../src/core/ui.js');
 const { Cutscene } = await import('../src/core/cutscene.js');
 const { assets } = await import('../src/core/assets.js');
+const { ARRIVALS, ERA_CARDS } = await import('../src/story.js');
 settings.set('quality', 'low');
 const results = [];
 function test(name, fn) {
@@ -47,6 +48,7 @@ const minimap = { setObjective() {}, setAccent() {} };
 const levels = createLevelManager({ scene, renderer: {}, camera, player, timeMachine: tm, audio, ui, postfx, minimap });
 const tick = (seconds, physics = false) => { for (let i=0;i<Math.ceil(seconds*60);i++) { levels.update(1/60); tm.update(1/60); scene.updateMatrixWorld(true); if (physics) player.update(1/60); } };
 const press = code => { const e = new Event('keydown', { cancelable:true }); Object.assign(e,{code,repeat:false}); window.dispatchEvent(e); };
+const continueDialogue = () => { let n=0; while (ui.dialogue.active) { assert.ok(++n<50); assert.ok(ui.dialogue.advance()); } };
 
 // Shared cached assets have no public mutation API. Exercise the ownership decision
 // using the real predicate for normal resources and a tagged sentinel for cache-owned ones.
@@ -62,6 +64,7 @@ test('Closing all panels drops a stale keypad submission callback', () => {
 test('Input clears on blur, freeze and full reset (including buffered jump and dash)', () => {
   player.lock(); press('KeyW'); press('Space'); assert.equal(player.keys.forward,true);
   window.dispatchEvent(new Event('blur')); assert.equal(player.keys.forward,false); assert.equal(player._jumpBuffer,0);
+  window.dispatchEvent(new Event('focus'));
   player.frozen=true; press('KeyW'); const before=player.mode; press('KeyV'); assert.equal(player.keys.forward,false); assert.equal(player.mode,before);
   player.frozen=false; player._dashCooldown=.8; player._airDashUsed=true; player.keys.forward=true; player.reset();
   assert.equal(player._dashCooldown,0); assert.equal(player._airDashUsed,false); assert.equal(player.keys.forward,false);
@@ -88,9 +91,9 @@ test('Jump lands on a thin floor and moving-platform carry changes player positi
 for (const view of ['first','third']) {
   test(`${view}: Ancient plates, mirrors, tablets and drums unlock core; progress 1/3`, () => {
     settings.set('thirdPerson', view === 'third');
-    levels.restartRun(); player.mode=view; assert.equal(tm.getCores(),0); assert.equal(player.hasCheckpoint,false);
+    levels.restartRun(); continueDialogue(); player.mode=view; assert.equal(tm.getCores(),0); assert.equal(player.hasCheckpoint,false);
     const d=levels.debug; d.solveBlocks(); assert.equal(d.state.gateOpen,true); d.alignMirrors(); d.readTablets(); ui.closeAllPanels(); d.solveDrums(); tick(3);
-    assert.equal(d.state.crystalLit,true); assert.equal(d.state.dialsSolved,true); d.takeCore(); tick(3.5);
+    assert.equal(d.state.crystalLit,true); assert.equal(d.state.dialsSolved,true); d.takeCore(); continueDialogue(); tick(3.5); continueDialogue();
     assert.equal(levels.index,1); assert.equal(levels.state,'playing'); assert.equal(tm.getCores(),1);
     assert.equal(audio.music,'lab'); assert.equal(audio.ambience,'lab'); assert.equal(player.hasCheckpoint,false);
     assert.equal(document.getElementById('core-count').textContent,'Cores 1 / 3');
@@ -103,7 +106,7 @@ for (const view of ['first','third']) {
     assert.ok(pad); pad.userData.onInteract(); assert.equal(ui.onKeypadSubmit('xxxx'),false); assert.equal(ui.onKeypadSubmit(d.code),true); ui.closeAllPanels();
     tick(.4); assert.equal(d.state.doorOpen,true); assert.equal(player.hasCheckpoint,true);
     const cp=player.getCheckpoint().position.clone(); player.position.set(20,-30,20); levels.registerFall(); assert.ok(player.position.equals(cp));
-    d.solveGrid(); tick(3); assert.equal(d.state.power,true); d.dropField(); tick(2); assert.equal(d.state.fieldDown,true); d.takeCore(); tick(3.5);
+    d.solveGrid(); tick(3); assert.equal(d.state.power,true); d.dropField(); tick(2); assert.equal(d.state.fieldDown,true); d.takeCore(); continueDialogue(); tick(3.5); continueDialogue();
     assert.equal(levels.index,2); assert.equal(tm.getCores(),2); assert.equal(player.flashlight,null); assert.equal(audio.music,'neon');
   });
   test(`${view}: Future hazards animate, checkpoint respawns, sequence gates core, finale reaches 3/3`, () => {
@@ -111,7 +114,7 @@ for (const view of ['first','third']) {
     assert.ok(d.gauntlet().barriers.length); assert.ok(d.phases().length);
     const cp=player.getCheckpoint().position.clone(); player.position.y=-40; levels.registerFall(); assert.ok(player.position.equals(cp)); player.frozen=false;
     d.takeCore(); assert.equal(d.state.coreTaken,false); assert.equal(d.solvePuzzle(),true); d.takeCore(); assert.equal(d.state.coreTaken,true);
-    tick(2); assert.equal(levels.state,'finale'); assert.equal(tm.getCores(),3); assert.equal(tm.userData.isRestoring,true);
+    continueDialogue(); tick(2); assert.equal(levels.state,'finale'); assert.equal(tm.getCores(),3); assert.equal(tm.userData.isRestoring,true);
     tick(7); assert.equal(levels.state,'won');
     assert.equal(document.getElementById('core-count').textContent,'Cores 3 / 3');
   });
@@ -125,7 +128,7 @@ test('Retry keeps previous cores and resets the current era', () => {
   tm.lightSocket(0); levels.load(1); levels.debug.solveGrid(); levels.retryEra(); assert.equal(tm.getCores(),1); assert.equal(levels.debug.state.power,false); assert.equal(player.hasCheckpoint,false);
 });
 test('Old hurt-respawn cannot move a player in a newly loaded era', () => {
-  player._invuln=0; levels.api.hurt({respawn:true}); levels.load(2); player.position.set(4,1,4); tick(.6); assert.equal(player.position.x,4);
+  continueDialogue(); player._invuln=0; levels.api.hurt({respawn:true}); levels.load(2); player.position.set(4,1,4); tick(.6); assert.equal(player.position.x,4);
 });
 test('Repeated level swaps dispose owned resources and retain shared sentinels', () => {
   const sharedGeo=new THREE.BoxGeometry(), sharedMat=new THREE.MeshBasicMaterial(), sharedTex=new THREE.Texture(); sharedMat.map=sharedTex;
@@ -143,6 +146,44 @@ test('Repeated level swaps dispose owned resources and retain shared sentinels',
 test('Cutscene finish releases old set closures and cancellation does not run completion', () => {
   const cs=new Cutscene({camera,ui}); let completed=0; cs.play([{at:1,run(){},end:true}],{onDone:()=>completed++}); cs.finish(); assert.equal(completed,1); assert.equal(cs.steps.length,0); assert.equal(cs.ctx,null);
   cs.play([{at:1,end:true}],{onDone:()=>completed++}); cs.cancel(); assert.equal(completed,1); assert.equal(cs.active,false);
+});
+test('Every era holds its narrative card and countdown until Enter/click acknowledgement', () => {
+  for (let i=0;i<3;i++) {
+    levels.load(i); const runTime=levels.stats.runTime;
+    assert.equal(levels.state,'arrival'); assert.equal(player.frozen,true);
+    tick(30); assert.equal(levels.state,'arrival'); assert.equal(levels.stats.runTime,runTime);
+    assert.equal(ui.dialogue.current.card.line,ERA_CARDS[i].line);
+    continueDialogue(); assert.equal(levels.state,'playing'); assert.equal(player.frozen,false);
+    levels.api.say('thought',[['Ari',`Era ${i} thought`]]); levels.api.say('thought',[['Ari','Duplicate']]);
+    assert.equal(ui.dialogue.queue.length,0); tick(15);
+    assert.equal(document.getElementById('caption-text').textContent,`Era ${i} thought`);
+    assert.equal(player.frozen,false); continueDialogue();
+  }
+});
+test('Core transition waits for unread lines, then Lab and Future arrivals each wait for their final line', () => {
+  levels.callbacks.onEraArrive=i=>ui.say(ARRIVALS[i]);
+  levels.restartRun(); continueDialogue();
+  for (let i=0;i<2;i++) {
+    ui.say([['Ari','Before core'],['Ari','Final thought']]); levels.api.completeLevel();
+    tick(20); assert.equal(levels.index,i); assert.equal(levels.state,'transition');
+    ui.dialogue.advance(); tick(10); assert.equal(levels.index,i);
+    ui.dialogue.advance(); tick(3.5);
+    assert.equal(levels.index,i+1); assert.equal(levels.state,'arrival');
+    ui.dialogue.advance(); assert.equal(document.getElementById('caption-text').textContent,ARRIVALS[i+1][0][1]);
+    ui.dialogue.advance(); tick(15); assert.equal(levels.state,'arrival');
+    assert.equal(document.getElementById('caption-text').textContent,ARRIVALS[i+1][1][1]);
+    ui.dialogue.advance(); assert.equal(levels.state,'playing'); assert.equal(player.frozen,false);
+  }
+  levels.callbacks.onEraArrive=null;
+});
+test('Restart or level replacement cancels pending dialogue-driven transition callbacks', () => {
+  levels.restartRun(); continueDialogue(); ui.say([['Ari','Old line']]); levels.api.completeLevel();
+  ui.dialogue.setPaused('game',true); levels.restartRun();
+  assert.equal(ui.dialogue.queue.length,0); assert.equal(ui.dialogue.current.view,'era-card');
+  assert.equal(ui.dialogue.timer,null); ui.dialogue.setPaused('game',false); continueDialogue();
+  tick(3.5); assert.equal(levels.index,0); assert.equal(levels.state,'playing');
+  ui.say([['Ari','Old level']]); levels.load(2); continueDialogue(); tick(3.5);
+  assert.equal(levels.index,2); assert.equal(ui.dialogue.queue.length,0);
 });
 ui.resetTransient();
 console.log(JSON.stringify({suite:'Node logic integration (renderer, DOM and audio doubles)',passed:results.filter(x=>x.status==='PASS').length,failed:results.filter(x=>x.status==='FAIL').length,results},null,2));

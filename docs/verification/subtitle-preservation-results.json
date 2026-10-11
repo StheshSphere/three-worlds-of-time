@@ -1,0 +1,19 @@
+{
+  "status": "PASS",
+  "baseline": "Previously delivered Member 4 complete project ZIP",
+  "previous_project_files": 228,
+  "existing_files_changed": [
+    "index.html",
+    "src/core/cutscene.js",
+    "src/core/ui.js",
+    "src/levelManager.js",
+    "src/main.js",
+    "src/style.css",
+    "tools/play.mjs",
+    "tools/test-integration.mjs",
+    "tools/tests/member4-release.json",
+    "tools/tests/support/dom.mjs"
+  ],
+  "unchanged_existing_files": 218,
+  "unchanged_content": "All level/puzzle files, story text, assets, shaders, audio, libraries, licences and other previous Member 1-4 work"
+}
