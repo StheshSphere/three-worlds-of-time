@@ -65,7 +65,7 @@ const fragmentShader = /* glsl */`
 
     // 1. gradient
     vec3 col = mix(uHorizon, uZenith, pow(clamp(h, 0.0, 1.0), 0.45));
-    col = mix(col, uGround, smoothstep(0.0, -0.22, h));
+    col = mix(col, uGround, (1.0 - smoothstep(-0.22, 0.0, h)));
 
     // 2. sun
     float sd = max(dot(d, normalize(uSunDir)), 0.0);

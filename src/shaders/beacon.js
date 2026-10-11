@@ -43,12 +43,12 @@ export function createBeaconMaterial(color = 0xff5be0) {
 
       // Soft band of light centred on pos (0..1); w = half-width.
       float band(float y, float pos, float w) {
-        return smoothstep(w, 0.0, abs(y - pos));
+        return (1.0 - smoothstep(0.0, w, abs(y - pos)));
       }
 
       void main() {
         // Fade toward both ends so the pillar melts into the air.
-        float vert = smoothstep(0.0, 0.16, vUv.y) * smoothstep(1.0, 0.7, vUv.y);
+        float vert = smoothstep(0.0, 0.16, vUv.y) * (1.0 - smoothstep(0.7, 1.0, vUv.y));
         // Bright rims, dimmer core — reads as a glass column from every angle.
         float rim = pow(abs(vUv.x - 0.5) * 2.0, 3.0);
         // Drifting scan lines.

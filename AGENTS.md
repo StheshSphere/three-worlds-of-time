@@ -6,7 +6,7 @@ short — if a rule stops mattering, delete it rather than letting it pile up.
 ## What this project is
 
 A 3D browser game for a university CGV group project, built with Three.js r160, **no bundler**. Three eras of the same
-place (Ancient Ruins / Modern Lab / Neon Future); recover a core in each and restore the Time Machine. Four members.
+place (Ancient Ruins / Modern Lab / Neon Future); recover a core in each and restore the Time Machine. Five credited developers.
 
 ## Run it
 

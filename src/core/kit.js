@@ -30,6 +30,7 @@ export function createKit(ctx) {
   const lights = [];
   const disposables = [];
   const colliders = [];
+  const cameraColliders = [];
   const walkables = [];
   const interactables = [];
   const updaters = [];
@@ -122,6 +123,7 @@ export function createKit(ctx) {
     obj.userData.solidBox = new THREE.Box3().setFromObject(obj);
     if (pad) obj.userData.solidBox.expandByScalar(pad);
     colliders.push(obj);
+    if (!cameraColliders.includes(obj)) cameraColliders.push(obj);
     return obj;
   }
 
@@ -133,8 +135,10 @@ export function createKit(ctx) {
   function removeCollider(obj) {
     const i = colliders.indexOf(obj);
     if (i >= 0) colliders.splice(i, 1);
+    const c = cameraColliders.indexOf(obj);
+    if (c >= 0) cameraColliders.splice(c, 1);
   }
-  function addCollider(obj) { if (!colliders.includes(obj)) { refreshSolid(obj); if (!obj.userData.solidBox) solidFrom(obj); else colliders.push(obj); } }
+  function addCollider(obj) { if (!colliders.includes(obj)) { refreshSolid(obj); if (!obj.userData.solidBox) solidFrom(obj); else colliders.push(obj); if (!cameraColliders.includes(obj)) cameraColliders.push(obj); } }
 
   /** Flat minimap shape on layer 2. */
   function mapShape(w, d, x, y, z, color, rotY = 0) {
@@ -156,7 +160,7 @@ export function createKit(ctx) {
    */
   function box({
     size, pos = [0, 0, 0], rot = 0, mat, tile = 2, solid = true, walk = true,
-    cast = true, receive = true, map = 'auto', parent = null, surface = null,
+    cameraBlock = false, cast = true, receive = true, map = 'auto', parent = null, surface = null,
   }) {
     const [w, h, d] = size;
     const mesh = new THREE.Mesh(boxGeo(w, h, d, tile), mat);
@@ -167,6 +171,7 @@ export function createKit(ctx) {
     if (parent) parent.add(mesh); else objects.push(mesh);
     mesh.updateMatrixWorld(true);
     if (solid) solidFrom(mesh);
+    else if (cameraBlock) { mesh.userData.solidBox = new THREE.Box3().setFromObject(mesh); cameraColliders.push(mesh); }
     if (walk) walkables.push(mesh);
     if (map === 'auto' || map === true) {
       const top = mesh.position.y + h / 2;
@@ -277,7 +282,7 @@ export function createKit(ctx) {
    */
   function interact(obj, prompt, onInteract) {
     obj.userData.prompt = prompt;
-    obj.userData.onInteract = onInteract;
+    obj.userData.onInteract = (...args) => { const result = onInteract(...args); ctx.api?.progress?.(); return result; };
     if (!interactables.includes(obj)) interactables.push(obj);
     return obj;
   }
@@ -308,7 +313,7 @@ export function createKit(ctx) {
 
   function result(extra = {}) {
     return {
-      objects, lights, disposables, colliders, walkables, interactables,
+      objects, lights, disposables, colliders, cameraColliders, walkables, interactables,
       update: (dt, t) => {
         for (let i = timers.length - 1; i >= 0; i--) {
           const timer = timers[i];
@@ -325,6 +330,6 @@ export function createKit(ctx) {
     ctx, track, material, basic, boxGeo, cylGeo, planeGeo, place, add, solidFrom,
     refreshSolid, removeCollider, addCollider, mapShape, box, proxy, invisible, prop,
     scatter, light, pointLight, interact, removeInteract, update, after, canvasTexture, result,
-    colliders, walkables, interactables, objects, lights,
+    colliders, cameraColliders, walkables, interactables, objects, lights,
   };
 }

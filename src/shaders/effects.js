@@ -34,7 +34,7 @@ const flameFragment = /* glsl */`
   void main() {
     vec2 p = vUv - vec2(0.5, 0.0);
     float width = mix(0.5, 0.06, pow(vUv.y, 0.8));
-    float mask = smoothstep(width, width * 0.2, abs(p.x)) * smoothstep(0.0, 0.08, vUv.y) * smoothstep(1.0, 0.55, vUv.y);
+    float mask = (1.0 - smoothstep(width * 0.2, width, abs(p.x))) * smoothstep(0.0, 0.08, vUv.y) * (1.0 - smoothstep(0.55, 1.0, vUv.y));
     float n = fbm2(vec2(p.x * 3.0 + uSeed, vUv.y * 2.5 - uTime * 2.2));
     float f = clamp(mask * (n * 1.6 - vUv.y * 0.6), 0.0, 1.0);
     vec3 col = mix(uColorB, uColorA, f) * f * 2.4 + vec3(1.0, 0.85, 0.55) * pow(f, 4.0) * 1.2;
@@ -93,7 +93,7 @@ const particleFragment = /* glsl */`
   varying float vBlink;
   void main() {
     float d = length(gl_PointCoord - 0.5);
-    float a = smoothstep(0.5, 0.0, d);
+    float a = (1.0 - smoothstep(0.0, 0.5, d));
     a = a * a * vBlink;
     gl_FragColor = vec4(uColor * a * 2.5, a);
   }

@@ -60,7 +60,7 @@ export function createCity({ count = 220, inner = 26, outer = 140, avoid } = {})
           col += wc * win * lit * 1.15;
           // neon trim near the roof
           float top = vLocal.y * vScale.y;
-          float trim = smoothstep(0.35, 0.0, abs(top - (vScale.y - 1.2)));
+          float trim = (1.0 - smoothstep(0.0, 0.35, abs(top - (vScale.y - 1.2))));
           vec3 tc = mod(cell.x, 2.0) < 1.0 ? vec3(1.0, 0.2, 0.75) : vec3(0.2, 0.85, 1.0);
           col += tc * trim * 2.5 * step(0.5, hash12(vec2(floor(vPosW.x * 0.03), floor(vPosW.z * 0.03))));
         }
@@ -125,7 +125,7 @@ export function createGridFloor() {
       void main() {
         vec2 g = vPosW.xz / 8.0 + vec2(0.0, uTime * 0.6);
         vec2 w = fwidth(g) * 1.2;
-        vec2 l = smoothstep(w, vec2(0.0), abs(fract(g - 0.5) - 0.5));
+        vec2 l = (vec2(1.0) - smoothstep(vec2(0.0), w, abs(fract(g - 0.5) - 0.5)));
         float line = max(l.x, l.y);
         float dist = length(vPosW.xz - cameraPosition.xz);
         float fade = exp(-dist * 0.006);
@@ -285,7 +285,7 @@ export function createStars({ count = 650, radius = 520, center = [0, 20, -70], 
       varying float vWarm;
       void main() {
         float d = length(gl_PointCoord - 0.5);
-        float a = smoothstep(0.5, 0.05, d) * vTwinkle;
+        float a = (1.0 - smoothstep(0.05, 0.5, d)) * vTwinkle;
         vec3 cool = vec3(0.82, 0.9, 1.0);
         vec3 warm = vec3(1.0, 0.85, 0.68);
         vec3 col = mix(cool, warm, step(0.76, vWarm));
@@ -358,9 +358,9 @@ export function createDistantLights({ count = 110, center = [0, 0, -70], inner =
       varying float vPulse;
       void main() {
         float d = length(gl_PointCoord - 0.5);
-        float halo = smoothstep(0.5, 0.0, d);
+        float halo = (1.0 - smoothstep(0.0, 0.5, d));
         halo *= halo;                                        // softer skirt
-        float core = smoothstep(0.14, 0.0, d);               // bright lamp centre
+        float core = (1.0 - smoothstep(0.0, 0.14, d));               // bright lamp centre
         float a = (halo * 0.5 + core) * (0.45 + 0.55 * vPulse);
         gl_FragColor = vec4(vColor * a * 2.2, a);
       }

@@ -292,3 +292,29 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   .title-wrap .menu-btn { padding: 0.48rem 1.4rem; }
   .game-title { font-size: clamp(2rem, 7vh, 3.5rem); }
 }
+
+/* Final journey controls and a single, legible instruction surface. */
+button:disabled { opacity: .4; cursor: not-allowed; }
+#save-summary { max-width: 420px; line-height: 1.35; margin: .6rem 0; }
+#save-notice { position: fixed; right: 24px; top: 110px; z-index: 90; max-width: 360px; padding: .7rem 1rem; background: #0b171ddd; color: #b8f5da; border: 1px solid #649c88; border-radius: 8px; pointer-events: none; }
+#save-notice.error { color: #ffd8b2; border-color: #c79666; }
+#confirm-screen { z-index: 85; }
+#timeline-loading { position: fixed; inset: 0; z-index: 95; display: grid; place-items: center; background: #090c13; color: var(--gold); letter-spacing: .12em; }
+#skip-cinematic { position: absolute; top: 18px; right: 24px; pointer-events: auto; padding: .55rem .9rem; background: #111520; color: var(--gold); border: 1px solid var(--gold); border-radius: 7px; cursor: pointer; font: inherit; }
+#skip-hint { bottom: 3vh; }
+#tutorial-card { position: fixed; z-index: 27; top: 50%; transform: translate(-50%, -50%); max-height: 72vh; overflow-y: auto; pointer-events: auto; background: rgba(6,8,14,.96); animation: none; }
+body.reading .hud-top-left, body.reading #message-banner, body.reading #interact-prompt, body.reading #waypoint { visibility: hidden; }
+#developer-credits { text-align: center; padding: 1.2rem 0; border-bottom: 1px solid var(--line); margin-bottom: 1.2rem; }
+#developer-credits p { font-size: 1.18rem; line-height: 1.7; color: var(--text); }
+#caption { background: rgba(4,6,12,.93); }
+@media (min-width: 761px) and (max-width: 1100px) {
+  .hud-top-left { top: 98px; max-width: 330px; }
+  .hud-top-center { width: 320px; }
+}
+@media (max-height: 800px) {
+  #pause-screen .menu { gap: .25rem; }
+  #pause-screen .menu-btn { padding: .45rem 1.4rem; }
+  #pause-screen h2 { margin: .3rem 0; }
+  .title-wrap .menu { gap: .3rem; }
+  .title-wrap .menu-btn { padding: .5rem 1.4rem; }
+}

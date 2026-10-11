@@ -41,7 +41,7 @@ const vertexShader = /* glsl */`
     world.xz += wind * bend;
     vec2 away = root.xz - uPlayer.xz;
     float d = length(away);
-    float push = smoothstep(1.3, 0.0, d) * step(abs(root.y - uPlayer.y), 1.5);
+    float push = (1.0 - smoothstep(0.0, 1.3, d)) * step(abs(root.y - uPlayer.y), 1.5);
     world.xz += normalize(away + 1e-4) * push * bend * 0.9;
     world.y -= push * bend * 0.35;
     vPosW = world.xyz;
@@ -120,7 +120,8 @@ export function createGrass({ patches, count, sunDir, sunColor = 0xffd7a0, avoid
   let n = 0;
   for (const patch of patches) {
     const share = Math.round(count * (patch.w * patch.d) / totalArea);
-    for (let i = 0; i < share * 1.5 && n < count; i++) {
+    let accepted = 0;
+    for (let i = 0; i < share * 1.5 && accepted < share && n < count; i++) {
       const x = patch.x + (Math.random() - 0.5) * patch.w;
       const z = patch.z + (Math.random() - 0.5) * patch.d;
       if (avoid && avoid(x, z)) continue;
@@ -130,7 +131,17 @@ export function createGrass({ patches, count, sunDir, sunColor = 0xffd7a0, avoid
       s.set(1 + Math.random() * 0.6, hgt, 1);
       m.compose(p.set(x, y, z), q, s);
       mesh.setMatrixAt(n++, m);
+      accepted++;
     }
+  }
+  // Mix patches once so reducing the live draw count keeps grass in every court.
+  const swap = new THREE.Matrix4();
+  let order = 0x63726173;
+  for (let i = n - 1; i > 0; i--) {
+    order = (Math.imul(order, 1664525) + 1013904223) >>> 0;
+    const j = Math.floor((order / 4294967296) * (i + 1));
+    mesh.getMatrixAt(i, m); mesh.getMatrixAt(j, swap);
+    mesh.setMatrixAt(i, swap); mesh.setMatrixAt(j, m);
   }
   mesh.count = n;
   mesh.instanceMatrix.needsUpdate = true;

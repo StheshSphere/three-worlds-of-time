@@ -10,7 +10,7 @@ import sys
 import tempfile
 import zipfile
 
-archive = Path(sys.argv[1] if len(sys.argv) > 1 else 'three-worlds-of-time.zip').resolve()
+archive = Path(sys.argv[1] if len(sys.argv) > 1 else 'Three_Worlds_of_Time_FINAL_LAMP.zip').resolve()
 
 class QuietHandler(SimpleHTTPRequestHandler):
     def log_message(self, *args):

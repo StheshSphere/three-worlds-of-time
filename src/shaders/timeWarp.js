@@ -72,7 +72,7 @@ export const TimeWarpShader = {
       float r = length(c);
 
       // --- time-warp swirl + ripple -------------------------------------
-      float angle = uWarp * 2.4 * smoothstep(0.8, 0.0, r);
+      float angle = uWarp * 2.4 * (1.0 - smoothstep(0.0, 0.8, r));
       float s = sin(angle);
       float co = cos(angle);
       c = mat2(co, -s, s, co) * c;
@@ -101,7 +101,7 @@ export const TimeWarpShader = {
       col = mix(vec3(luma), col, uSaturation);
 
       // --- vignette, hurt flash, grain, white-out ------------------------
-      col *= mix(1.0, smoothstep(0.88, 0.22, r), uVignette);
+      col *= mix(1.0, (1.0 - smoothstep(0.22, 0.88, r)), uVignette);
       col += vec3(0.9, 0.04, 0.03) * smoothstep(0.25, 0.75, r) * uDamage;
       float grain = hash12(vUv * uResolution + fract(uTime * 7.13) * 311.0) - 0.5;
       col += grain * uGrain * (0.35 + luma);

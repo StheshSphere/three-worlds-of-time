@@ -124,7 +124,6 @@ const FloorReflectShader = {
 };
 
 export function createFloorReflection(width, depth, { normalMap, quality, tile = 2 } = {}) {
-  if (quality && !quality.reflections) return null;
   const geometry = new THREE.PlaneGeometry(width, depth);
   const scale = quality && quality.pixelRatio > 1 ? 0.5 : 0.33;
   const mesh = new Reflector(geometry, {
@@ -141,7 +140,13 @@ export function createFloorReflection(width, depth, { normalMap, quality, tile =
   mesh.material.blending = THREE.AdditiveBlending;
   mesh.material.depthWrite = false;
   mesh.renderOrder = 1;
-  return { mesh, dispose() { mesh.dispose(); } };
+  function setQuality(q) {
+    mesh.visible = q.reflections;
+    const scale = q.pixelRatio > 1 ? .5 : .33;
+    mesh.getRenderTarget().setSize(Math.max(1, Math.round((window.innerWidth || 1280) * scale)), Math.max(1, Math.round((window.innerHeight || 720) * scale)));
+  }
+  if (quality) setQuality(quality);
+  return { mesh, setQuality, dispose() { mesh.dispose(); geometry.dispose(); } };
 }
 
 /* =====================================================================
@@ -177,8 +182,8 @@ export function createRainGlassMaterial() {
         float speed = 0.25 + h * 0.6;
         float y = fract(h * 7.3 - t * speed);
         vec2 d = f - vec2(0.5 + (hash12(id + 3.1) - 0.5) * 0.6, y);
-        float drop = smoothstep(0.08, 0.0, length(d * vec2(1.0, 2.8)));
-        float trail = smoothstep(0.03, 0.0, abs(d.x)) * step(0.0, d.y) * smoothstep(0.6, 0.0, d.y) * 0.4;
+        float drop = (1.0 - smoothstep(0.0, 0.08, length(d * vec2(1.0, 2.8))));
+        float trail = (1.0 - smoothstep(0.0, 0.03, abs(d.x))) * step(0.0, d.y) * (1.0 - smoothstep(0.0, 0.6, d.y)) * 0.4;
         return (drop + trail) * step(0.45, h);
       }
       void main() {
@@ -234,7 +239,7 @@ export function createScreenMaterial(map, { color = 0x9fe8ff, power = 1, holo = 
         vec3 noiseCol = vec3(stat) * 0.25;
         vec3 col = mix(noiseCol, content * 1.8, uPower);
         vec2 c = vUv - 0.5;
-        col *= smoothstep(0.75, 0.35, length(c * vec2(1.0, 1.3)));
+        col *= (1.0 - smoothstep(0.35, 0.75, length(c * vec2(1.0, 1.3))));
         float a = mix(1.0, (tex.a * 0.85 + 0.1) * scan, uHolo);
         gl_FragColor = vec4(col, a);
       }
@@ -300,9 +305,9 @@ export function createBarrierMaterial(color = 0xff4fd8) {
       void main() {
         float n = fbm2(vUv * vec2(8.0, 4.0) + vec2(0.0, -uTime * 0.6));
         if (n < uDissolve) discard;
-        float burn = smoothstep(uDissolve + 0.08, uDissolve, n) * step(0.001, uDissolve);
+        float burn = (1.0 - smoothstep(uDissolve, uDissolve + 0.08, n)) * step(0.001, uDissolve);
         float hex = 1.0 - smoothstep(0.0, 0.07, hexEdge(vPosW.xy * 2.4 + vPosW.zz * 2.4));
-        float edge = smoothstep(0.12, 0.0, vUv.y) + smoothstep(0.88, 1.0, vUv.y);
+        float edge = (1.0 - smoothstep(0.0, 0.12, vUv.y)) + smoothstep(0.88, 1.0, vUv.y);
         vec3 viewDir = normalize(cameraPosition - vPosW);
         float fres = pow(1.0 - abs(dot(viewDir, normalize(vNormalW))), 2.0);
         float energy = 0.18 + n * 0.5 + hex * 0.55 + edge * 0.9 + fres * 0.6;

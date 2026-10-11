@@ -1,5 +1,8 @@
 # Release and handoff instructions
 
+Final release: see `../FINAL_RELEASE_REPORT.md` for current validation and limitations. Earlier Git handoff
+notes below are retained as historical context; no repository push or course submission was made for this release.
+
 ## Local checks
 
 The game requires HTTP and a modern desktop Chrome browser with WebGL; no server-side JavaScript, PHP or build service is required. Development checks use Python 3.10+ and Node 20+.
@@ -8,12 +11,13 @@ From the source root:
 
 ```bash
 node tools/test-integration.mjs
+node tools/test-dialogue.mjs
 node tools/test-audio.mjs
 bash tools/build-deploy.sh
 python3 tools/test-release.py
 ```
 
-The build creates `dist/` and `three-worlds-of-time.zip`. The delivered `three-worlds-of-time-lamp-release.zip` has the same release contents, with `index.html` at ZIP root. Unzip it into a fresh folder, open a terminal there and run:
+The build creates `dist/` and `Three_Worlds_of_Time_FINAL_LAMP.zip`, with `index.html` at ZIP root. Unzip it into a fresh folder, open a terminal there and run:
 
 ```bash
 python3 -m http.server 8000
@@ -32,7 +36,7 @@ Set `CHROME` to an installed Chrome/Chromium executable if discovery fails, `HEA
 
 ## Moodle / LAMP
 
-1. Use the course's authorised Moodle/LAMP submission route. Upload `three-worlds-of-time-lamp-release.zip`; do not wrap it in another directory or ZIP.
+1. Use the course's authorised Moodle/LAMP submission route. Upload `Three_Worlds_of_Time_FINAL_LAMP.zip`; do not wrap it in another directory or ZIP.
 2. Open the published URL in Chrome. Hard-refresh with DevTools Network open; inspect Console for exceptions and Network for missing files, JavaScript MIME failures and mixed content.
 3. Play Ancient → Lab → Future → victory → restart on that URL in both camera modes. Check the exact acceptance list and listen to transitions/mute.
 4. If a defect appears, fix the source, rebuild, rerun local checks, upload the new release, and repeat the hosted checks.

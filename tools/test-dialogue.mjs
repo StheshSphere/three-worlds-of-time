@@ -171,6 +171,22 @@ await test('Cancelling a waiting cinematic never runs its completion or later ac
   cs.update(.1); cs.cancel(); clock.tick(20000); enter(); cs.update(20);
   assert.equal(done,0); assert.equal(d.active,false); assert.equal(clock.tasks.size,0);
 });
+
+await test('Tutorial remains until Enter/click, never auto-dismisses, and restores after a save', () => {
+  d.resetJourney(); ui.tutorial({kicker:'Help',title:'Persistent help',html:'Important instruction'});
+  clock.tick(60000); assert.equal(d.current.view,'tutorial-card'); assert.equal(hidden('tutorial-card'),false);
+  const state=d.snapshot(); d.clear(); d.restore(state); assert.equal(d.current.card.title,'Persistent help');
+  click(el('tutorial-card')); assert.equal(d.active,false);
+  d.resetJourney(); ui.say([['Ari','A fresh journey']]); assert.equal(hidden('caption-instruction'),false);
+});
+await test('Skip runs critical events once and cannot finish the following cinematic', () => {
+  const cs=new Cutscene({camera:new THREE.PerspectiveCamera(),ui}); let critical=0,finished=0;
+  cs.play([{at:0,say:['Ari','Read']},{at:4,critical:true,run:()=>critical++},{at:8,end:true}],{
+    onDone:()=>{finished++;cs.play([{at:0,say:['Ari','Next scene']},{at:4,end:true}]);}
+  });
+  cs.update(.1); cs.skip(); assert.equal(critical,1); assert.equal(finished,1); assert.equal(cs.active,true);
+  cs.update(.1); assert.equal(line(),'Next scene'); cs.cancel();
+});
 reset(); d.dispose();
 const result={suite:'Focused dialogue logic (DOM/render doubles; fake reminder clock)',passed:results.filter(x=>x.status==='PASS').length,failed:results.filter(x=>x.status==='FAIL').length,results};
 if(process.argv[2]) fs.writeFileSync(process.argv[2],JSON.stringify(result,null,2)+'\n');

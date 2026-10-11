@@ -1,0 +1,292 @@
+{
+  "release": "Three Worlds of Time \u2014 Final Release",
+  "date": "2026-10-11",
+  "integration": {
+    "suite": "Node logic integration (renderer, DOM and audio doubles)",
+    "passed": 35,
+    "failed": 0,
+    "results": [
+      {
+        "name": "Era game-time delay waits, fires once and stays paused without updates",
+        "status": "PASS"
+      },
+      {
+        "name": "Read panel opening is guarded from the same E event and duplicate stack entries",
+        "status": "PASS"
+      },
+      {
+        "name": "Closing all panels drops a stale keypad submission callback",
+        "status": "PASS"
+      },
+      {
+        "name": "Input clears on blur, freeze and full reset (including buffered jump and dash)",
+        "status": "PASS"
+      },
+      {
+        "name": "Dash cannot tunnel through a 0.02 m wall at the maximum 50 ms frame step",
+        "status": "PASS"
+      },
+      {
+        "name": "Third-person camera respects physics-only wall and switches view without changing yaw",
+        "status": "PASS"
+      },
+      {
+        "name": "Jump lands on a thin floor and moving-platform carry changes player position",
+        "status": "PASS"
+      },
+      {
+        "name": "first: Ancient plates, mirrors, tablets and drums unlock core; progress 1/3",
+        "status": "PASS"
+      },
+      {
+        "name": "first: Lab investigation, wrong/right keypad, conduit power, field and core; progress 2/3",
+        "status": "PASS"
+      },
+      {
+        "name": "first: Future hazards animate, checkpoint respawns, sequence gates core, finale reaches 3/3",
+        "status": "PASS"
+      },
+      {
+        "name": "first: Restart clears all core/puzzle/checkpoint/flashlight/dash state",
+        "status": "PASS"
+      },
+      {
+        "name": "third: Ancient plates, mirrors, tablets and drums unlock core; progress 1/3",
+        "status": "PASS"
+      },
+      {
+        "name": "third: Lab investigation, wrong/right keypad, conduit power, field and core; progress 2/3",
+        "status": "PASS"
+      },
+      {
+        "name": "third: Future hazards animate, checkpoint respawns, sequence gates core, finale reaches 3/3",
+        "status": "PASS"
+      },
+      {
+        "name": "third: Restart clears all core/puzzle/checkpoint/flashlight/dash state",
+        "status": "PASS"
+      },
+      {
+        "name": "Retry keeps previous cores and resets the current era",
+        "status": "PASS"
+      },
+      {
+        "name": "Old hurt-respawn cannot move a player in a newly loaded era",
+        "status": "PASS"
+      },
+      {
+        "name": "Repeated level swaps dispose owned resources and retain shared sentinels",
+        "status": "PASS"
+      },
+      {
+        "name": "Cutscene finish releases old set closures and cancellation does not run completion",
+        "status": "PASS"
+      },
+      {
+        "name": "Every era holds its narrative card and countdown until Enter/click acknowledgement",
+        "status": "PASS"
+      },
+      {
+        "name": "Core transition waits for unread lines, then Lab and Future arrivals each wait for their final line",
+        "status": "PASS"
+      },
+      {
+        "name": "Restart or level replacement cancels pending dialogue-driven transition callbacks",
+        "status": "PASS"
+      },
+      {
+        "name": "Save 1: Past light puzzle, bridge, mirrors, runes and collision restoration",
+        "status": "PASS"
+      },
+      {
+        "name": "Partial puzzle settings and pending instructions survive loading",
+        "status": "PASS"
+      },
+      {
+        "name": "Save 2: Core collection commits before transition and continues into Present once",
+        "status": "PASS"
+      },
+      {
+        "name": "Save 3: Present archive, discovered ink, power, journal and unlocked geometry restore",
+        "status": "PASS"
+      },
+      {
+        "name": "Save 4: Future checkpoints, permanent lock and safe hazard reset restore",
+        "status": "PASS"
+      },
+      {
+        "name": "Save 5: Repeated loads preserve object/collider/audio counts and do not duplicate rewards",
+        "status": "PASS"
+      },
+      {
+        "name": "Save 6: Missing, malformed, future-version and inconsistent saves disable Continue safely",
+        "status": "PASS"
+      },
+      {
+        "name": "Camera stays inside the laboratory ceiling for extreme third-person pitch",
+        "status": "PASS"
+      },
+      {
+        "name": "Archive entrance has no panelling across its opening; locked security door blocks passage",
+        "status": "PASS"
+      },
+      {
+        "name": "Power restoration and flashlight keep a constant light signature; quality switches apply live",
+        "status": "PASS"
+      },
+      {
+        "name": "Required reading freezes Future hazards and stability until advancement",
+        "status": "PASS"
+      },
+      {
+        "name": "New Journey confirmation leaves progress intact on cancel and replaces it only on acceptance",
+        "status": "PASS"
+      },
+      {
+        "name": "Completion cinema can be skipped once and completed saves cannot give a fourth core",
+        "status": "PASS"
+      }
+    ]
+  },
+  "dialogue": {
+    "suite": "Focused dialogue logic (DOM/render doubles; fake reminder clock)",
+    "passed": 21,
+    "failed": 0,
+    "results": [
+      {
+        "name": "Initial instruction appears once; full text stays until acknowledgement",
+        "status": "PASS"
+      },
+      {
+        "name": "Enter and NumpadEnter each advance exactly one line, held/repeated keys do not",
+        "status": "PASS"
+      },
+      {
+        "name": "A held final Enter cannot activate unrelated controls or a new sequence",
+        "status": "PASS"
+      },
+      {
+        "name": "Caption click and accessible Continue activation advance once",
+        "status": "PASS"
+      },
+      {
+        "name": "Locked-pointer clicks advance and are consumed before game actions",
+        "status": "PASS"
+      },
+      {
+        "name": "The gameplay click opening dialogue cannot also advance its first line",
+        "status": "PASS"
+      },
+      {
+        "name": "Reminder appears at 10 seconds once, never dismisses or advances text",
+        "status": "PASS"
+      },
+      {
+        "name": "Advancing hides reminder immediately and starts a fresh 10-second timer",
+        "status": "PASS"
+      },
+      {
+        "name": "Pause/resume preserves remaining reminder time and blocks dialogue input",
+        "status": "PASS"
+      },
+      {
+        "name": "Reader/keypad overlays suspend captions, leave Enter for the keypad, then restore",
+        "status": "PASS"
+      },
+      {
+        "name": "Tab visibility and focus each suspend timing without dismissing text",
+        "status": "PASS"
+      },
+      {
+        "name": "Overlapping gameplay thoughts append in order instead of replacing unread lines",
+        "status": "PASS"
+      },
+      {
+        "name": "Clearing/restarting drops queued text, reminders and stale completion callbacks",
+        "status": "PASS"
+      },
+      {
+        "name": "Era narrative cards use the same instruction, reminder and click progression",
+        "status": "PASS"
+      },
+      {
+        "name": "Normal HUD notifications expire independently without advancing or blocking dialogue",
+        "status": "PASS"
+      },
+      {
+        "name": "prologue: every original line stays in order; later events and ending wait for acknowledgement",
+        "status": "PASS"
+      },
+      {
+        "name": "wakeUp: every original line stays in order; later events and ending wait for acknowledgement",
+        "status": "PASS"
+      },
+      {
+        "name": "epilogue: every original line stays in order; later events and ending wait for acknowledgement",
+        "status": "PASS"
+      },
+      {
+        "name": "Cancelling a waiting cinematic never runs its completion or later actions",
+        "status": "PASS"
+      },
+      {
+        "name": "Tutorial remains until Enter/click, never auto-dismisses, and restores after a save",
+        "status": "PASS"
+      },
+      {
+        "name": "Skip runs critical events once and cannot finish the following cinematic",
+        "status": "PASS"
+      }
+    ]
+  },
+  "audio": {
+    "suite": "Audio lifecycle with Web Audio double",
+    "passed": 4,
+    "failed": 0,
+    "results": [
+      {
+        "name": "Rapid era music changes retain at most two tracks; ended tracks disconnect",
+        "status": "PASS"
+      },
+      {
+        "name": "One-shot effects stop on unload and release their connections",
+        "status": "PASS"
+      },
+      {
+        "name": "Disposed positional audio cannot start later when the context unlocks",
+        "status": "PASS"
+      },
+      {
+        "name": "Ambience reuse/crossfade is bounded and volume settings route to every bus",
+        "status": "PASS"
+      }
+    ]
+  },
+  "build": [
+    "PASS: 50 runtime modules; 182 files; ZIP root and integrity verified.",
+    "Release: Three_Worlds_of_Time_FINAL_LAMP.zip (20.52 MiB)",
+    "Test independently: cd dist && python3 -m http.server 8000",
+    "Then upload the ZIP contents via the course Moodle/LAMP route and test the published URL."
+  ],
+  "production_http": {
+    "suite": "Extracted static release at HTTP /game/ subfolder",
+    "status": "PASS",
+    "files_http_200_and_exact_bytes": 182,
+    "glb_dependency_checks": 33,
+    "zip_root_integrity_case_and_module_mime": "PASS",
+    "browser_execution": "NOT VERIFIED",
+    "lamp_deployment": "NOT VERIFIED"
+  },
+  "production_archive_sha256": "9489d6b9f03bad45b90381f1c0d9a4951fa3cbdc1e98890511c5fce8fd51bdaa",
+  "preservation": {
+    "original_files_retained": 237,
+    "assets_byte_identical": 125,
+    "vendored_files_byte_identical": 23
+  },
+  "browser": {
+    "status": "NOT VERIFIED",
+    "reason": "No local Chromium executable; remote browser local URL blocked."
+  },
+  "hardware_performance": "NOT MEASURED",
+  "deployment": "NOT PERFORMED"
+}

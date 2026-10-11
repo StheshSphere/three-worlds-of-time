@@ -52,6 +52,7 @@ export class UI {
     if (!id) return null;
     this.hide(id);
     this.dialogue.setPaused('panel', this.panelOpen);
+    if (id === 'confirm-screen') $('confirm-yes').onclick = null;
     if (id === 'keypad-screen') { clearTimeout(this._keypadTimer); this.onKeypadSubmit = null; }
     this.audio.play('ui-close', { volume: 0.4 });
     if (this.onPanelClosed) this.onPanelClosed(id);
@@ -63,6 +64,7 @@ export class UI {
     while (this.stack.length) this.hide(this.stack.pop());
     clearTimeout(this._keypadTimer);
     this.onKeypadSubmit = null;
+    $('confirm-yes').onclick = null;
     this._panelFocus = null;
     this.dialogue.setPaused('panel', false);
   }
@@ -132,27 +134,17 @@ export class UI {
     }
   }
 
-  /** Instruction card: { kicker, title, html } — stays up `seconds`, H brings back the last one. */
-  tutorial(card, seconds = 12) {
+  /** Important instruction cards share the same explicit acknowledgement queue. */
+  tutorial(card) {
     this._tutorial = card;
-    $('tut-kicker').textContent = card.kicker || 'How to play';
-    $('tut-title').textContent = card.title;
-    $('tut-body').innerHTML = card.html;
-    const el = $('tutorial-card');
-    el.classList.remove('hidden');
-    el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
-    clearTimeout(this._tutTimer);
-    this._tutTimer = setTimeout(() => el.classList.add('hidden'), seconds * 1000);
-    this.audio.play('ui-open', { volume: 0.5 });
+    this.dialogue.enqueue([{ view: 'tutorial-card', card }]);
+    this.audio.play('ui-open', { volume: .5 });
   }
-
   toggleTutorial() {
-    const el = $('tutorial-card');
-    if (!el.classList.contains('hidden')) { el.classList.add('hidden'); return; }
-    if (this._tutorial) this.tutorial(this._tutorial, 15);
+    if (this.dialogue.current?.view === 'tutorial-card') this.dialogue.advance();
+    else if (this._tutorial && !this.dialogue.active) this.tutorial(this._tutorial);
   }
-
-  hideTutorial() { clearTimeout(this._tutTimer); $('tutorial-card').classList.add('hidden'); this._tutorial = null; }
+  hideTutorial() { $('tutorial-card').classList.add('hidden'); this._tutorial = null; }
 
   /** Screen-space waypoint. edgeAngle (radians) set → pinned to the screen edge, arrow pointing out. */
   setWaypoint(visible, x = 0, y = 0, dist = 0, edgeAngle = null) {
@@ -272,7 +264,7 @@ export class UI {
     this._keypadValue = '';
     this.onKeypadSubmit = null;
     const press = (k) => {
-      if (!this.isOpen('keypad-screen')) return;
+      if (!this.isOpen('keypad-screen') || this._keypadAccepted) return;
       const disp = $('keypad-display');
       disp.classList.remove('error', 'ok');
       if (k === 'clear') this._keypadValue = '';
@@ -282,6 +274,7 @@ export class UI {
         this.audio.play(ok ? 'ui-confirm' : 'ui-error');
         if (!ok) this._keypadValue = '';
         else {
+          this._keypadAccepted = true;
           clearTimeout(this._keypadTimer);
           this._keypadTimer = setTimeout(() => { if (this.isOpen('keypad-screen')) this.closeTopPanel(); }, 700);
         }
@@ -291,7 +284,7 @@ export class UI {
     };
     document.querySelectorAll('#keypad-screen [data-key]').forEach((b) => b.addEventListener('click', () => press(b.dataset.key)));
     window.addEventListener('keydown', (e) => {
-      if (!this.isOpen('keypad-screen')) return;
+      if (!this.isOpen('keypad-screen') || e.repeat) return;
       if (/^Digit\d$|^Numpad\d$/.test(e.code)) press(e.code.slice(-1));
       else if (e.code === 'Enter' || e.code === 'NumpadEnter') press('enter');
       else if (e.code === 'Backspace') press('clear');
@@ -301,6 +294,7 @@ export class UI {
   openKeypad(onSubmit) {
     clearTimeout(this._keypadTimer);
     this._keypadValue = '';
+    this._keypadAccepted = false;
     $('keypad-display').textContent = '____';
     $('keypad-display').classList.remove('error', 'ok');
     this.onKeypadSubmit = onSubmit;
@@ -344,10 +338,11 @@ export class UI {
   setBestTime(text) { $('best-time').textContent = text || ''; }
 
   /* ----------------------------- cinematics ------------------------- */
-  cinema(on, letterbox = true, hint = 'ESC pause') {
+  cinema(on, letterbox = true, hint = 'X — skip cinematic · Esc — pause') {
     $('cinema').classList.toggle('hidden', !on);
     $('cinema').classList.toggle('no-bars', !letterbox);
     $('skip-hint').textContent = hint;
+    $('skip-cinematic').classList.toggle('hidden', !on);
   }
 
   /** Legacy durations are accepted for unchanged story scripts, never used to dismiss text. */
@@ -372,6 +367,10 @@ export class UI {
       $('era-card-sub').textContent = card.sub;
       $('era-card-tag').textContent = card.verb ? `${card.tag || ''} — ${card.verb}` : (card.tag || '');
       $('era-card-line').textContent = card.line || '';
+    } else if (entry.view === 'tutorial-card') {
+      $('tut-kicker').textContent = entry.card.kicker || 'How to play';
+      $('tut-title').textContent = entry.card.title;
+      $('tut-body').innerHTML = entry.card.html;
     } else {
       const box = $('caption');
       box.classList.toggle('in-game', !!entry.inGame);
@@ -390,11 +389,33 @@ export class UI {
     const inner = roll.querySelector('.roll-inner');
     inner.innerHTML = '<h2>The Three Worlds of Time</h2><p>The Broken Hourglass</p>'
       + '<h2>A Wits CGV group project</h2><p>COMS3006A · COMS3025A</p>'
+      + document.getElementById('developer-credits').outerHTML.replace('id="developer-credits"', '')
       + '<h2>Built with</h2>' + document.getElementById('credits-list').outerHTML.replace('id="credits-list"', '')
       + '<h2>Thank you for playing</h2>';
     roll.classList.remove('hidden', 'rolling');
     void roll.offsetWidth;
     roll.classList.add('rolling');
   }
+  savedNotice(text = 'Timeline Saved', error = false) {
+    const el = $('save-notice'); el.textContent = text; el.classList.toggle('error', error); this.show('save-notice');
+    clearTimeout(this._saveTimer); this._saveTimer = setTimeout(() => this.hide('save-notice'), error ? 6500 : 2400);
+  }
+
+  setContinue(result) {
+    const button = $('continue-button'); button.disabled = result.status !== 'valid';
+    const s = result.save;
+    $('save-summary').textContent = s ? (s.status === 'complete' ? 'Journey complete — view your ending' :
+      `${['The Past', 'The Present', 'The Future'][s.era]} · ${s.eras[s.era].label}`) :
+      result.status === 'corrupt' ? 'Saved journey could not be read. New Journey will ask before replacing it.' :
+      result.status === 'unavailable' ? 'Saving is unavailable in this browser.' : 'Your progress is saved on this browser and device.';
+  }
+
+  confirm(title, message, action, accept = 'Start New Journey') {
+    $('confirm-title').textContent = title; $('confirm-message').textContent = message;
+    $('confirm-yes').textContent = accept;
+    $('confirm-yes').onclick = () => { $('confirm-yes').onclick = null; this.closeTopPanel(); action(); };
+    this.openPanel('confirm-screen');
+  }
+
   setPauseLevel(text) { $('pause-level').textContent = text; }
 }

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createRandom } from '../core/save.js';
 import { SimplexNoise } from 'three/addons/math/SimplexNoise.js';
 import { createGrass } from '../shaders/grass.js';
 import { createWater } from '../shaders/water.js';
@@ -51,7 +52,8 @@ const ROWS = 7;
 const tileX = (c) => -7 + c * TILE;
 const tileZ = (r) => -19 - r * TILE;
 
-export function build(kit, api) {
+export function build(kit, api, { save = null } = {}) {
+  const random = createRandom(save?.seed);
   const q = api.quality;
   const scene = api.scene;
   const sunDir = api.sky.sunDir;
@@ -119,11 +121,11 @@ export function build(kit, api) {
   }
 
   function brokenColumn(x, z, h, r = 0.45) {
-    const c = column(x, z, h, r, M.wall, Math.random() * 6);
+    const c = column(x, z, h, r, M.wall, random() * 6);
     // a fallen drum next to it
     const drum = new THREE.Mesh(columnGeo(1.4, r), M.wall);
-    drum.rotation.set(Math.PI / 2, 0, Math.random() * 6);
-    drum.position.set(x + (Math.random() - 0.5) * 2.5, r, z + (Math.random() - 0.5) * 2.5);
+    drum.rotation.set(Math.PI / 2, 0, random() * 6);
+    drum.position.set(x + (random() - 0.5) * 2.5, r, z + (random() - 0.5) * 2.5);
     drum.castShadow = true;
     kit.add(drum);
     return c;
@@ -270,7 +272,7 @@ export function build(kit, api) {
   const blocked = new Set(['2,4', '5,5', '0,5', '7,2']);
   for (const key of blocked) {
     const [c, r] = key.split(',').map(Number);
-    brokenColumn(tileX(c), tileZ(r), 0.9 + Math.random() * 0.5, 0.62);
+    brokenColumn(tileX(c), tileZ(r), 0.9 + random() * 0.5, 0.62);
   }
 
   // Pressure plates — glyph rings glow when weighted.
@@ -343,7 +345,7 @@ export function build(kit, api) {
       const k = 1 - b.moving;
       b.mesh.position.lerpVectors(b.from, b.to, k * k * (3 - 2 * k));
       kit.refreshSolid(b.mesh);
-      if (b.moving === 0) { api.sound('stone-thud', { volume: 0.7 }); checkPlates(); }
+      if (b.moving === 0) { api.sound('stone-thud', { volume: 0.7 }); checkPlates(); api.progress(); }
     }
   });
 
@@ -592,9 +594,9 @@ export function build(kit, api) {
     m.castShadow = true;
     m.receiveShadow = true;
     const target = new THREE.Vector3(0, -0.3, -57.2 - i * 2.05);
-    const start = new THREE.Vector3((Math.random() - 0.5) * 14, -10 - Math.random() * 6, target.z + (Math.random() - 0.5) * 4);
+    const start = new THREE.Vector3((random() - 0.5) * 14, -10 - random() * 6, target.z + (random() - 0.5) * 4);
     m.position.copy(start);
-    m.rotation.set(Math.random() * 2, Math.random() * 3, Math.random() * 2);
+    m.rotation.set(random() * 2, random() * 3, random() * 2);
     const rot0 = m.rotation.clone();
     m.userData.surface = 'stone';
     kit.add(m);
@@ -622,7 +624,7 @@ export function build(kit, api) {
         s.mesh.rotation.set(0, 0, 0);
         s.mesh.position.copy(s.target);
         kit.walkables.push(s.mesh);
-        api.sound('stone-thud', { volume: 0.6, rate: 0.8 + Math.random() * 0.3 });
+        api.sound('stone-thud', { volume: 0.6, rate: 0.8 + random() * 0.3 });
       } else all = false;
     }
     if (all && !state.bridgeBuilt) {
@@ -675,9 +677,9 @@ export function build(kit, api) {
   kit.add(mural);
 
   // The code — random each load.
-  const pool = [...GLYPHS].sort(() => Math.random() - 0.5);
+  const pool = [...GLYPHS].sort(() => random() - 0.5);
   const code = pool.slice(0, 3);              // code[i] = glyph for hour i
-  const tabletOrder = [0, 1, 2].sort(() => Math.random() - 0.5); // which tablet holds which hour
+  const tabletOrder = [0, 1, 2].sort(() => random() - 0.5); // which tablet holds which hour
 
   // Altar + drums.
   kit.box({ size: [4.2, 1.2, 2], pos: [0, 1.95, -82.6], mat: M.dressed, tile: 1.5, surface: 'stone' });
@@ -701,7 +703,7 @@ export function build(kit, api) {
     const d = new THREE.Mesh(drumGeo, drumMat);
     d.position.set(-1.25 + i * 1.25, 3.15, -82.0);
     d.castShadow = true;
-    const idx = Math.floor(Math.random() * 6);
+    const idx = Math.floor(random() * 6);
     const drum = { mesh: d, idx, angle: drumAngle(idx) };
     d.rotation.x = drum.angle;
     kit.add(d);
@@ -754,6 +756,7 @@ export function build(kit, api) {
   const coreLight = kit.pointLight(0xffb347, 0, 12, [0, 4, -83.3]);
   let coreRise = 0;
   kit.interact(core, () => (core.visible && coreRise >= 1 && !state.coreTaken ? 'Take the Ancient Core' : null), () => {
+    if (state.coreTaken || !state.dialsSolved) return null;
     state.coreTaken = true;
     core.visible = false;
     coreBeam.mesh.visible = false;
@@ -823,7 +826,7 @@ export function build(kit, api) {
   /* ===================================================================
      Vegetation, rocks, trees, grass, fireflies
      =================================================================== */
-  const rnd = (a, b) => a + Math.random() * (b - a);
+  const rnd = (a, b) => a + random() * (b - a);
   const ferns = [];
   const fernZones = [[22, 9, 6, 4], [-18, 4, 6, 18], [-16, -24, 8, 10], [16, -24, 8, 10], [-14, -80, 6, 16], [14, -80, 6, 16], [24, -2, 3, 14], [-12, 16, 10, 4], [14, 16, 10, 4]];
   for (const [cx, cz, w, d] of fernZones) {
@@ -856,10 +859,12 @@ export function build(kit, api) {
   ];
   const grass = createGrass({
     patches: [{ x: 0, z: -2, w: 60, d: 52 }, { x: 0, z: -82, w: 30, d: 24 }],
-    count: Math.round(26000 * q.grass),
+    count: 26000,
     sunDir,
     avoid: (x, z) => avoidRects.some(([x1, x2, z1, z2]) => x > x1 && x < x2 && z > z1 && z < z2),
   });
+  const grassCapacity = grass.mesh.count;
+  grass.mesh.count = Math.round(grassCapacity * q.grass);
   kit.add(grass.mesh);
   kit.track(grass);
   kit.update((dt, t) => grass.update(t, api.player.position, scene));
@@ -1042,7 +1047,38 @@ export function build(kit, api) {
     takeCore() { coreRise = 1; core.userData.onInteract(); },
   };
 
+  function snapshot() {
+    return { seed: random.seed, state: { ...state, plates: [...state.plates], tablets: [...state.tablets] },
+      blocks: blocks.map(b => [b.c, b.r]), mirrors: mirrors.map(m => m.o), drums: drums.map(d => d.idx),
+      enteredCourt, inSunCourt, checkpointBridge };
+  }
+  function restore(s) {
+    Object.assign(state, s.state, { plates: [...s.state.plates], tablets: [...s.state.tablets] });
+    enteredCourt = s.enteredCourt; inSunCourt = s.inSunCourt; checkpointBridge = s.checkpointBridge;
+    blocks.forEach((b, i) => { [b.c, b.r] = s.blocks[i]; b.moving = 0;
+      b.mesh.position.set(tileX(b.c), .9, tileZ(b.r)); kit.refreshSolid(b.mesh); });
+    checkPlates();
+    mirrors.forEach((m, i) => { m.o = s.mirrors[i]; m.angle = m.target = mirrorAngle(m.o); m.pivot.rotation.y = m.angle; });
+    traceBeam();
+    gateLift = state.gateOpen ? 1 : 0; gate.position.y = -gateLift * 4.3;
+    if (state.gateOpen) kit.removeCollider(gateProxy);
+    // A completed light puzzle restores the finished bridge, never a half-built crossing.
+    if (state.crystalLit) {
+      state.bridgeBuilding = state.bridgeBuilt = true; crystalLight.intensity = 30; crystalMat.emissiveIntensity = 3;
+      bridge.forEach(b => { b.done = true; b.t = 1; b.mesh.position.copy(b.target); b.mesh.rotation.set(0, 0, 0);
+        b.mesh.updateMatrixWorld(true); if (!kit.walkables.includes(b.mesh)) kit.walkables.push(b.mesh); });
+    }
+    drums.forEach((d, i) => { d.idx = s.drums[i]; d.angle = drumAngle(d.idx); d.mesh.rotation.x = d.angle; });
+    if (state.dialsSolved) { drumMat.emissive.setHex(0xffa53a); drumMat.emissiveIntensity = .8; }
+    coreRise = state.dialsSolved ? 1 : 0;
+    core.visible = coreBeam.mesh.visible = state.dialsSolved && !state.coreTaken;
+    core.position.y = 4; coreLight.intensity = core.visible ? 25 : 0;
+    tabletMeshes.forEach((mesh, i) => { mesh.children[1].material.emissiveIntensity = state.tablets[i] ? .9 : .05; });
+  }
   return kit.result({
+    snapshot, restore,
+    applyQuality(q) { grass.mesh.count = Math.round(grassCapacity * q.grass); water.setQuality(q); },
+    checkpointLabel: () => checkpointBridge ? 'Sanctum' : state.crystalLit ? 'Sun crystal restored' : state.gateOpen ? 'Sun Gate' : 'Temple approach',
     spawn: new THREE.Vector3(0, 0, 9),
     spawnYaw: 0,
     bounds: 100,

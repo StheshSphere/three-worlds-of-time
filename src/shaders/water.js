@@ -88,11 +88,6 @@ const WaterShader = {
 
 export function createWater(width, depth, { quality, sunDir, scene } = {}) {
   const geometry = new THREE.PlaneGeometry(width, depth);
-  if (quality && !quality.reflections) {
-    const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x0e3c3a, roughness: 0.08, metalness: 0.2 }));
-    mesh.rotation.x = -Math.PI / 2;
-    return { mesh, update() {}, dispose() { geometry.dispose(); mesh.material.dispose(); } };
-  }
   const scale = quality && quality.pixelRatio > 1 ? 0.5 : 0.35;
   const mesh = new Reflector(geometry, {
     shader: WaterShader,
@@ -102,14 +97,24 @@ export function createWater(width, depth, { quality, sunDir, scene } = {}) {
     clipBias: 0.003,
   });
   mesh.rotation.x = -Math.PI / 2;
-  const u = mesh.material.uniforms;
+  const reflectedMaterial = mesh.material;
+  const renderReflection = mesh.onBeforeRender;
+  const fallback = new THREE.MeshStandardMaterial({ color: 0x0e3c3a, roughness: .08, metalness: .2 });
+  function setQuality(q) {
+    mesh.material = q.reflections ? reflectedMaterial : fallback;
+    mesh.onBeforeRender = q.reflections ? renderReflection : () => {};
+    const scale = q.pixelRatio > 1 ? .5 : .35;
+    mesh.getRenderTarget().setSize(Math.max(1, Math.round((window.innerWidth || 1280) * scale)), Math.max(1, Math.round((window.innerHeight || 720) * scale)));
+  }
+  const u = reflectedMaterial.uniforms;
+  if (quality) setQuality(quality);
   if (sunDir) u.uSunDir.value.copy(sunDir);
   return {
-    mesh,
+    mesh, setQuality,
     update(t) {
       u.uTime.value = t;
       if (scene && scene.fog) { u.fogColor.value.copy(scene.fog.color); u.fogDensity.value = scene.fog.density; }
     },
-    dispose() { mesh.dispose(); },
+    dispose() { mesh.dispose(); geometry.dispose(); reflectedMaterial.dispose(); fallback.dispose(); },
   };
 }

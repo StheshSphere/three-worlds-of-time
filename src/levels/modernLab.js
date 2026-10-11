@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createRandom } from '../core/save.js';
 import { createParticles } from '../shaders/effects.js';
 import {
   createRevealInkMaterial, createFloorReflection, createRainGlassMaterial,
@@ -46,7 +47,8 @@ export const meta = {
   },
 };
 
-export function build(kit, api) {
+export function build(kit, api, { save = null } = {}) {
+  const random = createRandom(save?.seed);
   const q = api.quality;
   const scene = api.scene;
   scene.fog = new THREE.FogExp2(0x070b12, 0.018);
@@ -83,7 +85,7 @@ export function build(kit, api) {
     return kit.box({ size: [x2 - x1, 0.4, z2 - z1], pos: [(x1 + x2) / 2, -0.2, (z1 + z2) / 2], mat, tile, solid: false, surface });
   }
   function ceiling(x1, z1, x2, z2, y) {
-    return kit.box({ size: [x2 - x1, 0.3, z2 - z1], pos: [(x1 + x2) / 2, y + 0.15, (z1 + z2) / 2], mat: M.ceiling, tile: 3, solid: false, walk: false, map: false, cast: false });
+    return kit.box({ size: [x2 - x1, 0.3, z2 - z1], pos: [(x1 + x2) / 2, y + 0.15, (z1 + z2) / 2], mat: M.ceiling, tile: 3, solid: false, walk: false, cameraBlock: true, map: false, cast: false });
   }
   /** Sliding door: returns { open() } — the panel slides into the wall. */
   function slidingDoor(x, z, width, height, axis = 'x', locked = true) {
@@ -103,6 +105,11 @@ export function build(kit, api) {
     });
     return {
       panel,
+      restoreOpen() {
+        opening = true; t = 1;
+        if (axis === 'x') panel.position.x = start.x + width + .1; else panel.position.z = start.z + width + .1;
+        stripe.material.emissive.setHex(0x30ff90); kit.removeCollider(panel);
+      },
       open() {
         if (opening) return;
         opening = true;
@@ -218,9 +225,8 @@ export function build(kit, api) {
   sunStone.position.set(-6, -1.58, 7);
   kit.add(sunStone);
   kit.pointLight(0xffb36a, 6, 4, [-6, -0.7, 7]);
-  const glassMat = q.transmission
-    ? kit.track(new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.04, metalness: 0, transmission: 1, thickness: 0.2, ior: 1.45 }))
-    : kit.track(new THREE.MeshStandardMaterial({ color: 0x9fc4d6, roughness: 0.05, transparent: true, opacity: 0.25 }));
+  const glassMat = kit.track(new THREE.MeshPhysicalMaterial({ color: 0x9fc4d6, roughness: .04, metalness: 0,
+    transmission: q.transmission ? 1 : 0, thickness: .2, ior: 1.45, transparent: true, opacity: q.transmission ? 1 : .25 }));
   const glassFloor = kit.box({ size: [4, 0.06, 3], pos: [-6, -0.03, 7], mat: glassMat, solid: false, cast: false, surface: 'stone' });
   glassFloor.receiveShadow = false;
   const plaque = textTexture(['Foundation stones of the', 'Temple of the First Hour.', 'Excavated 2019 — the', 'Chronos Lab was built', 'directly above them.'], { w: 512, h: 220, bg: '#1a1408', fg: '#e9c98a' });
@@ -287,7 +293,7 @@ export function build(kit, api) {
     spot.target.position.set(0, 0, 0);
     kit.light(spot);
     kit.light(spot.target);
-    beacons.push({ spot, lamp, phase: Math.random() * 6 });
+    beacons.push({ spot, lamp, phase: random() * 6 });
   }
   const hemi = kit.light(new THREE.HemisphereLight(0x4a6a9a, 0x0a0a10, 0.42));
   // Cold moonlight through the south windows gives the dark hall its shape.
@@ -314,7 +320,7 @@ export function build(kit, api) {
     kit.add(sgn);
   }
   // Two-tone walls: dark lower panelling (wainscot) around the hall.
-  for (const [x, z, w, d] of [[0, -11.95, 24, 0.12], [-11.95, -7, 0.12, 10], [-11.95, 7, 0.12, 10], [11.95, -7, 0.12, 10], [11.95, 7, 0.12, 10]]) {
+  for (const [x, z, w, d] of [[-6.8, -11.95, 10.4, 0.12], [6.8, -11.95, 10.4, 0.12], [-11.95, -7, 0.12, 10], [-11.95, 7, 0.12, 10], [11.95, -7, 0.12, 10], [11.95, 7, 0.12, 10]]) {
     kit.box({ size: [w, 1.3, d], pos: [x, 0.65, z], mat: M.panels, tile: 1.5, solid: false, walk: false, map: false });
   }
   // Hazard ring around the machine.
@@ -344,7 +350,7 @@ export function build(kit, api) {
     g.fillStyle = '#07090c'; g.fillRect(0, 0, 128, 512);
     for (let y = 8; y < 512; y += 22) {
       g.fillStyle = '#1a1e24'; g.fillRect(6, y, 116, 16);
-      for (let x = 12; x < 110; x += 12) { g.fillStyle = Math.random() > 0.55 ? (Math.random() > 0.8 ? '#ffb020' : '#39ff8a') : '#0a120c'; g.fillRect(x, y + 5, 5, 5); }
+      for (let x = 12; x < 110; x += 12) { g.fillStyle = random() > 0.55 ? (random() > 0.8 ? '#ffb020' : '#39ff8a') : '#0a120c'; g.fillRect(x, y + 5, 5, 5); }
     }
   });
   const rackMat = kit.track(new THREE.MeshStandardMaterial({ color: 0x15181d, metalness: 0.6, roughness: 0.4, emissiveMap: ledTex, emissive: 0xffffff, emissiveIntensity: 0.0, map: ledTex }));
@@ -375,7 +381,7 @@ export function build(kit, api) {
   let boltT = -1;
   kit.update((dt, t) => {
     nextBolt -= dt;
-    if (nextBolt <= 0) { boltT = 0; nextBolt = 7 + Math.random() * 9; kit.after(() => api.sound('warp', { volume: 0.45, rate: 0.45 }), 700 + Math.random() * 900); }
+    if (nextBolt <= 0) { boltT = 0; nextBolt = 7 + random() * 9; kit.after(() => api.sound('warp', { volume: 0.45, rate: 0.45 }), 700 + random() * 900); }
     let flash = 0;
     if (boltT >= 0) {
       boltT += dt;
@@ -410,9 +416,10 @@ export function build(kit, api) {
   /* ===================================================================
      Logs & story
      =================================================================== */
-  const codeDigits = Array.from({ length: 4 }, () => Math.floor(Math.random() * 10));
+  const codeDigits = Array.from({ length: 4 }, () => Math.floor(random() * 10));
   const code = codeDigits.join('');
   kit.interact(incidentLaptop, 'Read the incident log', () => {
+    const firstRead = !state.readIncident;
     state.readIncident = true;
     api.sound('computer', { volume: 0.6 });
     api.reader({
@@ -428,7 +435,7 @@ export function build(kit, api) {
         + '  Ask Prof. Adeyemi. Her office is through the west door.',
     });
     api.journal('Incident log: power is out, the Lab Core is sealed in the vault. Reroute power in the <b>Power Room</b> (north, past the Archive). The Archive code is known only to <b>Prof. Adeyemi</b> (office, west).', 'incident');
-    api.setObjective('Find Prof. Adeyemi’s office');
+    if (firstRead && !state.flashlight) api.setObjective('Find Prof. Adeyemi’s office');
     return 'read';
   });
 
@@ -474,6 +481,7 @@ export function build(kit, api) {
   kit.add(flashHalo.mesh);
   kit.track(flashHalo);
   kit.interact(flashGroup, () => (state.flashlight ? null : 'Take the flashlight'), () => {
+    if (state.flashlight) return null;
     state.flashlight = true;
     flashGroup.visible = false;
     flashHalo.mesh.visible = false;
@@ -536,7 +544,7 @@ export function build(kit, api) {
     [-3.0, 1.55, -15.6, Math.PI / 2], [3.0, 1.45, -19.6, -Math.PI / 2],
     [-3.0, 1.6, -23.6, Math.PI / 2], [3.0, 1.5, -27.6, -Math.PI / 2],
   ];
-  const positions = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
+  const positions = [0, 1, 2, 3].sort(() => random() - 0.5);
   markSpots.forEach(([x, y, z, r], i) => {
     const pos = positions[i];
     const digit = codeDigits[pos];
@@ -571,7 +579,6 @@ export function build(kit, api) {
   const fl = { on: false, pos: new THREE.Vector3(), dir: new THREE.Vector3() };
   const _toMark = new THREE.Vector3();
   kit.update((dt, t) => {
-    api.flashlight();
     Object.assign(fl, api.flashlight());
     for (const mat of inkMats) {
       mat.uniforms.uOn.value = fl.on ? 1 : 0;
@@ -587,14 +594,19 @@ export function build(kit, api) {
       const lit = d < 9 && _toMark.normalize().dot(fl.dir) > 0.94;
       mk.seen = lit ? mk.seen + dt : 0;
       if (mk.seen > 0.4 && !state.marks[mk.pos]) {
+        discoverMark(mk);
+      }
+    }
+  });
+
+  function discoverMark(mk) {
+    if (state.marks[mk.pos]) return;
         state.marks[mk.pos] = true;
         api.sound('rune', { volume: 0.7, rate: 1.4 });
         const n = state.marks.filter(Boolean).length;
         api.journal(`Archive ink: digit <b>${mk.digit}</b> with <b>${mk.pos + 1}</b> dot${mk.pos ? 's' : ''} → position ${mk.pos + 1} of the code.`, `mark-${mk.pos}`);
         api.message(`Phosphor ink: a ${mk.digit} with ${mk.pos + 1} dot${mk.pos ? 's' : ''}. (${n}/4 — saved to journal, J)`, 3000);
-      }
-    }
-  });
+  }
 
   // Security door + keypad at the end of the corridor.
   const secDoor = slidingDoor(0, -30, 3.2, 3.4, 'x', true);
@@ -739,7 +751,7 @@ export function build(kit, api) {
     const mat = kit.track(new THREE.MeshStandardMaterial({ color: 0x3a4652, map: tileTex[type], emissiveMap: tileTex[type], emissive: 0x6fd3ff, emissiveIntensity: 0 }));
     const m = new THREE.Mesh(kit.track(new THREE.PlaneGeometry(TS * 0.94, TS * 0.94)), mat);
     m.position.set((c - 1) * TS, 1.95 - (r - 1) * TS, -45.62);
-    let rot = Math.floor(Math.random() * 4);
+    let rot = Math.floor(random() * 4);
     const tile = { mesh: m, mat, type, rot, angle: -rot * Math.PI / 2, r, c, solRot, flash: 0, litBase: 0.05 };
     m.rotation.z = tile.angle;
     kit.add(m);
@@ -784,7 +796,7 @@ export function build(kit, api) {
     if (solved && !state.power) restorePower();
     return solved;
   }
-  while (evaluateGridDry()) tiles.forEach((t) => { t.rot = Math.floor(Math.random() * 4); t.angle = -t.rot * Math.PI / 2; t.mesh.rotation.z = t.angle; });
+  while (evaluateGridDry()) tiles.forEach((t) => { t.rot = Math.floor(random() * 4); t.angle = -t.rot * Math.PI / 2; t.mesh.rotation.z = t.angle; });
   function evaluateGridDry() {
     const s = state.power; state.power = true; const r = evaluateGrid(); state.power = s; return r;
   }
@@ -806,12 +818,12 @@ export function build(kit, api) {
   ]) {
     const l = kit.pointLight(0xdcefff, 0, dist, [x, y, z]);
     l.userData.target = i;
-    l.visible = false;          // invisible lights cost nothing in the shaders
+    l.visible = true;           // fixed light count: intensity animates without recompilation
     workLights.push(l);
   }
   let powerT = -1;
   function restorePower() {
-    state.power = true;
+    state.power = state.vaultOpen = true;
     powerT = 0;
     api.sound('power-up', { volume: 1 });
     labSound('power-restored', { volume: 1 });   // Member 2 · Lab cue lands with the audio pass
@@ -820,7 +832,7 @@ export function build(kit, api) {
     api.setObjective('Recover the Lab Core from the vault (east of the hall)');
     roomRed.intensity = 0;
     for (const h of genHums) h.dispose();   // generators wind down — mains is back
-    for (const b of beacons) { b.spot.visible = false; b.lamp.material.emissiveIntensity = 0; }
+    for (const b of beacons) { b.spot.intensity = 0; b.lamp.material.emissiveIntensity = 0; }
     moon.intensity = 0.15;
     for (const s of strips) s.material.emissiveIntensity = 0.3;
     kit.after(() => vaultDoor.open(), 2200);
@@ -830,12 +842,12 @@ export function build(kit, api) {
     powerT += dt;
     workLights.forEach((l, i) => {
       const on = powerT > i * 0.25;
-      const flick = powerT < i * 0.25 + 0.4 && Math.random() > 0.5 ? 0.2 : 1;
-      l.visible = on;
+      const flick = powerT < i * 0.25 + 0.4 && random() > 0.5 ? 0.2 : 1;
+      l.visible = true;
       l.intensity = on ? l.userData.target * flick : 0;
     });
     const k = Math.min(1, powerT / 1.5);
-    tubeOff.emissiveIntensity = k * (Math.random() > 0.15 || powerT > 2 ? 2.4 : 0.3);
+    tubeOff.emissiveIntensity = k * (random() > 0.15 || powerT > 2 ? 2.4 : 0.3);
     hemi.intensity = 0.18 + k * 0.5;
     hemi.color.setHex(0xbcd4ff);
     screens.forEach((s) => { s.uniforms.uPower.value = k; });
@@ -872,9 +884,8 @@ export function build(kit, api) {
   core.position.set(18, 1.6, 0);
   kit.add(core);
   const coreLight = kit.pointLight(0x58d6ff, 12, 8, [18, 1.8, 0]);
-  const containMat = q.transmission
-    ? kit.track(new THREE.MeshPhysicalMaterial({ color: 0xe8f8ff, roughness: 0.03, transmission: 1, thickness: 0.4, ior: 1.5, transparent: true }))
-    : kit.track(new THREE.MeshStandardMaterial({ color: 0xbfe8ff, roughness: 0.05, transparent: true, opacity: 0.22 }));
+  const containMat = kit.track(new THREE.MeshPhysicalMaterial({ color: 0xbfe8ff, roughness: .03,
+    transmission: q.transmission ? 1 : 0, thickness: .4, ior: 1.5, transparent: true, opacity: q.transmission ? 1 : .22 }));
   const glassTube = new THREE.Mesh(kit.track(new THREE.CylinderGeometry(0.75, 0.75, 1.9, 40, 1, true)), containMat);
   glassTube.position.set(18, 1.75, 0);
   kit.add(glassTube);
@@ -895,6 +906,7 @@ export function build(kit, api) {
   screens.push(consoleScreen.material);
   let fieldT = -1;
   kit.interact(consoleScreen, () => (!state.power || state.fieldDown ? null : 'Disengage the containment field'), () => {
+    if (!state.power || state.fieldDown) return null;
     state.fieldDown = true;
     fieldT = 0;
     api.sound('force-field', { volume: 0.9, rate: 0.6 });
@@ -906,15 +918,16 @@ export function build(kit, api) {
     fieldMat.uniforms.uTime.value = t;
     core.rotation.y += dt;
     core.position.y = (state.fieldDown ? 1.6 : 1.6) + Math.sin(t * 2) * 0.08;
-    coreLight.intensity = 10 + Math.sin(t * 3) * 2;
+    coreLight.intensity = state.coreTaken ? 0 : 10 + Math.sin(t * 3) * 2;
     if (fieldT >= 0 && fieldT < 2) {
       fieldT += dt;
       fieldMat.uniforms.uDissolve.value = Math.min(1, fieldT / 1.2);
       glassTube.position.y = 1.75 - Math.min(1, fieldT / 1.6) * 2.2;
-      if (fieldT > 1.2) { field.visible = false; kit.removeCollider(fieldProxy); }
+      if (fieldT > 1.2 && field.visible) { field.visible = false; kit.removeCollider(fieldProxy); hum.dispose(); }
     }
   });
   kit.interact(core, () => (state.fieldDown && !state.coreTaken ? 'Take the Lab Core' : null), () => {
+    if (!state.fieldDown || state.coreTaken) return null;
     state.coreTaken = true;
     labSound('core-pickup', { volume: 0.7 });   // Member 2 · Lab take cue, layered under the shared core-get fanfare
     core.visible = false;
@@ -957,7 +970,7 @@ export function build(kit, api) {
     redLamp.emissiveIntensity = emergency.lamp * k;
     moon.intensity = 0.15 + (emergency.moon - 0.15) * k;
     stripMat.emissiveIntensity = 0.3 + (emergency.strips - 0.3) * k;
-    beacons.forEach((b, i) => { b.spot.visible = k > 0.001; b.spot.intensity = emergency.spots[i] * k; });
+    beacons.forEach((b, i) => { b.spot.intensity = emergency.spots[i] * k; });
     scene.fog.color.lerpColors(fogFrom, fogTo, 1 - k);
     scene.fog.density = 0.013 + (fogDensity0 - 0.013) * k;
     for (const m of glassMats) m.envMapIntensity = 1.6 - 0.6 * k;
@@ -1136,14 +1149,47 @@ export function build(kit, api) {
     state, code,
     readLogs() { incidentLaptop.userData.onInteract(); },
     takeFlashlight() { flashGroup.userData.onInteract(); },
-    revealAll() { marks.forEach((mk) => { state.marks[mk.pos] = true; }); },
+    revealAll() { marks.forEach(discoverMark); },
     openDoor() { state.doorOpen = true; secDoor.open(); },
     solveGrid() { tiles.forEach((t) => { t.rot = t.solRot; }); evaluateGrid(); },
     dropField() { consoleScreen.userData.onInteract(); },
     takeCore() { core.userData.onInteract(); },
   };
 
+  function snapshot() {
+    return { seed: random.seed, state: { ...state, marks: [...state.marks] }, tiles: tiles.map(t => t.rot), cpDone };
+  }
+  function restore(s) {
+    Object.assign(state, s.state, { marks: [...s.state.marks] }); cpDone = s.cpDone; cpFlash = 0;
+    flashGroup.visible = flashHalo.mesh.visible = !state.flashlight;
+    if (state.flashlight) api.grantFlashlight();
+    marks.forEach(m => { m.seen = state.marks[m.pos] ? .5 : 0; });
+    tiles.forEach((t, i) => { t.rot = s.tiles[i]; t.angle = -t.rot * Math.PI / 2; t.mesh.rotation.z = t.angle; });
+    evaluateGridDry();
+    if (state.doorOpen) secDoor.restoreOpen();
+    if (state.power) {
+      state.vaultOpen = true; powerT = 5; vaultDoor.restoreOpen();
+      for (const h of genHums) h.dispose();
+      workLights.forEach(l => { l.visible = true; l.intensity = l.userData.target; });
+      roomRed.intensity = redLamp.emissiveIntensity = officeLamp.intensity = 0;
+      beacons.forEach(b => { b.spot.intensity = 0; });
+      moon.intensity = .15; stripMat.emissiveIntensity = .3; tubeOff.emissiveIntensity = 2.4;
+      hemi.intensity = .68; hemi.color.setHex(0xbcd4ff);
+      screens.forEach(m => { m.uniforms.uPower.value = 1; });
+      scene.fog.color.copy(fogTo); scene.fog.density = .013;
+      glassMats.forEach(m => { m.envMapIntensity = 1.6; }); statusUpdate();
+    }
+    if (state.fieldDown) {
+      fieldT = 2; field.visible = false; fieldMat.uniforms.uDissolve.value = 1;
+      glassTube.position.y = -.45; kit.removeCollider(fieldProxy); hum.dispose();
+    }
+    core.visible = !state.coreTaken; coreLight.intensity = state.coreTaken ? 0 : 12;
+    cpPadMat.emissiveIntensity = cpDone ? 1.6 : 1.2;
+  }
   return kit.result({
+    applyQuality(q) { refl.setQuality(q); for (const m of glassMats) { m.transmission = q.transmission ? 1 : 0; m.opacity = q.transmission ? 1 : .25; m.needsUpdate = true; } },
+    snapshot, restore, prepare: () => api.player.prepareFlashlight(),
+    checkpointLabel: () => state.fieldDown ? 'Vault open' : state.power ? 'Power restored' : cpDone ? 'Power room' : state.doorOpen ? 'Archive unlocked' : 'Research facility',
     spawn: new THREE.Vector3(0, 0, 9.5),
     spawnYaw: 0,
     bounds: 60,

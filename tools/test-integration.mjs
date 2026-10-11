@@ -10,6 +10,7 @@ register('./tests/support/loader.mjs', import.meta.url);
 const { Element } = await import('./tests/support/dom.mjs');
 const THREE = await import('three');
 const { settings } = await import('../src/core/settings.js');
+const { JourneyStore, SAVE_KEY, validateSave } = await import('../src/core/save.js');
 const { Player } = await import('../src/player.js');
 const { createTimeMachine } = await import('../src/timeMachine.js');
 const { createLevelManager } = await import('../src/levelManager.js');
@@ -49,6 +50,7 @@ const levels = createLevelManager({ scene, renderer: {}, camera, player, timeMac
 const tick = (seconds, physics = false) => { for (let i=0;i<Math.ceil(seconds*60);i++) { levels.update(1/60); tm.update(1/60); scene.updateMatrixWorld(true); if (physics) player.update(1/60); } };
 const press = code => { const e = new Event('keydown', { cancelable:true }); Object.assign(e,{code,repeat:false}); window.dispatchEvent(e); };
 const continueDialogue = () => { let n=0; while (ui.dialogue.active) { assert.ok(++n<50); assert.ok(ui.dialogue.advance()); } };
+const play = (seconds, physics = false) => { for (let i=0;i<Math.ceil(seconds*60);i++) { continueDialogue(); tick(1/60,physics); } continueDialogue(); };
 
 // Shared cached assets have no public mutation API. Exercise the ownership decision
 // using the real predicate for normal resources and a tagged sentinel for cache-owned ones.
@@ -92,8 +94,8 @@ for (const view of ['first','third']) {
   test(`${view}: Ancient plates, mirrors, tablets and drums unlock core; progress 1/3`, () => {
     settings.set('thirdPerson', view === 'third');
     levels.restartRun(); continueDialogue(); player.mode=view; assert.equal(tm.getCores(),0); assert.equal(player.hasCheckpoint,false);
-    const d=levels.debug; d.solveBlocks(); assert.equal(d.state.gateOpen,true); d.alignMirrors(); d.readTablets(); ui.closeAllPanels(); d.solveDrums(); tick(3);
-    assert.equal(d.state.crystalLit,true); assert.equal(d.state.dialsSolved,true); d.takeCore(); continueDialogue(); tick(3.5); continueDialogue();
+    const d=levels.debug; d.solveBlocks(); assert.equal(d.state.gateOpen,true); d.alignMirrors(); d.readTablets(); ui.closeAllPanels(); d.solveDrums(); play(3);
+    assert.equal(d.state.crystalLit,true); assert.equal(d.state.dialsSolved,true); d.takeCore(); continueDialogue(); play(3.5); continueDialogue();
     assert.equal(levels.index,1); assert.equal(levels.state,'playing'); assert.equal(tm.getCores(),1);
     assert.equal(audio.music,'lab'); assert.equal(audio.ambience,'lab'); assert.equal(player.hasCheckpoint,false);
     assert.equal(document.getElementById('core-count').textContent,'Cores 1 / 3');
@@ -104,18 +106,18 @@ for (const view of ['first','third']) {
     d.revealAll();
     const pad=levels.level.interactables.find(o=>String(typeof o.userData.prompt==='function'?o.userData.prompt():o.userData.prompt).includes('4-digit'));
     assert.ok(pad); pad.userData.onInteract(); assert.equal(ui.onKeypadSubmit('xxxx'),false); assert.equal(ui.onKeypadSubmit(d.code),true); ui.closeAllPanels();
-    tick(.4); assert.equal(d.state.doorOpen,true); assert.equal(player.hasCheckpoint,true);
+    play(.4); assert.equal(d.state.doorOpen,true); assert.equal(player.hasCheckpoint,true);
     const cp=player.getCheckpoint().position.clone(); player.position.set(20,-30,20); levels.registerFall(); assert.ok(player.position.equals(cp));
-    d.solveGrid(); tick(3); assert.equal(d.state.power,true); d.dropField(); tick(2); assert.equal(d.state.fieldDown,true); d.takeCore(); continueDialogue(); tick(3.5); continueDialogue();
+    d.solveGrid(); play(3); assert.equal(d.state.power,true); d.dropField(); play(2); assert.equal(d.state.fieldDown,true); d.takeCore(); continueDialogue(); play(3.5); continueDialogue();
     assert.equal(levels.index,2); assert.equal(tm.getCores(),2); assert.equal(player.flashlight,null); assert.equal(audio.music,'neon');
   });
   test(`${view}: Future hazards animate, checkpoint respawns, sequence gates core, finale reaches 3/3`, () => {
-    const d=levels.debug; d.goto(3); player.frozen=true; const before=JSON.stringify(d.movers()); tick(.5); assert.notEqual(JSON.stringify(d.movers()),before);
+    const d=levels.debug; d.goto(3); player.frozen=true; const before=JSON.stringify(d.movers()); play(.5); assert.notEqual(JSON.stringify(d.movers()),before);
     assert.ok(d.gauntlet().barriers.length); assert.ok(d.phases().length);
     const cp=player.getCheckpoint().position.clone(); player.position.y=-40; levels.registerFall(); assert.ok(player.position.equals(cp)); player.frozen=false;
     d.takeCore(); assert.equal(d.state.coreTaken,false); assert.equal(d.solvePuzzle(),true); d.takeCore(); assert.equal(d.state.coreTaken,true);
-    continueDialogue(); tick(2); assert.equal(levels.state,'finale'); assert.equal(tm.getCores(),3); assert.equal(tm.userData.isRestoring,true);
-    tick(7); assert.equal(levels.state,'won');
+    continueDialogue(); play(2); assert.equal(levels.state,'finale'); assert.equal(tm.getCores(),3); assert.equal(tm.userData.isRestoring,true);
+    play(7); assert.equal(levels.state,'won');
     assert.equal(document.getElementById('core-count').textContent,'Cores 3 / 3');
   });
   test(`${view}: Restart clears all core/puzzle/checkpoint/flashlight/dash state`, () => {
@@ -185,6 +187,174 @@ test('Restart or level replacement cancels pending dialogue-driven transition ca
   ui.say([['Ari','Old level']]); levels.load(2); continueDialogue(); tick(3.5);
   assert.equal(levels.index,2); assert.equal(ui.dialogue.queue.length,0);
 });
+
+const storage = new Map();
+globalThis.localStorage = { getItem: k => storage.get(k) ?? null, setItem: (k,v) => storage.set(k,String(v)) };
+let pastSave, presentSave, futureSave;
+const save = () => { const r=levels.saveGame({silent:true}); assert.equal(r.ok,true,r.reason); const data=levels.readSave().save; assert.ok(validateSave(data)); return data; };
+const doorAt = z => player.colliders.some(o => { const b=o.userData.solidBox; return b && b.min.x < 0 && b.max.x > 0 && b.min.z <= z && b.max.z >= z && b.max.y > 2 && b.min.y < 1; });
+
+test('Save 1: Past light puzzle, bridge, mirrors, runes and collision restoration', () => {
+  levels.restartRun(); continueDialogue();
+  const d=levels.debug; d.solveBlocks(); d.alignMirrors(); d.readTablets(); d.solveDrums(); play(6);
+  player.mode='first'; player.yaw=.72;
+  const code=[...d.code]; pastSave=save();
+  assert.equal(pastSave.eras[0].puzzle.state.bridgeBuilt,true);
+  assert.ok(pastSave.journal.length===3);
+  levels.load(2); assert.ok(levels.continueJourney(pastSave));
+  assert.equal(levels.index,0); assert.equal(player.mode,'first');
+  assert.deepEqual(levels.debug.code,code); assert.equal(levels.debug.state.crystalLit,true);
+  assert.equal(levels.debug.state.dialsSolved,true); assert.equal(doorAt(-34.6),false);
+  const slabs=levels.level.walkables.filter(o=>o.position.z < -56 && o.position.z > -68 && Math.abs(o.position.x)<.01);
+  assert.equal(slabs.length,6); assert.ok(slabs.every(o=>Math.abs(o.position.y+.3)<1e-6));
+  assert.deepEqual(levels.level.snapshot().mirrors,pastSave.eras[0].puzzle.mirrors);
+  assert.deepEqual(levels.level.snapshot().drums,pastSave.eras[0].puzzle.drums);
+  assert.equal(ui.journal.length,3);
+});
+
+test('Partial puzzle settings and pending instructions survive loading', () => {
+  levels.restartRun(); continueDialogue();
+  const turns=levels.level.interactables.filter(o=>typeof o.userData.prompt === 'function' && o.userData.prompt() === 'Turn the bronze mirror');
+  turns[0].userData.onInteract();
+  ui.tutorial({kicker:'Puzzle',title:'Keep this instruction',html:'Read at your own pace.'});
+  const data=save(); const before=data.eras[0].puzzle;
+  levels.continueJourney(data);
+  assert.equal(ui.dialogue.current.card.title,'Keep this instruction');
+  assert.deepEqual(levels.level.snapshot().mirrors,before.mirrors);
+  const stability=levels.stability; tick(30); assert.equal(levels.stability,stability);
+  continueDialogue(); play(1); assert.ok(levels.stability<stability);
+  levels.continueJourney(pastSave); continueDialogue();
+});
+
+test('Save 2: Core collection commits before transition and continues into Present once', () => {
+  levels.debug.takeCore();
+  const milestone=levels.readSave().save;
+  assert.equal(milestone.eras[0].puzzle.state.coreTaken,true);
+  assert.equal(levels.saveGame({silent:true}).ok,false); // cannot capture an unsafe transition
+  levels.continueJourney(milestone); continueDialogue();
+  assert.equal(levels.index,1); assert.equal(tm.getCores(),1);
+  assert.equal(levels.debug.state.coreTaken,false);
+  assert.equal(save().eras[0].puzzle.state.crystalLit,true);
+});
+
+test('Save 3: Present archive, discovered ink, power, journal and unlocked geometry restore', () => {
+  const d=levels.debug; d.readLogs(); ui.closeAllPanels(); d.takeFlashlight(); d.revealAll();
+  const pad=levels.level.interactables.find(o=>String(typeof o.userData.prompt==='function'?o.userData.prompt():o.userData.prompt).includes('4-digit'));
+  pad.userData.onInteract(); assert.equal(ui.onKeypadSubmit(d.code),true); ui.closeAllPanels();
+  play(2); d.solveGrid(); play(5); d.dropField(); play(3);
+  player.mode='third'; player.setFlashlight(false);
+  const code=d.code; presentSave=save(); levels.continueJourney(presentSave); continueDialogue();
+  assert.equal(levels.debug.code,code);
+  assert.equal(levels.debug.state.power,true); assert.equal(levels.debug.state.fieldDown,true);
+  assert.equal(levels.debug.state.vaultOpen,true); assert.equal(doorAt(-30),false);
+  assert.equal(player.flashlightOwned,true); assert.equal(player.flashlightOn,false);
+  assert.deepEqual(levels.debug.state.marks,[true,true,true,true]);
+  assert.deepEqual(levels.level.snapshot().tiles,presentSave.eras[1].puzzle.tiles);
+  const blocksVault=player.colliders.some(o=>{const b=o.userData.solidBox;return b && b.min.x<12.4&&b.max.x>12.2&&b.min.z<0&&b.max.z>0&&b.min.y<1;});
+  assert.equal(blocksVault,false);
+  assert.equal(ui.journal.filter(j=>j.key==='incident').length,1);
+  assert.equal(ui.journal.filter(j=>j.key?.startsWith('mark-')).length,4);
+  assert.equal(tm.getCores(),1);
+});
+
+test('Save 4: Future checkpoints, permanent lock and safe hazard reset restore', () => {
+  levels.debug.takeCore(); continueDialogue(); play(3.6);
+  assert.equal(levels.index,2); assert.equal(tm.getCores(),2);
+  levels.debug.goto(4); player.onGround=true; play(.1);
+  const checkpointSave=save(); levels.continueJourney(checkpointSave); continueDialogue();
+  assert.ok(player.position.distanceTo(new THREE.Vector3(0,1.5,-107))<.01);
+  assert.equal(levels.debug.state.reached[4],true);
+  const d=levels.debug; d.solvePuzzle(); play(1.5); futureSave=save();
+  levels.continueJourney(futureSave); continueDialogue();
+  assert.equal(levels.debug.state.puzzleSolved,true);
+  assert.deepEqual(levels.debug.puzzle().seq,futureSave.eras[2].puzzle.seq);
+  assert.equal(levels.debug.collapse().riftActive,false); assert.equal(levels.debug.collapse().fallen,0);
+  assert.equal(player.canDash,true); assert.equal(player.flashlight,null);
+  assert.ok(player.position.z < -138); // no repeat of the already-completed collapse
+  assert.equal(tm.getCores(),2);
+});
+
+test('Save 5: Repeated loads preserve object/collider/audio counts and do not duplicate rewards', () => {
+  const counts=[];
+  for(let i=0;i<4;i++) {
+    levels.continueJourney(futureSave); continueDialogue();
+    counts.push([levels.level.objects.length,player.colliders.length,player.cameraColliders.length,player.walkables.length,positionals.size,ui.journal.length]);
+    assert.equal(tm.getCores(),2); assert.equal(levels.debug.state.coreTaken,false);
+  }
+  assert.ok(counts.every(c=>JSON.stringify(c)===JSON.stringify(counts[0])));
+  levels.debug.takeCore(); continueDialogue(); play(9);
+  assert.equal(levels.state,'won'); assert.equal(tm.getCores(),3);
+  const done=levels.readSave().save; assert.equal(done.status,'complete');
+  const loaded=levels.continueJourney(done); assert.equal(loaded.completed,true); assert.equal(tm.getCores(),3);
+});
+
+test('Save 6: Missing, malformed, future-version and inconsistent saves disable Continue safely', () => {
+  const mem=new Map(); const store=new JourneyStore(()=>({getItem:k=>mem.get(k),setItem:(k,v)=>mem.set(k,v)}));
+  assert.equal(store.read().status,'missing');
+  mem.set(SAVE_KEY,'{'); assert.equal(store.read().status,'corrupt');
+  for(const mutate of [s=>s.version++,s=>s.player.position[0]=null,s=>s.eras[1].puzzle.tiles=[],s=>s.eras[1].puzzle.state.power=false,s=>s.cores=3]) {
+    const broken=JSON.parse(JSON.stringify(presentSave)); mutate(broken); mem.set(SAVE_KEY,JSON.stringify(broken));
+    assert.equal(store.read().status,'corrupt'); assert.equal(store.write(broken).ok,false);
+  }
+  const blocked=new JourneyStore(()=>{throw Error('denied');}); assert.equal(blocked.read().status,'unavailable'); assert.equal(blocked.write(pastSave).ok,false);
+  let old=JSON.stringify(pastSave); const full=new JourneyStore(()=>({getItem:()=>old,setItem:()=>{throw Error('quota');}}));
+  assert.equal(full.write(presentSave).ok,false); assert.equal(full.read().save.era,0);
+});
+
+test('Camera stays inside the laboratory ceiling for extreme third-person pitch', () => {
+  levels.continueJourney(presentSave); continueDialogue();
+  player.position.set(0,0,-20); player.mode='third'; player.yaw=0; player.pitch=.9;
+  scene.updateMatrixWorld(true);
+  for(let i=0;i<30;i++) player._placeCamera(.05);
+  assert.ok(camera.position.y<3.6-.1,`ceiling clip: ${camera.position.y}`);
+  assert.ok(player.cameraColliders.length>player.colliders.length);
+});
+
+test('Archive entrance has no panelling across its opening; locked security door blocks passage', () => {
+  levels.load(1); continueDialogue(); scene.updateMatrixWorld(true);
+  const ray=new THREE.Raycaster(new THREE.Vector3(0,.65,-11),new THREE.Vector3(0,0,-1),0,2);
+  const meshes=[]; scene.traverse(o=>{if(o.isMesh && o.layers.test(camera.layers) && o.visible) meshes.push(o);});
+  const hits=ray.intersectObjects(meshes,false).filter(h=>h.object.material?.visible!==false && !h.object.material?.transparent);
+  assert.equal(hits.length,0);
+  assert.equal(doorAt(-30),true);
+});
+
+test('Power restoration and flashlight keep a constant light signature; quality switches apply live', () => {
+  const signature=()=>{const lights=[];scene.traverseVisible(o=>{if(o.isLight)lights.push(o.type);});return lights.sort().join(',');};
+  const before=signature(); levels.debug.takeFlashlight(); levels.debug.openDoor(); levels.debug.solveGrid();
+  for(let i=0;i<80;i++){play(.05);assert.equal(signature(),before);}
+  const refl=levels.level.objects.find(o=>o.isReflector); assert.ok(refl);
+  settings.set('quality','high'); levels.applyQuality(); assert.equal(refl.visible,true); assert.equal(player.flashlight.castShadow,true);
+  settings.set('quality','low'); levels.applyQuality(); assert.equal(refl.visible,false); assert.equal(player.flashlight.castShadow,false);
+});
+
+test('Required reading freezes Future hazards and stability until advancement', () => {
+  levels.continueJourney(futureSave); continueDialogue();
+  ui.tutorial({kicker:'Future',title:'Wait safely',html:'Read this first.'});
+  const before=JSON.stringify(levels.debug.movers()); const st=levels.stability;
+  tick(30); assert.equal(JSON.stringify(levels.debug.movers()),before); assert.equal(levels.stability,st);
+  continueDialogue(); play(.5); assert.notEqual(JSON.stringify(levels.debug.movers()),before);
+});
+
+test('New Journey confirmation leaves progress intact on cancel and replaces it only on acceptance', () => {
+  storage.set(SAVE_KEY,JSON.stringify(pastSave)); const old=storage.get(SAVE_KEY); let replaced=0;
+  ui.confirm('New Journey?', 'Replace progress?', () => { replaced++; levels.restartRun(); });
+  ui.closeTopPanel(); assert.equal(replaced,0); assert.equal(storage.get(SAVE_KEY),old);
+  assert.equal(document.getElementById('confirm-yes').onclick,null);
+  ui.confirm('New Journey?', 'Replace progress?', () => { replaced++; levels.restartRun(); });
+  document.getElementById('confirm-yes').onclick(); continueDialogue(); play(1);
+  assert.equal(replaced,1); assert.equal(levels.debug.state.crystalLit,false);
+  assert.equal(levels.readSave().save.eras[0].puzzle.state.crystalLit,false);
+});
+
+test('Completion cinema can be skipped once and completed saves cannot give a fourth core', () => {
+  levels.continueJourney(futureSave); continueDialogue(); levels.debug.takeCore(); continueDialogue(); play(2);
+  assert.equal(levels.state,'finale'); let endings=0; levels.callbacks.onFinale=()=>endings++;
+  levels.skipFinale(); levels.skipFinale(); assert.equal(endings,1); assert.equal(tm.getCores(),3);
+  levels.continueJourney(levels.readSave().save); assert.equal(tm.getCores(),3); assert.equal(levels.state,'won');
+  levels.callbacks.onFinale=null;
+});
+
 ui.resetTransient();
 console.log(JSON.stringify({suite:'Node logic integration (renderer, DOM and audio doubles)',passed:results.filter(x=>x.status==='PASS').length,failed:results.filter(x=>x.status==='FAIL').length,results},null,2));
 process.exit(results.some(x=>x.status==='FAIL')?1:0);

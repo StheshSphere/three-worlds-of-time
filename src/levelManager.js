@@ -3,6 +3,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createKit } from './core/kit.js';
 import { createSky } from './shaders/sky.js';
 import { settings } from './core/settings.js';
+import { JourneyStore, SAVE_VERSION, validateSave } from './core/save.js';
 import { assets } from './core/assets.js';
 import { ERA_CARDS } from './story.js';
 import * as ancientRuins from './levels/ancientRuins.js';
@@ -36,6 +37,11 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
   scene.add(levelGroup);
   const pmrem = new THREE.PMREMGenerator(renderer);
 
+  const store = new JourneyStore();
+  let eraProgress = [null, null, null];
+  let runActive = false, restoring = false, dirty = false, warming = false;
+  let saveClock = 0, dirtyAt = 0, lastSaved = -10, unsafeFor = 0, mountToken = 0;
+  const requestSave = () => { if (runActive && !restoring) { if (!dirty) dirtyAt = saveClock; dirty = true; } };
   let index = -1;
   let level = null;          // kit.result() of the mounted era
   let meta = null;
@@ -70,8 +76,9 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     get quality() { return settings.quality(); },
     get renderer() { return renderer; },
     audio,
-    message: (text, ms) => ui.message(text, ms),
-    setObjective: (text) => ui.setObjective(text),
+    progress: requestSave,
+    message: (text, ms) => { if (!restoring) ui.message(text, ms); },
+    setObjective: (text) => { ui.setObjective(text); requestSave(); },
     setHint: (fn) => { hintFn = fn; },
     /** fn() → [{ text, state: 'done'|'active'|'todo' }] — the HUD step checklist. */
     setChecklist: (fn) => { checklistFn = fn; },
@@ -79,37 +86,38 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     tutorial: (key, card, seconds = 13) => {
       if (shownTutorials.has(key)) return;
       shownTutorials.add(key);
-      ui.tutorial(card, seconds);
+      ui.tutorial(card, seconds); requestSave();
     },
     /** Ari thinks aloud (in-game captions), once per key. */
     say: (key, lines) => {
       if (spokenLines.has(key)) return;
       spokenLines.add(key);
-      ui.say(lines);
+      ui.say(lines); requestSave();
     },
     setMarker: (pos, color) => { marker = pos ? pos.clone() : null; minimap.setObjective(marker, color); },
     checkpoint: (pos, yaw, label = 'Checkpoint — the timeline remembers this moment.') => {
-      player.setCheckpoint(pos, yaw);
+      player.setCheckpoint(pos, yaw); requestSave();
       if (label) ui.message(label, 2200);
       audio.play('checkpoint', { volume: 0.5 });
     },
     penalize: (seconds, reason) => {
+      if (ui.dialogue.active && !ui.panelOpen) return;
       stability = Math.max(0, stability - seconds);
       if (reason) ui.message(`${reason}  (−${seconds}s stability)`, 2600);
     },
     hurt: (opts = {}) => {
-      if (state !== 'playing') return;
+      if (state !== 'playing' || ui.dialogue.active) return;
       if (player.hurt(opts)) {
         stats.shocks++;
         ui.damage();
         audio.play('zap', { volume: 0.9 });
         if (opts.penalty) api.penalize(opts.penalty, opts.reason);
-        if (opts.respawn) after(450, () => player.reset());
+        if (opts.respawn) { unsafeFor = .6; after(450, () => player.reset()); }
       }
     },
-    sound: (name, opts) => audio.play(name, opts),
+    sound: (name, opts) => { if (!restoring) audio.play(name, opts); },
     positional: (name, obj, opts) => { const h = audio.positional(name, obj, opts); levelDisposables.push(h); return h; },
-    journal: (html, key) => ui.addJournal(html, key),
+    journal: (html, key) => { ui.addJournal(html, key); requestSave(); },
     reader: (opts) => ui.openReader(opts),
     keypad: (onSubmit) => ui.openKeypad(onSubmit),
     grantFlashlight: () => { player.addFlashlight(); },
@@ -141,6 +149,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
   }
 
   function unload() {
+    ++mountToken; warming = false; unsafeFor = 0;
     audio.stopEffects();
     timers.length = 0;
     cinematic = null;
@@ -182,7 +191,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
    * Mount an era. opts.title → title-screen backdrop; opts.cutscene → mounted
    * but frozen (no countdown, no era card) until startPlay().
    */
-  function load(i, opts = {}) { mount(LEVELS[i], LEVELS[i].meta, i, opts); }
+  function load(i, opts = {}) { if (opts.title) runActive = false; mount(LEVELS[i], LEVELS[i].meta, i, opts); }
 
   /** Mount a non-playable cutscene set (src/levels/prologue.js). */
   function loadSet(mod, variant = 'night') {
@@ -192,10 +201,11 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     return level;
   }
 
-  function mount(mod, levelMeta, i, { title = false, cutscene = false, variant } = {}) {
+  function mount(mod, levelMeta, i, { title = false, cutscene = false, variant, saved = null } = {}) {
     unload();
     index = i;
     meta = levelMeta;
+    time = 0;
     const q = settings.quality();
 
     // Sky dome + image-based lighting rendered from it.
@@ -229,7 +239,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     }
 
     const kit = createKit({ renderer, quality: q, api });
-    level = mod.build(kit, api, { variant });
+    level = mod.build(kit, api, { variant, save: saved?.puzzle });
     for (const o of level.objects) levelGroup.add(o);
     for (const l of level.lights) levelGroup.add(l);
 
@@ -238,13 +248,16 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     // player is handed those exact arrays.
     const tm = timeMachine.getPhysics();
     kit.colliders.push(...tm.colliders);
+    kit.cameraColliders.push(...tm.colliders);
     kit.walkables.push(...tm.walkables);
     player.setLevel({
-      colliders: kit.colliders, walkables: kit.walkables, interactables: kit.interactables,
+      colliders: kit.colliders, cameraColliders: kit.cameraColliders, walkables: kit.walkables, interactables: kit.interactables,
       spawn: level.spawn, spawnYaw: level.spawnYaw ?? 0, bounds: level.bounds ?? 120,
       killY: level.killY ?? -14, surface: meta.surface,
     });
     player.canDash = !!level.dash;      // the Future's new ability
+    level.prepare?.();
+    level.applyQuality?.(q);
 
     timeMachine.setEra(i);
     player.hero.setGauntletColor(meta.accent);
@@ -259,6 +272,38 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     audio.setAmbience(meta.ambience);
     state = title ? 'title' : cutscene ? 'cutscene' : 'playing';
     stateTime = 0;
+    if (saved) {
+      level.restore(saved.puzzle);
+      stability = saved.stability;
+      saved.tutorials.forEach(k => shownTutorials.add(k)); saved.spoken.forEach(k => spokenLines.add(k));
+      ui.setObjective(saved.objective);
+      if (saved.checkpoint.active) player.setCheckpoint(new THREE.Vector3().fromArray(saved.checkpoint.position), saved.checkpoint.yaw);
+      scene.updateMatrixWorld(true);
+    }
+    // Compile hidden reward materials too. Light objects stay mounted at zero
+    // intensity, so turning on a torch/power cannot create new light variants.
+    if (renderer.compileAsync || renderer.compile) {
+      const token = mountToken;
+      warming = true; ui.show('timeline-loading');
+      scene.updateMatrixWorld(true);
+      if (renderer.initTexture) {
+        const textures = new Set();
+        scene.traverse(o => {
+          const materials = Array.isArray(o.material) ? o.material : [o.material];
+          for (const m of materials) {
+            if (!m) continue;
+            for (const value of Object.values(m)) if (value?.isTexture) textures.add(value);
+            for (const uniform of Object.values(m.uniforms || {})) if (uniform.value?.isTexture) textures.add(uniform.value);
+          }
+        });
+        for (const texture of textures) if (!texture.isRenderTargetTexture) renderer.initTexture(texture);
+      }
+      const compile = renderer.compileAsync ? renderer.compileAsync(scene, camera) : Promise.resolve(renderer.compile(scene, camera));
+      Promise.resolve(compile).catch(e => console.error('Shader warm-up failed', e)).finally(() => {
+        if (token !== mountToken) return;
+        warming = false; ui.hide('timeline-loading');
+      });
+    }
     if (!title && !cutscene) {
       startPlay();
     }
@@ -283,6 +328,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
       state = 'playing';
       stateTime = 0;
       player.frozen = false;
+      requestSave();
       if (meta.introCard) after(600, () => api.tutorial('intro', meta.introCard, 16));
     });
   }
@@ -290,6 +336,8 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
   /* ------------------------------ core → next era ---------------------------- */
   function beginCoreSequence() {
     if (state !== 'playing') return;
+    // Commit the core milestone at a consistent checkpoint before any teleport.
+    saveGame({ silent: true, checkpointOnly: true });
     state = 'transition';
     stateTime = 0;
     pending = { phase: 'dialogue', next: index + 1 };
@@ -327,6 +375,8 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
   }
 
   function restartRun(opts = {}) {
+    eraProgress = [null, null, null]; runActive = true; dirty = false;
+    if (!opts.cutscene) ui.dialogue.resetJourney();
     timeMachine.reset();
     stats.runTime = 0; stats.falls = 0; stats.rewinds = 0; stats.shocks = 0;
     ui.setCores(0);
@@ -336,12 +386,14 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     postfx.u.uFlash.value = 0;
     postfx.u.uWarp.value = 0;
     load(0, opts);
+    requestSave();
     if (!opts.cutscene) player.mode = settings.get('thirdPerson') ? 'third' : 'first';
   }
 
   function startFinale() {
     state = 'finale';
     ui.hide('hud');
+    ui.cinema(true);
     ui.clearMessage();
     stateTime = 0;
     player.frozen = true;
@@ -366,6 +418,15 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
 
   /* ------------------------------ per frame ---------------------------------- */
   function update(dt) {
+    if (warming) return;
+    saveClock += dt;
+    unsafeFor = Math.max(0, unsafeFor - dt);
+    if (runActive && state === 'playing' && !restoring) {
+      if ((dirty && saveClock - dirtyAt >= .35 && saveClock - lastSaved >= 1) || saveClock - lastSaved > 20)
+        saveGame({ silent: !dirty });
+    }
+    // All required reading pauses hazards, platform motion, countdowns and penalties.
+    if (state === 'playing' && ui.dialogue.active) return;
     time += dt;
     stateTime += dt;
     if (state === 'playing') {
@@ -375,6 +436,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
         if (timer.remaining <= 0) { timers.splice(i, 1); timer.fn(); }
       }
     }
+    if (state === 'playing' && ui.dialogue.active) return;
     if (sky) sky.update(camera, time);
     if (sun) {
       // Follow the player; snap to shadow-map texels so shadows don't shimmer.
@@ -391,7 +453,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
       if (level && level.update) level.update(dt, time);
     }
 
-    if (state === 'playing') {
+    if (state === 'playing' && !ui.dialogue.active) {
       stats.runTime += dt;
       stability -= dt;
       const frac = stability / stabilityMax;
@@ -425,6 +487,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
             u.uWarp.value = 0.6;
             startFinale();
           } else {
+            eraProgress[index] = captureEra();
             const done = index;
             timeMachine.lightSocket(done);
             const cores = timeMachine.getCores();
@@ -456,16 +519,80 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
       timeMachine.setWarp(THREE.MathUtils.smoothstep(stateTime, 5.2, 6.4));   // final surge ripples out (restoring drives the rest)
       u.uFlash.value = THREE.MathUtils.smoothstep(stateTime, 5.4, 6.4);
       if (stateTime > 1.5 && !pending.cheered) { pending.cheered = true; player.hero.play('cheer', { hold: true }); }
-      if (stateTime > 6.6) {
-        state = 'won';
-        cinematic = null;
-        u.uFlash.value = 0.0;
-        u.uWarp.value = 0;
-        timeMachine.setWarp(0);
-        player.unlock();
-        if (callbacks.onFinale) callbacks.onFinale({ ...stats });
-      }
+      if (stateTime > 6.6) finishFinale();
     }
+  }
+
+  function finishFinale() {
+    if (state !== 'finale') return;
+    state = 'won';
+    saveGame({ silent: true, completed: true, checkpointOnly: true });
+    cinematic = null; ui.cinema(false);
+    postfx.u.uFlash.value = postfx.u.uWarp.value = 0;
+    timeMachine.setWarp(0); player.unlock();
+    if (callbacks.onFinale) callbacks.onFinale({ ...stats });
+  }
+
+  function captureEra() {
+    const cp = player.getCheckpoint();
+    return { puzzle: level.snapshot(), checkpoint: { position: (cp?.position || player.spawn).toArray(),
+      yaw: cp?.yaw ?? player.spawnYaw, active: !!cp }, stability,
+      tutorials: [...shownTutorials], spoken: [...spokenLines],
+      objective: ui._cache.objectivetext || meta.objective,
+      label: level.checkpointLabel?.() || meta.title };
+  }
+
+  function saveGame({ silent = false, completed = false, checkpointOnly = false } = {}) {
+    if (!runActive || restoring || !level?.snapshot || unsafeFor > 0 ||
+        (!completed && !['playing', 'arrival'].includes(state)))
+      return { ok: false, reason: 'Wait for a safe moment in the era before saving.' };
+    eraProgress[index] = captureEra();
+    const save = { version: SAVE_VERSION, savedAt: Date.now(), status: completed ? 'complete' : 'active',
+      era: index, cores: completed ? 3 : index, eras: eraProgress,
+      player: player.savePose(checkpointOnly || index === 2), stats: { ...stats },
+      journal: ui.journal.map(j => ({ ...j })), dialogue: ui.dialogue.snapshot() };
+    const result = store.write(save);
+    // A failed autosave is retried at the periodic interval, never every frame.
+    lastSaved = saveClock; dirty = false;
+    if (!silent || !result.ok) ui.savedNotice(result.ok ? 'Timeline Saved' : result.reason, !result.ok);
+    return result;
+  }
+
+  function continueJourney(save = store.read().save) {
+    if (!validateSave(save)) return false;
+    restoring = true; runActive = true; dirty = false;
+    eraProgress = JSON.parse(JSON.stringify(save.eras));
+    Object.assign(stats, save.stats);
+    timeMachine.reset();
+    let target = save.era;
+    let completed = save.status === 'complete';
+    // Closing during core collection resumes at the next safe era boundary.
+    if (eraProgress[target].puzzle.state.coreTaken) {
+      if (target < 2) target++; else completed = true;
+    }
+    const cores = completed ? 3 : target;
+    for (let i = 0; i < cores; i++) timeMachine.lightSocket(i);
+    ui.setCores(cores); player.hero.setCores(cores);
+    postfx.u.uFlash.value = postfx.u.uWarp.value = postfx.u.uGlitch.value = 0;
+    timeMachine.setWarp(0);
+    const saved = eraProgress[target];
+    load(target, { cutscene: true, saved });
+    ui.journal = save.journal.map(j => ({ ...j })); ui._renderJournal();
+    player.frozen = false;
+    scene.updateMatrixWorld(true);
+    if (saved) player.restorePose(save.player);
+    else { player.mode = save.player.mode; player.reset(); }
+    state = completed ? 'won' : 'playing'; stateTime = 0;
+    ui.dialogue.instructed = save.dialogue.instructed;
+    if (!completed && target === save.era) ui.dialogue.restore(save.dialogue);
+    if (!completed && !shownTutorials.has('intro') && meta.introCard) api.tutorial('intro', meta.introCard);
+    if (!completed && target !== save.era) startPlay({ arrival: true });
+    if (checklistFn) ui.setChecklist(checklistFn());
+    if (hintFn) ui.setHint(typeof hintFn === 'function' ? hintFn() : hintFn);
+    ui.setStability(stability / stabilityMax, stability);
+    restoring = false; requestSave();
+    if (completed) saveGame({ silent: true, completed: true, checkpointOnly: true });
+    return { completed };
   }
 
   /** Called after player.update so cinematics can take the camera. */
@@ -473,6 +600,16 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
 
   return {
     api,
+    readSave: () => store.read(), saveGame, continueJourney, skipFinale: finishFinale,
+    get warming() { return warming; },
+    get stability() { return stability; },
+    requestSave,
+    applyQuality() {
+      const q = settings.quality();
+      if (sun) { sun.castShadow = q.shadows; sun.shadow.map?.dispose(); sun.shadow.map = null; sun.shadow.mapSize.set(q.shadowMapSize, q.shadowMapSize); }
+      if (player.flashlight) player.flashlight.castShadow = q.shadows;
+      level?.applyQuality?.(q);
+    },
     load,
     loadSet,
     startPlay,
@@ -492,6 +629,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     get debug() { return level && level.debug; },
     get level() { return level; },
     registerFall() {
+      if (ui.dialogue.active) return;
       stats.falls++;
       api.penalize(meta?.fallPenalty ?? 15, 'You slipped out of time');
       audio.play('warp', { volume: 0.5 });

@@ -116,14 +116,16 @@ for p in sorted(required):
     target = dest / p.relative_to(ROOT)
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(p, target)
-archive = ROOT / 'three-worlds-of-time.zip'
-with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+archive = ROOT / 'Three_Worlds_of_Time_FINAL_LAMP.zip'
+pending = archive.with_suffix('.zip.tmp')
+with zipfile.ZipFile(pending, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as z:
     for p in sorted(dest.rglob('*')):
         if p.is_file():
             z.write(p, p.relative_to(dest))
-with zipfile.ZipFile(archive) as z:
+with zipfile.ZipFile(pending) as z:
     assert 'index.html' in z.namelist()
     assert z.testzip() is None
+pending.replace(archive)
 print(f'PASS: {len(seen)} runtime modules; {len(required)} files; ZIP root and integrity verified.')
 print(f'Release: {archive.name} ({archive.stat().st_size / 1048576:.2f} MiB)')
 print('Test independently: cd dist && python3 -m http.server 8000')

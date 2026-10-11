@@ -42,6 +42,24 @@ Open <http://localhost:8000> in Chrome. **Never** open `index.html` as a `file:/
 | M | Minimap on/off |
 | J | Field journal (clues you've found) |
 | Esc | Pause (options, controls, credits, restart) |
+| Enter / click | Advance the current subtitle or important instruction |
+| X / Skip cinematic | Skip the current cinematic |
+| H | Reopen the latest tutorial |
+
+## Save and continue
+
+**Continue Journey** restores the latest valid browser-local journey. Completed puzzles, clues, journal,
+unlocked geometry, cores and stable puzzle configurations survive closing the browser. Progress autosaves
+at milestones and periodically; **Esc → Save Game** saves manually. The Future resumes at the last safe
+checkpoint with temporary hazards reset. **Resume** only closes the pause menu.
+
+Saves belong to the current browser profile and site origin on this device. Clearing site data removes them;
+another browser, device or host does not share them. Storage errors leave the previous save intact and show
+a notice. New Journey and restarting an era require confirmation before replacing existing progress.
+Reading important instructions pauses gameplay hazards and the stability countdown.
+
+See [FINAL_RELEASE_REPORT.md](FINAL_RELEASE_REPORT.md) for the final changes, test evidence and remaining
+Chrome/Ubuntu checks. Earlier member reports are retained as historical handoff documents.
 
 ## What's in it (mapped to the rubric)
 
@@ -53,7 +71,7 @@ Open <http://localhost:8000> in Chrome. **Never** open `index.html` as a `file:/
 - **3D Effects** — PBR materials (albedo + normal + AO/roughness/metal maps), image-based lighting from each era's sky,
   shadow-mapped sun that follows the player, a shadow-casting flashlight, **planar reflections** (temple pool, lab floor),
   **refraction** (transmission glass on High quality), procedural skybox, fog, bloom, MSAA, instancing.
-- **Shaders** — 17 custom GLSL shaders (16 full ShaderMaterials + 1 PBR injection), each driven by time and/or game state — see [`docs/SHADERS.md`](docs/SHADERS.md).
+- **Shaders** — custom GLSL effects driven by time and/or game state, including 21 effects documented in [`docs/SHADERS.md`](docs/SHADERS.md).
 - **Gameplay & Experience** — three distinct eras and verbs, a story told through logs, tablets and the setting
   (the lab's glass floor shows the temple underneath), per-era music + synthesised ambience + 3D positional sound,
   randomised codes (replay value), best-time record.
@@ -89,7 +107,7 @@ bash tools/build-deploy.sh
 ```
 
 Runs the brief's pre-flight checks (no absolute paths, lowercase asset names, every asset present), copies only what
-the browser needs into `dist/`, and zips it as `three-worlds-of-time.zip` **with `index.html` at the top level**.
+the browser needs into `dist/`, and zips it as `Three_Worlds_of_Time_FINAL_LAMP.zip` **with `index.html` at the top level**.
 Test the build (`cd dist && python3 -m http.server`), upload the zip via Moodle, then play the published URL in Chrome
 and check the console for 404s.
 
@@ -109,12 +127,13 @@ Requires Node 20+ and Python 3.10+ for development checks; neither is needed on 
 
 ```bash
 node tools/test-integration.mjs
+node tools/test-dialogue.mjs
 node tools/test-audio.mjs
 bash tools/build-deploy.sh
 python3 tools/test-release.py
 ```
 
-The first two execute real gameplay/audio lifecycle code with DOM, renderer and Web Audio doubles.
+The first three execute real gameplay, dialogue and audio lifecycle code with DOM, renderer and Web Audio doubles.
 The release check extracts the ZIP independently and verifies every file over HTTP at a subfolder URL.
 These checks do **not** verify visuals, GPU memory, real input, audible output or a complete spatial playthrough.
 

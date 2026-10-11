@@ -7,7 +7,7 @@
       "click": "#play-button"
     },
     {
-      "dialogueUntil": "__game.mode() === 'playing' && __game.levels.state === 'playing'"
+      "dialogueUntil": "(__game.mode() === 'playing' && __game.levels.state === 'playing') && !__game.ui.dialogue.active && !__game.levels.warming"
     },
     {
       "assert": "__game.player.mode === window.__testView && __game.timeMachine.getCores() === 0",
@@ -40,14 +40,14 @@
       "click": "#reader-screen [data-close]"
     },
     {
-      "until": "__game.mode() === 'playing' && __game.levels.debug.state.dialsSolved && __game.levels.debug.state.crystalLit"
+      "dialogueUntil": "(__game.mode() === 'playing' && __game.levels.debug.state.dialsSolved && __game.levels.debug.state.crystalLit) && !__game.ui.dialogue.active && !__game.levels.warming"
     },
     {
       "eval": "__game.levels.debug.takeCore()"
     },
     {
       "timeout": 240000,
-      "dialogueUntil": "__game.levels.index === 1 && __game.levels.state === 'playing'"
+      "dialogueUntil": "(__game.levels.index === 1 && __game.levels.state === 'playing') && !__game.ui.dialogue.active && !__game.levels.warming"
     },
     {
       "assert": "__game.timeMachine.getCores() === 1 && document.getElementById('core-count').textContent === 'Cores 1 / 3'",
@@ -60,26 +60,26 @@
       "click": "#reader-screen [data-close]"
     },
     {
-      "until": "__game.mode() === 'playing'"
+      "dialogueUntil": "(__game.mode() === 'playing') && !__game.ui.dialogue.active && !__game.levels.warming"
     },
     {
       "eval": "{ const d=__game.levels.debug; d.takeFlashlight(); d.revealAll(); d.openDoor(); d.solveGrid(); }"
     },
     {
-      "until": "__game.levels.debug.state.power && __game.levels.debug.state.doorOpen"
+      "dialogueUntil": "(__game.levels.debug.state.power && __game.levels.debug.state.doorOpen) && !__game.ui.dialogue.active && !__game.levels.warming"
     },
     {
       "eval": "__game.levels.debug.dropField()"
     },
     {
-      "until": "__game.levels.debug.state.fieldDown"
+      "dialogueUntil": "(__game.levels.debug.state.fieldDown) && !__game.ui.dialogue.active && !__game.levels.warming"
     },
     {
       "eval": "__game.levels.debug.takeCore()"
     },
     {
       "timeout": 240000,
-      "dialogueUntil": "__game.levels.index === 2 && __game.levels.state === 'playing'"
+      "dialogueUntil": "(__game.levels.index === 2 && __game.levels.state === 'playing') && !__game.ui.dialogue.active && !__game.levels.warming"
     },
     {
       "assert": "__game.timeMachine.getCores() === 2 && !__game.player.hasCheckpoint",
@@ -101,7 +101,7 @@
       "eval": "__game.levels.debug.takeCore()"
     },
     {
-      "dialogueUntil": "__game.levels.state === 'finale'"
+      "dialogueUntil": "(__game.levels.state === 'finale') && !__game.ui.dialogue.active && !__game.levels.warming"
     },
     {
       "assert": "__game.timeMachine.getCores() === 3 && __game.player.mode === 'third'",
@@ -128,7 +128,11 @@
       "click": "#win-restart-button"
     },
     {
-      "dialogueUntil": "__game.mode() === 'playing' && __game.levels.index === 0 && __game.levels.state === 'playing'"
+      "comment": "Confirm the deliberate overwrite of the completed journey.",
+      "click": "#confirm-yes"
+    },
+    {
+      "dialogueUntil": "(__game.mode() === 'playing' && __game.levels.index === 0 && __game.levels.state === 'playing') && !__game.ui.dialogue.active && !__game.levels.warming"
     },
     {
       "assert": "__game.timeMachine.getCores() === 0 && !__game.player.hasCheckpoint && !__game.levels.debug.state.gateOpen && !__game.player.canDash && !__game.player.flashlight",

@@ -81,7 +81,7 @@ player.addEventListener('step', (e) => {
 player.addEventListener('land', (e) => { audio.play('land', { volume: Math.min(1, e.speed / 14) }); if (e.speed > 13) player.shake(0.25); });
 player.addEventListener('dash', () => { audio.play('dash', { volume: 0.7 }); postfx.u.uWarp.value = Math.max(postfx.u.uWarp.value, 0.22); });
 player.addEventListener('fall', () => { if (levels.state === 'playing') levels.registerFall(); });
-player.addEventListener('view', (e) => ui.message(e.mode === 'first' ? 'First-person view' : 'Third-person view', 1200));
+player.addEventListener('view', (e) => { ui.message(e.mode === 'first' ? 'First-person view' : 'Third-person view', 1200); levels.requestSave(); });
 player.addEventListener('flashlight', (e) => audio.play('switch', { volume: 0.6, rate: e.on ? 1.1 : 0.9 }));
 
 player.addEventListener('lock', () => {
@@ -125,6 +125,7 @@ function pause() {
   ui.setPauseLevel(`You are in ${levels.meta ? levels.meta.title.toLowerCase() : 'the timeline'} — ${levels.meta ? levels.meta.subtitle : ''}.`);
   // A story set is not a playable era; restarting the journey remains available.
   document.getElementById('retry-era-button').classList.toggle('hidden', pausedMode === 'cutscene');
+  document.getElementById('save-button').disabled = pausedMode === 'cutscene' || !['playing', 'arrival'].includes(levels.state);
   ui.show('pause-screen');
 }
 
@@ -153,6 +154,7 @@ function showTitle() {
   player.facing = -0.5;
   const best = records.bestTime();
   ui.setBestTime(best ? `Best journey: ${formatTime(best)}` : '');
+  ui.setContinue(levels.readSave());
   ui.show('title-screen');
 }
 
@@ -162,6 +164,7 @@ function startGame() {
   ui.hide('title-screen');
   ui.hide('hud');
   ui.resetJournal();
+  ui.dialogue.resetJourney();
   mode = 'cutscene';
   ui.dialogue.setPaused('game', false);
   player.lock();
@@ -175,6 +178,7 @@ function beginPast() {
   mode = 'cutscene';
   cutscene.play(story.wakeUp(storyCtx(levels.level)), { onDone: () => {
     player.hero.release();
+    postfx.u.uFlash.value = postfx.u.uWarp.value = postfx.u.uGlitch.value = 0;
     player.mode = settings.get('thirdPerson') ? 'third' : 'first';
     player.yaw = 0;                 // look toward the temple; stay where Ari stood up
     player.pitch = -0.12;
@@ -200,6 +204,7 @@ function startCredits() {
   mode = 'credits';
   ui.endCard(false);
   ui.cinema(true, true, 'SPACE / ENTER / ESC — skip credits');
+  document.getElementById('skip-cinematic').classList.add('hidden');
   ui.rollCredits(true);
   clearTimeout(creditsTimer);
   creditsTimer = setTimeout(endCredits, 26500);
@@ -234,15 +239,59 @@ function showWinScreen(stats) {
   audio.play('win', { volume: 0.9 });
 }
 
-document.getElementById('play-button').addEventListener('click', startGame);
+function newJourney(action = startGame) {
+  const existing = levels.readSave();
+  if (existing.status === 'valid' || existing.status === 'corrupt' || ['playing', 'paused', 'failed', 'won'].includes(mode)) {
+    ui.confirm('Begin a New Journey?', 'This replaces your current journey and its puzzle progress. Your options are kept.', action);
+  } else action();
+}
+
+function continueGame() {
+  const save = levels.readSave();
+  if (!save.save) { ui.setContinue(save); return; }
+  audio.unlock(); cutscene.cancel();
+  ui.dialogue.setPaused('game', false);
+  const result = levels.continueJourney(save.save);
+  if (!result) { ui.savedNotice('The saved journey could not be loaded.', true); return; }
+  ui.hide('title-screen'); ui.hide('pause-screen'); ui.closeAllPanels();
+  if (result.completed) { showWinScreen(levels.stats); return; }
+  mode = 'playing'; ui.show('hud'); player.lock();
+  setTimeout(() => { if (!player.isLocked && mode === 'playing') pause(); }, 400);
+}
+
+function saveManually() {
+  const result = levels.saveGame();
+  if (!result.ok) ui.savedNotice(result.reason, true);
+}
+function retryEra() {
+  ui.hide('pause-screen'); ui.hide('fail-screen'); cutscene.cancel();
+  ui.dialogue.setPaused('game', false);
+  levels.retryEra(); mode = 'playing'; ui.show('hud'); player.lock();
+}
+function returnToTitle() {
+  levels.saveGame({ silent: true });
+  audio.stopMusic(.5); showTitle();
+}
+let lastSkipAt = -Infinity;
+function skipCinematic() {
+  if (performance.now() - lastSkipAt < 600 || levels.warming) return;
+  lastSkipAt = performance.now();
+  if (mode === 'playing' && levels.state === 'finale') { levels.skipFinale(); return; }
+  if (mode === 'cutscene' && cutscene.active) { cutscene.skip(); camera.fov = settings.get('fov'); camera.updateProjectionMatrix(); }
+}
+document.getElementById('play-button').addEventListener('click', () => newJourney());
+document.getElementById('continue-button').addEventListener('click', continueGame);
+document.getElementById('save-button').addEventListener('click', saveManually);
+document.getElementById('skip-cinematic').addEventListener('click', skipCinematic);
 document.getElementById('resume-button').addEventListener('click', resume);
-document.getElementById('retry-era-button').addEventListener('click', () => { ui.hide('pause-screen'); cutscene.cancel(); levels.retryEra(); mode = 'playing'; ui.show('hud'); player.lock(); });
-document.getElementById('restart-button').addEventListener('click', () => { ui.hide('pause-screen'); cutscene.cancel(); ui.resetJournal(); levels.restartRun(); mode = 'playing'; ui.show('hud'); player.lock(); });
-document.getElementById('quit-button').addEventListener('click', () => { audio.stopMusic(0.5); showTitle(); });
-document.getElementById('fail-retry-button').addEventListener('click', () => { ui.hide('fail-screen'); ui.show('hud'); levels.retryEra(); mode = 'playing'; player.lock(); });
+document.getElementById('retry-era-button').addEventListener('click', () => ui.confirm('Rewind this era?', 'This resets puzzles in this era. Cores from earlier eras are kept.', retryEra, 'Rewind era'));
+document.getElementById('restart-button').addEventListener('click', () => newJourney(() => { ui.hide('pause-screen'); startGame(); }));
+document.getElementById('quit-button').addEventListener('click', returnToTitle);
+document.getElementById('fail-retry-button').addEventListener('click', retryEra);
 document.getElementById('fail-quit-button').addEventListener('click', showTitle);
-document.getElementById('win-restart-button').addEventListener('click', () => { ui.hide('win-screen'); ui.show('hud'); ui.resetJournal(); levels.restartRun(); mode = 'playing'; player.lock(); });
+document.getElementById('win-restart-button').addEventListener('click', () => newJourney(() => { ui.hide('win-screen'); startGame(); }));
 document.getElementById('win-quit-button').addEventListener('click', showTitle);
+window.addEventListener('pagehide', () => levels.saveGame({ silent: true }));
 
 /* =====================================================================
    Member 2 — quick master volume / mute (title + pause screens).
@@ -306,9 +355,11 @@ ui.onPanelClosed = () => {
 };
 
 window.addEventListener('keydown', (e) => {
+  if ((mode === 'cutscene' || (mode === 'playing' && levels.state === 'finale')) && e.code === 'KeyX' && !e.repeat) { e.preventDefault(); skipCinematic(); return; }
   if (mode === 'cutscene' && e.code === 'Escape') { e.preventDefault(); pause(); return; }
   if (mode === 'credits' && !e.repeat && (e.code === 'Space' || e.code === 'Enter' || e.code === 'Escape')) { endCredits(); return; }
   if (e.code === 'Escape' && ui.panelOpen) { ui.closeTopPanel(); return; }
+  if (['Enter', 'NumpadEnter'].includes(e.code) && !e.repeat && ui.isOpen('reader-screen') && !ui.justOpened) { e.preventDefault(); ui.closeTopPanel(); return; }
   if (e.code === 'KeyE' && ui.isOpen('reader-screen') && !ui.justOpened) { ui.closeTopPanel(); return; }
   if (e.code === 'KeyJ' && (mode === 'playing' || mode === 'overlay')) {
     if (ui.isOpen('journal-screen')) ui.closeTopPanel();
@@ -319,7 +370,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 settings.onChange((key) => {
-  if (key === 'quality') { userPickedQuality = true; applyQuality(); ui.message('Graphics quality changed — reflections and grass density update when the next era loads.', 3500); }
+  if (key === 'quality') { userPickedQuality = true; applyQuality(); levels.applyQuality(); ui.message('Graphics quality updated.', 2200); }
   if (key === 'fov') { camera.fov = settings.get('fov'); camera.updateProjectionMatrix(); }
 });
 
@@ -385,9 +436,13 @@ function frame() {
   t += dt;
 
   const running = mode === 'playing' || mode === 'title' || mode === 'cutscene' || mode === 'credits';
-  if (running) {
+  const reading = mode === 'playing' && ui.dialogue.active;
+  player.inputEnabled = !reading && !levels.warming;
+  document.body.classList.toggle('reading', reading);
+  if (running && !levels.warming) {
     levels.update(dt);
-    player.update(dt);
+    if (mode !== 'playing' || !ui.dialogue.active) player.update(dt);
+    else { player._clearKeys(); player.hero.update(dt, { speed: 0, grounded: true }); }
     levels.updateCamera(dt);
     cutscene.update(dt);
   }
@@ -415,8 +470,8 @@ function frame() {
   }
 
   updateWaypoint();
-  postfx.render(t);
-  if (mode === 'playing' && minimap.enabled) minimap.render(player.position, player.facing, t);
+  if (!levels.warming) postfx.render(t);
+  if (mode === 'playing' && minimap.enabled && !levels.warming) minimap.render(player.position, player.facing, t);
 
   // FPS counter + one-time automatic downgrade on slow lab machines.
   fpsFrames++;
@@ -461,7 +516,7 @@ if (new URLSearchParams(location.search).get('qa') === '1') window.__game = {
   THREE, scene, renderer, camera, player, timeMachine, levels, audio, ui, postfx, settings,
   start: startGame,
   skipTo(i) { cutscene.cancel(); player.frozen = false; levels.load(i); mode = 'playing'; ui.hide('title-screen'); ui.show('hud'); },
-  cutscene,
+  cutscene, save: saveManually, continueGame, newJourney, returnToTitle, pause, resume,
   story: { startGame, beginPast, startEpilogue, endCredits },
   mode: () => mode,
 };

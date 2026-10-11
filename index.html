@@ -42,7 +42,8 @@
       <h2 class="game-subtitle title-font">— The Broken Hourglass —</h2>
       <p class="tagline">Past: <b>Solve</b> · Present: <b>Investigate</b> · Future: <b>Survive</b></p>
       <nav class="menu">
-        <button id="play-button" class="menu-btn primary">Begin the Journey</button>
+        <button id="play-button" class="menu-btn primary">New Journey</button>
+        <button id="continue-button" class="menu-btn" disabled>Continue Journey</button>
         <button class="menu-btn" data-open="controls-screen">Controls</button>
         <button class="menu-btn" data-open="options-screen">Options</button>
         <button class="menu-btn" data-open="credits-screen">Credits</button>
@@ -52,6 +53,7 @@
         <button id="title-mute-button" class="audio-mute" type="button" title="Mute all sound">Mute</button>
         <input id="title-volume-slider" class="audio-volume" type="range" min="0" max="1" step="0.05" aria-label="Master volume" />
       </div>
+      <p id="save-summary" class="small"></p>
       <p id="best-time" class="best-time"></p>
     </div>
   </div>
@@ -65,8 +67,8 @@
       <h1 id="era-card-title" class="title-font">The Past</h1>
       <p id="era-card-sub">Temple of the First Hour</p>
       <p id="era-card-line">The hourglass is shattered — solve the trials of the First Hour.</p>
-      <p id="era-card-instruction" class="dialogue-instruction hidden">Press Enter/click to continue</p>
-      <p id="era-card-reminder" class="dialogue-reminder hidden" role="status">Press Enter/click to continue</p>
+      <p id="era-card-instruction" class="dialogue-instruction hidden">Press Enter / Click to continue</p>
+      <p id="era-card-reminder" class="dialogue-reminder hidden" role="status">Press Enter / Click to continue</p>
     </div>
     <div class="letterbox bottom"></div>
   </div>
@@ -99,7 +101,9 @@
       <p class="kicker" id="tut-kicker">How to play</p>
       <h3 id="tut-title" class="title-font"></h3>
       <div id="tut-body"></div>
-      <p class="tut-foot"><kbd>H</kbd> show this again</p>
+      <p id="tutorial-card-instruction" class="dialogue-instruction hidden">Press Enter / Click to continue</p>
+      <p id="tutorial-card-reminder" class="dialogue-reminder hidden">Press Enter / Click to continue</p>
+      <button class="dialogue-continue" type="button">Continue</button>
     </div>
     <div id="interact-prompt" class="hidden"><kbd>E</kbd><span id="interact-label">Interact</span></div>
     <div id="message-banner"></div>
@@ -114,13 +118,13 @@
   <div id="cinema" class="hidden">
     <div class="cine-bar top"></div>
     <div class="cine-bar bottom"></div>
-    <div id="skip-hint"><kbd>Esc</kbd> pause</div>
+    <button id="skip-cinematic" type="button">Skip cinematic · X</button><div id="skip-hint"><kbd>Esc</kbd> pause</div>
   </div>
   <div id="caption" class="hidden" aria-live="polite">
     <div id="caption-speaker"></div>
     <div id="caption-text"></div>
-    <p id="caption-instruction" class="dialogue-instruction hidden">Press Enter/click to continue</p>
-    <p id="caption-reminder" class="dialogue-reminder hidden" role="status">Press Enter/click to continue</p>
+    <p id="caption-instruction" class="dialogue-instruction hidden">Press Enter / Click to continue</p>
+    <p id="caption-reminder" class="dialogue-reminder hidden" role="status">Press Enter / Click to continue</p>
   </div>
   <div id="end-card" class="hidden">
     <h1 class="title-font">The Three Worlds of Time</h1>
@@ -171,6 +175,7 @@
       <p id="pause-level" class="small"></p>
       <nav class="menu">
         <button id="resume-button" class="menu-btn primary">Resume</button>
+        <button id="save-button" class="menu-btn">Save Game</button>
         <button id="retry-era-button" class="menu-btn">Restart this era</button>
         <button id="restart-button" class="menu-btn">Restart journey</button>
         <button class="menu-btn" data-open="options-screen">Options</button>
@@ -185,6 +190,14 @@
       </div>
     </div>
   </div>
+
+  <div id="save-notice" class="hidden" role="status" aria-live="polite"></div>
+  <div id="confirm-screen" class="screen panel-screen hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <div class="panel"><h2 id="confirm-title" class="title-font"></h2><p id="confirm-message"></p>
+      <nav class="menu"><button id="confirm-yes" class="menu-btn primary"></button><button class="menu-btn" data-close>Keep current journey</button></nav>
+    </div>
+  </div>
+  <div id="timeline-loading" class="hidden" role="status">Preparing the timeline…</div>
 
   <!-- ============================ OPTIONS ============================ -->
   <div id="options-screen" class="screen panel-screen hidden">
@@ -227,6 +240,7 @@
         <dt><kbd>J</kbd></dt><dd>Field journal (clues you have found)</dd>
         <dt><kbd>H</kbd></dt><dd>Help — show the current instructions again</dd>
         <dt>◆ marker</dt><dd>Your next goal (with distance); the checklist top-left tracks your progress</dd>
+        <dt><kbd>X</kbd></dt><dd>Skip the current cinematic</dd>
         <dt><kbd>Esc</kbd></dt><dd>Pause</dd>
       </dl>
       <button class="menu-btn" data-close>Back</button>
@@ -238,6 +252,7 @@
     <div class="panel credits">
       <h2 class="title-font">Credits</h2>
       <div class="credits-scroll">
+        <div id="developer-credits"><h3>THREE WORLDS OF TIME</h3><h3>DEVELOPED BY</h3><p>Raquel de Franca<br>Sthembile Ndaba<br>Keitumetse Julius<br>Lesego Ngobeni<br>Ntandoyenkosi Nemadozi</p></div>
         <h3>Game</h3>
         <p>The Three Worlds of Time: The Broken Hourglass — a COMS3006A/COMS3025A Computer Graphics &amp; Visualisation group project, University of the Witwatersrand.</p>
         <p>Level design, puzzles, gameplay code, custom GLSL shaders (sky, time-warp post-process and era grading,
@@ -270,7 +285,7 @@
               “Elevator To Reactor (Loop)” by Hazmat Harry (the Present);
               “Space Synth Wave / Cool 80's Synth Wave” by Alex McCulloch / Pro Sensory (the Future)</li>
           <li><b>Fonts</b> — Cinzel by Natanael Gama and Rajdhani by Indian Type Foundry — SIL Open Font Licence — Google Fonts</li>
-          <li><b>Noise filter</b> — pink-noise coefficients adapted from Paul Kellett’s economy filter (musicdsp.org).</li>
+          <li><b>Ambience noise</b> — original sample-rate-aware low-pass noise synthesis. Earlier releases used Paul Kellett’s economy pink-noise filter (musicdsp.org); those coefficients are no longer included.</li>
           <li><b>Source links &amp; notices</b> — <a href="./credits.html" target="_blank" rel="noopener">Full asset audit and licence notices</a></li>
 
         </ul>

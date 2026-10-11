@@ -89,6 +89,7 @@ export class Player extends THREE.EventDispatcher {
     this.onGround = false;
     this.groundObject = null;
     this.colliders = [];
+    this.cameraColliders = [];
     this.walkables = [];
     this.interactables = [];
     this.nearbyInteractable = null;
@@ -209,7 +210,7 @@ export class Player extends THREE.EventDispatcher {
           this.dispatchEvent({ type: 'view', mode: this.mode });
         }
         break;
-      case 'KeyF': if (down && !repeat && this.flashlight) this.setFlashlight(!this.flashlightOn); break;
+      case 'KeyF': if (down && !repeat && this.flashlightOwned) this.setFlashlight(!this.flashlightOn); break;
       default: break;
     }
   }
@@ -263,8 +264,9 @@ export class Player extends THREE.EventDispatcher {
   }
 
   /* ----------------------------- level hooks ------------------------ */
-  setLevel({ colliders = [], walkables = [], interactables = [], spawn, spawnYaw = 0, bounds = 120, killY = -14, surface = 'stone' }) {
+  setLevel({ colliders = [], cameraColliders = colliders, walkables = [], interactables = [], spawn, spawnYaw = 0, bounds = 120, killY = -14, surface = 'stone' }) {
     this.colliders = colliders;
+    this.cameraColliders = cameraColliders;
     this.walkables = walkables;
     this.interactables = interactables;
     if (spawn) this.spawn.copy(spawn);
@@ -349,7 +351,7 @@ export class Player extends THREE.EventDispatcher {
   }
 
   /** Lab grants a flashlight: a shadow-casting spotlight that follows the look direction. */
-  addFlashlight() {
+  prepareFlashlight() {
     if (this.flashlight) return;
     const spot = new THREE.SpotLight(0xfff1d6, 0, 28, Math.PI / 6.5, 0.45, 1.4);
     spot.castShadow = settings.quality().shadows;
@@ -358,11 +360,17 @@ export class Player extends THREE.EventDispatcher {
     spot.shadow.bias = -0.0015;
     this.worldFx.add(spot, spot.target);
     this.flashlight = spot;
+    this.flashlightOwned = false;
+  }
+
+  addFlashlight() {
+    this.prepareFlashlight();
+    this.flashlightOwned = true;
     this.setFlashlight(true);
   }
 
   setFlashlight(on) {
-    if (!this.flashlight) return;
+    if (!this.flashlight || !this.flashlightOwned) return;
     this.flashlightOn = on;
     this.flashlight.intensity = on ? 70 : 0;
     this.dispatchEvent({ type: 'flashlight', on });
@@ -373,6 +381,7 @@ export class Player extends THREE.EventDispatcher {
       this.worldFx.remove(this.flashlight, this.flashlight.target);
       this.flashlight.dispose();
       this.flashlight = null;
+      this.flashlightOwned = false;
       this.flashlightOn = false;
     }
   }
@@ -581,27 +590,28 @@ export class Player extends THREE.EventDispatcher {
       _target.copy(_head).addScaledVector(_right, TP_SHOULDER);
       _target.y += TP_HEIGHT;
       _camDir.copy(_look).negate();
-      // Pull the camera in if level geometry blocks the view.
-      let want = TP_DISTANCE;
-      this._camRay.set(_target, _camDir);
-      this._camRay.far = TP_DISTANCE + 0.3;
-      this._cameraHits.length = 0;
-      const h = this._camRay.intersectObjects(this.walkables, false, this._cameraHits)[0];
-      if (h) want = Math.max(0.6, h.distance - 0.3);
-      // Snap in fast (never clip through a wall), ease out slowly.
-      this._camDist = want < this._camDist ? want : this._camDist + (want - this._camDist) * (1 - Math.exp(-3 * dt));
-      this.camera.position.copy(_target).addScaledVector(_camDir, this._camDist);
-      // Physics-only proxies and Object3D blockers have no raycast mesh.
-      // Sweep the full head-to-camera path, including the shoulder offset.
+      // Sweep from inside the room, including shoulder/height offset. Expanded
+      // AABBs protect the near plane, even for invisible proxies and ceilings.
+      this.camera.position.copy(_target).addScaledVector(_camDir, TP_DISTANCE);
       _cameraPath.subVectors(this.camera.position, _head);
-      let distance = _cameraPath.length();
+      const fullDistance = _cameraPath.length();
       _cameraPath.normalize();
       this._camRay.set(_head, _cameraPath);
-      for (const obj of this.colliders) {
+      this._camRay.far = fullDistance;
+      let want = fullDistance;
+      this._cameraHits.length = 0;
+      const h = this._camRay.intersectObjects(this.walkables, false, this._cameraHits)[0];
+      if (h) want = Math.max(.05, h.distance - .22);
+      for (const obj of this.cameraColliders) {
         if (!obj.userData.solidBox) continue;
-        _cameraBox.copy(obj.userData.solidBox).expandByScalar(0.18);
-        if (this._camRay.ray.intersectBox(_cameraBox, _cameraHit)) distance = Math.min(distance, Math.max(0.05, _cameraHit.distanceTo(_head) - 0.05));
+        _cameraBox.copy(obj.userData.solidBox).expandByScalar(.22);
+        // If expansion contains the anchor, use the unexpanded boundary.
+        if (_cameraBox.containsPoint(_head)) _cameraBox.copy(obj.userData.solidBox);
+        if (this._camRay.ray.intersectBox(_cameraBox, _cameraHit))
+          want = Math.min(want, Math.max(.05, _cameraHit.distanceTo(_head) - .04));
       }
+      this._camDist = want < this._camDist ? want : this._camDist + (want - this._camDist) * (1 - Math.exp(-4 * dt));
+      const distance = this._camDist;
       this.camera.position.copy(_head).addScaledVector(_cameraPath, distance);
       // Fade the hero out if the camera is jammed against them.
       this.hero.group.visible = this.frozen || distance > 0.9;
@@ -610,8 +620,8 @@ export class Player extends THREE.EventDispatcher {
     if (this._shake > 0) {
       this._shake = Math.max(0, this._shake - dt * 1.2);
       const s = this._shake * this._shake * 0.6;
-      this.camera.position.x += (Math.random() - 0.5) * s;
-      this.camera.position.y += (Math.random() - 0.5) * s;
+      this.camera.rotateX((Math.random() - .5) * s * .1);
+      this.camera.rotateY((Math.random() - .5) * s * .1);
     }
   }
 
@@ -644,6 +654,38 @@ export class Player extends THREE.EventDispatcher {
     this.flashlight.position.y -= 0.25;
     this.flashlight.target.position.copy(this.flashlight.position).addScaledVector(_look, 8);
     this.flashlight.target.updateMatrixWorld();
+  }
+
+  /** Reject unsafe mid-air/dynamic-platform positions; fall back to a stable checkpoint. */
+  savePose(checkpointOnly = false) {
+    const cp = this.getCheckpoint();
+    const stable = !checkpointOnly && this.onGround && !this._fell && !this.isDashing &&
+      !this.groundObject?.userData.carryDelta && this.groundObject?.userData.tileIndex === undefined;
+    return { position: (stable ? this.position : cp?.position || this.spawn).toArray(),
+      yaw: stable ? this.yaw : cp?.yaw ?? this.spawnYaw, pitch: this.pitch, mode: this.mode,
+      flashlightOn: !!this.flashlightOn };
+  }
+
+  restorePose(pose) {
+    this.reset(); this.mode = pose.mode;
+    _origin.fromArray(pose.position); _origin.y += .5;
+    this._groundRay.set(_origin, _down); this._groundRay.far = 1.5;
+    this._groundHits.length = 0;
+    const hit = this._groundRay.intersectObjects(this.walkables, false, this._groundHits)[0];
+    if (hit && Math.abs(hit.point.y - pose.position[1]) < .6) {
+      this.position.fromArray(pose.position); this.position.y = hit.point.y;
+      let blocked = false;
+      for (const o of this.colliders) {
+        const b = o.userData.solidBox;
+        if (b && this.position.y + RIG_HEIGHT > b.min.y && this.position.y + STEP_UP < b.max.y &&
+            this.position.x > b.min.x - RIG_RADIUS && this.position.x < b.max.x + RIG_RADIUS &&
+            this.position.z > b.min.z - RIG_RADIUS && this.position.z < b.max.z + RIG_RADIUS) { blocked = true; break; }
+      }
+      if (blocked) this.reset(); else { this.onGround = true; this.groundObject = hit.object; }
+    }
+    this.yaw = pose.yaw; this.pitch = pose.pitch; this.facing = this.yaw + Math.PI;
+    if (this.flashlightOwned) this.setFlashlight(pose.flashlightOn);
+    this._camDist = .05; this._placeCamera(0);
   }
 
   /** Flashlight state for the reveal-ink shader (the Present). */

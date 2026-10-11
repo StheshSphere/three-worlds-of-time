@@ -186,14 +186,14 @@ export class AudioManager {
     const len = this.ctx.sampleRate * 4;
     const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     const d = buf.getChannelData(0);
-    // Pink-ish noise (Paul Kellett's economy filter) — softer than white noise.
-    let b0 = 0, b1 = 0, b2 = 0;
-    for (let i = 0; i < len; i++) {
-      const w = Math.random() * 2 - 1;
-      b0 = 0.99765 * b0 + w * 0.099046;
-      b1 = 0.963 * b1 + w * 0.2965164;
-      b2 = 0.57 * b2 + w * 1.0526913;
-      d[i] = (b0 + b1 + b2 + w * 0.1848) * 0.11;
+    // Soft environmental noise. A one-pole low-pass with a sample-rate-derived
+    // pole replaces the earlier third-party coefficient table.
+    const alpha = 1 - Math.exp(-2 * Math.PI * 750 / this.ctx.sampleRate);
+    let low = 0;
+    for (let i = 0; i < d.length; i++) {
+      const white = Math.random() * 2 - 1;
+      low += alpha * (white - low);
+      d[i] = .85 * low + .035 * white;
     }
     this._noise = buf;
     return buf;

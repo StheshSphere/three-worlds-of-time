@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createRandom } from '../core/save.js';
 import { createParticles, createBeam } from '../shaders/effects.js';
 import { createBarrierMaterial, createScreenMaterial } from '../shaders/labShaders.js';
 import { createBeaconMaterial } from '../shaders/beacon.js';
@@ -48,7 +49,8 @@ export const meta = {
   },
 };
 
-export function build(kit, api) {
+export function build(kit, api, { save = null } = {}) {
+  const random = createRandom(save?.seed);
   const scene = api.scene;
   scene.fog = new THREE.FogExp2(0x1a0726, 0.0085);
   kit.light(new THREE.HemisphereLight(0x8a5aff, 0x12041e, 0.6));
@@ -59,7 +61,7 @@ export function build(kit, api) {
   const magenta = kit.track(new THREE.MeshStandardMaterial({ color: 0x1a0414, emissive: 0xff3fd0, emissiveIntensity: 2.6 }));
   const underGlow = kit.track(new THREE.MeshBasicMaterial({ color: 0x5a1a8a, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
 
-  const state = { section: 0, riftActive: false, coreTaken: false, puzzleSolved: false, puzzleStep: 0, puzzleCd: 0, reached: [false, false, false, false, false] };
+  const state = { section: 0, collapseComplete: false, riftActive: false, coreTaken: false, puzzleSolved: false, puzzleStep: 0, puzzleCd: 0, reached: [false, false, false, false, false] };
   const checkpoints = [
     new THREE.Vector3(0, 0, 4),
     new THREE.Vector3(0, 0.5, -18),
@@ -97,7 +99,7 @@ export function build(kit, api) {
   /* ===================================================================
      The city, the void and the sky traffic
      =================================================================== */
-  const city = createCity({ count: Math.round(260 * (api.quality.grass > 0.5 ? 1 : 0.6)), inner: 24, outer: 170, avoid: (x, z) => Math.abs(x) < 20 && z < 25 && z > -160 });
+  const city = createCity({ count: 260, inner: 24, outer: 170, avoid: (x, z) => Math.abs(x) < 20 && z < 25 && z > -160 });
   kit.add(city.mesh);
   kit.track(city);
   const grid = createGridFloor();
@@ -113,15 +115,16 @@ export function build(kit, api) {
   // Sky depth for pennies: a twinkling star dome and hovering city lights
   // (each ONE GPU-animated Points draw — see docs/SHADERS.md), plus a
   // second, magenta mote layer drifting up past the decks.
-  const stars = createStars({ count: Math.round(650 * (api.quality.grass > 0.5 ? 1 : 0.5)) });
+  const stars = createStars({ count: 650 });
   kit.add(stars.mesh);
   kit.track(stars);
-  const cityLights = createDistantLights({ count: Math.round(110 * (api.quality.grass > 0.5 ? 1 : 0.6)), avoid: (x, z) => Math.abs(x) < 24 && z < 25 && z > -160 });
+  const cityLights = createDistantLights({ count: 110, avoid: (x, z) => Math.abs(x) < 24 && z < 25 && z > -160 });
   kit.add(cityLights.mesh);
   kit.track(cityLights);
   const motes = createParticles({ count: 150, center: [0, -2, -70], box: [64, 22, 170], color: 0xff9ae8, size: 0.05, rise: 0.25 });
   kit.add(motes.mesh);
   kit.track(motes);
+  const cityCapacity = city.mesh.count;
   kit.update((dt, t) => { city.update(t, scene); grid.update(t); traffic.update(t); data.update(t); stars.update(t); cityLights.update(t); motes.update(t); });
 
   // Holographic billboards hovering beside the course.
@@ -445,7 +448,7 @@ export function build(kit, api) {
       }
       if (tile.timer >= 0) {
         tile.timer -= dt;
-        tile.group.position.x = tile.home.x + (Math.random() - 0.5) * 0.06;
+        tile.group.position.x = tile.home.x + (random() - 0.5) * 0.06;
         if (tile.timer <= 0) {
           tile.fallen = true;
           const idx = kit.walkables.indexOf(tile.body);
@@ -464,6 +467,8 @@ export function build(kit, api) {
         state.riftActive = false;
       }
       if (player.position.z < -138) {
+        state.collapseComplete = true;
+        api.checkpoint(new THREE.Vector3(-3.6, 3, -141), 0, 'Checkpoint — the spire is secure.');
         state.riftActive = false;
         if (riftRumble && riftRumble.sound.isPlaying) riftRumble.sound.pause();
         riftMat.uniforms.uDissolve.value = 0;
@@ -524,7 +529,7 @@ export function build(kit, api) {
   const PUZZLE_NAMES = ['cyan', 'magenta', 'gold'];
   const COLOR_HOLD = 3.5;                                        // seconds per colour
   const seq = [0, 1, 2];                                         // shown order, reshuffled per load
-  for (let i = seq.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [seq[i], seq[j]] = [seq[j], seq[i]]; }
+  for (let i = seq.length - 1; i > 0; i--) { const j = Math.floor(random() * (i + 1)); [seq[i], seq[j]] = [seq[j], seq[i]]; }
   const cssHex = (n) => `#${n.toString(16).padStart(6, '0')}`;
 
   const containmentMat = kit.track(createBarrierMaterial(0xff5be0));
@@ -616,6 +621,8 @@ export function build(kit, api) {
   function solvePuzzle() {
     if (state.puzzleSolved) return;
     state.puzzleSolved = true;
+    state.collapseComplete = true;
+    api.checkpoint(new THREE.Vector3(-3.6, 3, -141), 0, null);
     state.puzzleStep = 3;
     drawPanel();
     kit.removeCollider(containmentProxy);
@@ -759,7 +766,7 @@ export function build(kit, api) {
       ['Ride the moving platforms', state.reached[2]],
       ['Cross the phasing platforms', state.reached[3]],
       ['Get through the barrier gauntlet', state.reached[4]],
-      ['Outrun the collapse to the spire', api.player.position.z < -138 || state.coreTaken],
+      ['Outrun the collapse to the spire', state.collapseComplete || state.coreTaken],
       ['Break the sequence lock', state.puzzleSolved],
       ['Take the Neon Core', state.coreTaken],
     ];
@@ -831,7 +838,34 @@ export function build(kit, api) {
 
   kit.track({ dispose() { state.disposed = true; } });
 
+  function snapshot() {
+    return { seed: random.seed, seq: [...seq], state: {
+      section: state.section, collapseComplete: state.collapseComplete,
+      coreTaken: state.coreTaken, puzzleSolved: state.puzzleSolved, puzzleStep: state.puzzleStep, reached: [...state.reached] } };
+  }
+  function restore(s) {
+    Object.assign(state, s.state, { reached: [...s.state.reached], puzzleCd: 0, riftActive: false });
+    seq.splice(0, 3, ...s.seq); resetCollapse(); drawPanel();
+    nodes.forEach(n => { n.ci = n.prevCi = n.i; n.switchAt = -1;
+      n.orbMat.emissive.setHex(PUZZLE_COLORS[n.ci]); n.glowMat.color.setHex(PUZZLE_COLORS[n.ci]); });
+    if (state.puzzleSolved) {
+      kit.removeCollider(containmentProxy); containment.visible = false;
+      containmentMat.uniforms.uDissolve.value = 1; containmentMat.uniforms.uActive.value = 0;
+      fieldSfx.sound.pause();
+      nodes.forEach(n => { n.orbMat.emissive.setHex(0xffcc33); n.orbMat.emissiveIntensity = 1.1; n.glowMat.color.setHex(0xffcc33); });
+    }
+    core.visible = coreBeam.mesh.visible = !state.coreTaken; coreLight.intensity = state.coreTaken ? 0 : 18;
+    if (state.coreTaken) coreSfx.sound.pause();
+    introShown = true;
+  }
   return kit.result({
+    snapshot, restore,
+    applyQuality(q) {
+      city.mesh.count = Math.round(cityCapacity * (q.grass > .5 ? 1 : .6));
+      stars.mesh.geometry.setDrawRange(0, Math.round(650 * (q.grass > .5 ? 1 : .5)));
+      cityLights.mesh.geometry.setDrawRange(0, Math.round(110 * (q.grass > .5 ? 1 : .6)));
+    },
+    checkpointLabel: () => state.puzzleSolved ? 'Sequence lock released' : state.collapseComplete ? 'Spire' : ['Arrival', 'Moving platforms', 'Phase platforms', 'Gauntlet', 'Collapse bridge'][state.section],
     spawn: checkpoints[0].clone(),
     spawnYaw: 0,
     bounds: 200,

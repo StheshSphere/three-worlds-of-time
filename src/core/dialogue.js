@@ -10,7 +10,7 @@ export class Dialogue {
     this.heldEnter = new Set();
     this.instructed = false;
     this.timer = null;
-    this.views = Object.fromEntries(['caption', 'era-card'].map(id => [id, {
+    this.views = Object.fromEntries(['caption', 'era-card', 'tutorial-card'].map(id => [id, {
       root: document.getElementById(id),
       instruction: document.getElementById(id + '-instruction'),
       reminder: document.getElementById(id + '-reminder'),
@@ -131,6 +131,17 @@ export class Dialogue {
       view.reminder.classList.toggle('hidden', !visible || !this.reminded);
     }
   }
+
+  resetJourney() { this.clear(); this.instructed = false; this.heldEnter.clear(); }
+
+  snapshot() {
+    return { instructed: this.instructed, entries: [this.current, ...this.queue].filter(Boolean)
+      .filter(e => e.view !== 'era-card').map(e => e.view === 'caption'
+        ? { view: e.view, speaker: e.speaker || '', text: e.text, inGame: true }
+        : { view: e.view, card: { kicker: e.card.kicker || '', title: e.card.title, html: e.card.html } }) };
+  }
+
+  restore(saved) { this.clear(); this.instructed = saved.instructed; this.enqueue(saved.entries); }
 
   clear() {
     this.stopTimer();
