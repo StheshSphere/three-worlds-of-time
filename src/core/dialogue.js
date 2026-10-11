@@ -56,7 +56,8 @@ export class Dialogue {
   get enabled() { return this.active && !this.pauses.size; }
   consume(e) { e.preventDefault(); e.stopImmediatePropagation(); }
   acceptsClick(e) {
-    return this.enabled && (!!document.pointerLockElement || this.views[this.current.view].root.contains(e.target));
+    return this.enabled && (this.views[this.current.view].root.contains(e.target) ||
+      !e.target?.closest?.('button, input, textarea, select, a, [role="button"]'));
   }
 
   enqueue(entries) {
@@ -126,7 +127,7 @@ export class Dialogue {
     for (const [id, view] of Object.entries(this.views)) {
       const visible = this.enabled && this.current.view === id;
       view.root.classList.toggle('hidden', !visible);
-      view.instruction.classList.toggle('hidden', !visible || this.instructed);
+      view.instruction.classList.toggle('hidden', !visible || this.instructed || this.reminded);
       view.reminder.classList.toggle('hidden', !visible || !this.reminded);
     }
   }
