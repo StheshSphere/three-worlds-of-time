@@ -21,8 +21,10 @@ export const ERA_GRADES = [
   { lift: [0.004, 0.002, 0.0], gain: [1.06, 1.0, 0.9], saturation: 1.1, bloom: [0.45, 0.55, 0.88], exposure: 1.0 },
   // the Present: cool, desaturated, clinical
   { lift: [0.0, 0.003, 0.008], gain: [0.92, 1.0, 1.1], saturation: 0.92, bloom: [0.55, 0.45, 0.82], exposure: 1.15 },
-  // the Future: punchy neon
-  { lift: [0.004, 0.0, 0.01], gain: [1.05, 0.95, 1.1], saturation: 1.15, bloom: [0.8, 0.55, 0.7], exposure: 1.0 },
+  // The Future: colourful and legible instead of a blown-out pink/white haze.
+  // Keep bloom only for the brightest details; a narrower radius preserves
+  // the cyan/magenta/gold puzzle colours and the silhouettes of the towers.
+  { lift: [0.0, 0.0, 0.002], gain: [0.98, 0.97, 1.02], saturation: 1.05, bloom: [0.28, 0.23, 1.02], exposure: 0.78 },
 ];
 
 export class PostFX {

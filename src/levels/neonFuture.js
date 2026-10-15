@@ -38,7 +38,7 @@ export const meta = {
   stability: 360,
   accent: 0xff5be0,
   surface: 'metal',
-  sun: { color: 0xa9d8ff, intensity: 1.4, extent: 20 },
+  sun: { color: 0xa9d8ff, intensity: 0.95, extent: 20 },
   fallPenalty: 12,
   introCard: {
     kicker: 'The Future · Your goal', title: 'Survive the collapsing skyline',
@@ -54,13 +54,13 @@ export function build(kit, api, { save = null } = {}) {
   const random = createRandom(save?.seed);
   const scene = api.scene;
   scene.fog = new THREE.FogExp2(0x1a0726, 0.0085);
-  kit.light(new THREE.HemisphereLight(0x8a5aff, 0x12041e, 0.6));
+  kit.light(new THREE.HemisphereLight(0x8a5aff, 0x12041e, 0.78));
 
   const deck = kit.material('metal-plate-02', { metal: true, tint: 0x5a6070, roughness: 0.45 });
   const deckDark = kit.material('metal-plate', { metal: true, tint: 0x3a3f4c, roughness: 0.5 });
-  const cyan = kit.track(new THREE.MeshStandardMaterial({ color: 0x041418, emissive: 0x27e0ff, emissiveIntensity: 2.6 }));
-  const magenta = kit.track(new THREE.MeshStandardMaterial({ color: 0x1a0414, emissive: 0xff3fd0, emissiveIntensity: 2.6 }));
-  const underGlow = kit.track(new THREE.MeshBasicMaterial({ color: 0x5a1a8a, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const cyan = kit.track(new THREE.MeshStandardMaterial({ color: 0x0a3743, emissive: 0x27e0ff, emissiveIntensity: 1.25, roughness: 0.48 }));
+  const magenta = kit.track(new THREE.MeshStandardMaterial({ color: 0x370e34, emissive: 0xff3fd0, emissiveIntensity: 1.25, roughness: 0.48 }));
+  const underGlow = kit.track(new THREE.MeshBasicMaterial({ color: 0x4c1780, transparent: true, opacity: 0.17, blending: THREE.AdditiveBlending, depthWrite: false }));
 
   const state = { section: 0, collapseComplete: false, riftActive: false, coreTaken: false, puzzleSolved: false, puzzleStep: 0, puzzleCd: 0, reached: [false, false, false, false, false] };
   const checkpoints = [
@@ -100,7 +100,8 @@ export function build(kit, api, { save = null } = {}) {
   /* ===================================================================
      The city, the void and the sky traffic
      =================================================================== */
-  const city = createCity({ count: 260, inner: 24, outer: 170, avoid: (x, z) => Math.abs(x) < 20 && z < 25 && z > -160 });
+  // Keep towers at the sides, not immediately beside the player or the final colour lock.
+  const city = createCity({ count: 215, inner: 32, outer: 170, avoid: (x, z) => Math.abs(x) < 38 && z < 30 && z > -170 });
   kit.add(city.mesh);
   kit.track(city);
   const grid = createGridFloor();
@@ -116,10 +117,10 @@ export function build(kit, api, { save = null } = {}) {
   // Sky depth for pennies: a twinkling star dome and hovering city lights
   // (each ONE GPU-animated Points draw — see docs/SHADERS.md), plus a
   // second, magenta mote layer drifting up past the decks.
-  const stars = createStars({ count: 650 });
+  const stars = createStars({ count: 500 });
   kit.add(stars.mesh);
   kit.track(stars);
-  const cityLights = createDistantLights({ count: 110, avoid: (x, z) => Math.abs(x) < 24 && z < 25 && z > -160 });
+  const cityLights = createDistantLights({ count: 78, avoid: (x, z) => Math.abs(x) < 34 && z < 30 && z > -170 });
   kit.add(cityLights.mesh);
   kit.track(cityLights);
   const motes = createParticles({ count: 150, center: [0, -2, -70], box: [64, 22, 170], color: 0xff9ae8, size: 0.05, rise: 0.25 });
@@ -517,16 +518,17 @@ export function build(kit, api, { save = null } = {}) {
   pedestal.position.set(0, 3.5, -143);
   kit.add(pedestal);
   kit.solidFrom(pedestal);
-  const coreMat = kit.track(new THREE.MeshStandardMaterial({ color: 0xffd0f6, emissive: 0xff3fd0, emissiveIntensity: 4.5, roughness: 0.15 }));
+  const coreMat = kit.track(new THREE.MeshStandardMaterial({ color: 0xffb2e5, emissive: 0xff3fd0, emissiveIntensity: 1.7, roughness: 0.25 }));
   const core = new THREE.Mesh(kit.track(new THREE.OctahedronGeometry(0.45, 1)), coreMat);
   core.position.set(0, 4.7, -143);
   kit.add(core);
-  const coreBeam = createBeam({ radius: 0.5, color: 0xff7ae6 });
+  const coreBeam = createBeam({ radius: 0.3, color: 0xff7ae6 });
   coreBeam.set(new THREE.Vector3(0, 5, -143), new THREE.Vector3(0, 60, -143));
-  coreBeam.material.uniforms.uIntensity.value = 0.55;
+  coreBeam.material.uniforms.uIntensity.value = 0.23;
   kit.add(coreBeam.mesh);
   kit.track(coreBeam);
-  const coreLight = kit.pointLight(0xff4fd8, 18, 14, [0, 5.2, -143]);
+  // A contained accent light rather than a huge white/magenta wash over the puzzle.
+  const coreLight = kit.pointLight(0xff4fd8, 5.5, 11, [0, 5.2, -143]);
   // The core is never silent: a bright hum marks it from across the
   // spire — a "hear the goal" cue, like the lab's generator room.
   const coreSfx = api.positional('hum', core, { volume: 0.3, refDistance: 4.5, rolloff: 1.4, rate: 1.5 });
@@ -584,12 +586,13 @@ export function build(kit, api, { save = null } = {}) {
     pylon.castShadow = true; pylon.receiveShadow = true;
     pylon.position.y = 0.55;
     g.add(pylon);
-    const orbMat = kit.track(new THREE.MeshStandardMaterial({ color: 0x10161c, emissive: PUZZLE_COLORS[0], emissiveIntensity: 3, roughness: 0.3 }));
+    const orbMat = kit.track(new THREE.MeshStandardMaterial({ color: 0x23333f, emissive: PUZZLE_COLORS[0], emissiveIntensity: 1.05, roughness: 0.38, metalness: 0.12 }));
     const orb = new THREE.Mesh(kit.track(new THREE.IcosahedronGeometry(0.43, 1)), orbMat);
     orb.position.y = 1.5;
     g.add(orb);
-    const glowMat = kit.track(new THREE.MeshBasicMaterial({ map: nodeGlowTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, color: PUZZLE_COLORS[0] }));
-    const glow = new THREE.Mesh(kit.track(new THREE.PlaneGeometry(2.3, 2.3)), glowMat);
+    // The billboards are subtle halos, not large overexposed white discs.
+    const glowMat = kit.track(new THREE.MeshBasicMaterial({ map: nodeGlowTex, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, color: PUZZLE_COLORS[0] }));
+    const glow = new THREE.Mesh(kit.track(new THREE.PlaneGeometry(1.65, 1.65)), glowMat);
     glow.position.y = 1.5;
     g.add(glow);
     g.position.set(nx, 3.0, nz);
@@ -613,7 +616,10 @@ export function build(kit, api, { save = null } = {}) {
   });
 
   const panelTex = kit.canvasTexture(768, 384, (g) => drawPanelTo(g));
-  const panelMat = kit.track(createScreenMaterial(panelTex, { color: 0xffffff, power: 1, holo: true }));
+  // Normal blending gives the instruction panel a dark, readable background.
+  // The original additive hologram made the colours disappear into the skyline.
+  const panelMat = kit.track(createScreenMaterial(panelTex, { color: 0xe3e3e3, power: 1, holo: true }));
+  panelMat.blending = THREE.NormalBlending;
   const panel = new THREE.Mesh(kit.track(new THREE.PlaneGeometry(7.3, 3.65)), panelMat);
   panel.position.set(0, 7.5, -145.2);
   panel.rotation.x = -0.10;
@@ -722,7 +728,7 @@ export function build(kit, api, { save = null } = {}) {
         if (fieldSfx && fieldSfx.sound.isPlaying) fieldSfx.sound.pause();
       }
       const g = 0.85 + 0.15 * Math.sin(t * 1.6);
-      for (const n of nodes) { n.orb.rotation.y += dt * 0.4; n.glowMat.opacity = g; n.halo.material.opacity = 0; }
+      for (const n of nodes) { n.orb.rotation.y += dt * 0.4; n.glowMat.opacity = g * 0.28; n.halo.material.opacity = 0; }
       return;
     }
     const base = Math.floor(t / COLOR_HOLD) % 3;
@@ -734,7 +740,7 @@ export function build(kit, api, { save = null } = {}) {
         n.glowMat.color.setHex(PUZZLE_COLORS[ci]);
       }
       n.orb.rotation.y += dt * 1.2;
-      n.halo.material.opacity = n.ci === seq[state.puzzleStep] ? 0.75 + 0.23 * Math.sin(t * 5) : 0;
+      n.halo.material.opacity = n.ci === seq[state.puzzleStep] ? 0.50 + 0.16 * Math.sin(t * 5) : 0;
       n.halo.scale.setScalar(1 + 0.12 * Math.sin(t * 5));
       n.glow.lookAt(api.camera.position);   // billboard — reads from across the spire
     }

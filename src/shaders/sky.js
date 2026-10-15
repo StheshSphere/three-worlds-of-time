@@ -121,9 +121,10 @@ const PRESETS = {
     cloudColor: 0x3a4558, cloudShadow: 0x0b0f17, stars: 0.15, nebula: 0, cityGlow: 0.35, cityColor: 0x3a5a88,
   },
   neon: {
-    zenith: 0x06021a, horizon: 0x3c0f52, ground: 0x07000f, sunColor: 0x000000,
+    // Deep violet night sky; restrained nebula so the final puzzle reads clearly.
+    zenith: 0x06021a, horizon: 0x230b39, ground: 0x07000f, sunColor: 0x000000,
     sunDir: [0, 1, 0], sunSize: 0.0, cloudCover: 0, cloudColor: 0, cloudShadow: 0,
-    stars: 1, nebula: 1, nebulaA: 0xff2fb4, nebulaB: 0x2fd8ff, cityGlow: 1, cityColor: 0xff3aa8,
+    stars: 0.85, nebula: 0.42, nebulaA: 0x9d1d83, nebulaB: 0x1c82b1, cityGlow: 0.40, cityColor: 0xcf3797,
   },
 };
 

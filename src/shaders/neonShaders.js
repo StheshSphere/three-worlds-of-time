@@ -57,12 +57,12 @@ export function createCity({ count = 220, inner = 26, outer = 140, avoid } = {})
           float h = hash12(cell + floor(vPosW.x * 0.01) * 13.0 + floor(vPosW.z * 0.01) * 7.0);
           float lit = step(0.58, h) * (0.75 + 0.25 * step(0.02, fract(h * 91.0 + uTime * 0.05)));
           vec3 wc = h > 0.9 ? vec3(1.0, 0.25, 0.8) : h > 0.75 ? vec3(0.2, 0.85, 1.0) : vec3(1.0, 0.72, 0.38);
-          col += wc * win * lit * 1.15;
+          col += wc * win * lit * 0.56;
           // neon trim near the roof
           float top = vLocal.y * vScale.y;
           float trim = (1.0 - smoothstep(0.0, 0.35, abs(top - (vScale.y - 1.2))));
           vec3 tc = mod(cell.x, 2.0) < 1.0 ? vec3(1.0, 0.2, 0.75) : vec3(0.2, 0.85, 1.0);
-          col += tc * trim * 2.5 * step(0.5, hash12(vec2(floor(vPosW.x * 0.03), floor(vPosW.z * 0.03))));
+          col += tc * trim * 0.8 * step(0.5, hash12(vec2(floor(vPosW.x * 0.03), floor(vPosW.z * 0.03))));
         }
         float fog = 1.0 - exp(-fogDensity * fogDensity * vFogDepth * vFogDepth);
         gl_FragColor = vec4(mix(col, fogColor, fog), 1.0);
@@ -181,8 +181,8 @@ export function createTraffic({ count = 140, length = 400, zCenter = -60 } = {})
     fragmentShader: /* glsl */`
       varying float vEnd;
       void main() {
-        vec3 head = vec3(1.0, 0.95, 0.8) * 3.0;
-        vec3 tail = vec3(1.0, 0.1, 0.25) * 3.0;
+        vec3 head = vec3(1.0, 0.95, 0.8) * 1.2;
+        vec3 tail = vec3(1.0, 0.1, 0.25) * 1.2;
         vec3 body = vec3(0.04, 0.03, 0.06);
         vec3 col = vEnd > 0.9 ? head : vEnd < -0.9 ? tail : body;
         gl_FragColor = vec4(col, 1.0);
@@ -362,10 +362,10 @@ export function createDistantLights({ count = 110, center = [0, 0, -70], inner =
         halo *= halo;                                        // softer skirt
         float core = (1.0 - smoothstep(0.0, 0.14, d));               // bright lamp centre
         float a = (halo * 0.5 + core) * (0.45 + 0.55 * vPulse);
-        gl_FragColor = vec4(vColor * a * 2.2, a);
+        gl_FragColor = vec4(vColor * a * 0.95, a);
       }
     `,
-    uniforms: { uTime: { value: 0 }, uSize: { value: 2.4 } },
+    uniforms: { uTime: { value: 0 }, uSize: { value: 1.8 } },
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   });
   const points = new THREE.Points(geometry, material);
