@@ -41,7 +41,7 @@ export const meta = {
     kicker: 'The Past · Your goal', title: 'Find the Ancient Core in this temple',
     html: '<ul><li>Follow the <b>◆ marker</b> — it always shows your next goal and how far away it is.</li>'
       + '<li>The <b>checklist</b> (top-left) tracks every step of the temple’s puzzles.</li>'
-      + '<li>Look at objects and press <kbd>E</kbd> to use them. <kbd>J</kbd> opens your journal of clues; <kbd>H</kbd> shows help again.</li>'
+      + '<li>Approach clues and follow the nearby arrow. When <b>Press E</b> appears, press <kbd>E</kbd> to read or collect. <kbd>J</kbd> opens your journal; <kbd>H</kbd> shows help again.</li>'
       + '<li>Keep an eye on <b>Timeline stability</b> (top) — if it runs out, the era collapses and you rewind.</li></ul>',
   },
 };
@@ -115,19 +115,37 @@ export function build(kit, api, { save = null } = {}) {
     m.castShadow = true;
     m.receiveShadow = true;
     kit.add(m);
-    kit.proxy({ size: [r * 2.2, h, r * 2.2], pos: [x, h / 2, z] });
+    // Measure vertices: rotating a cylinder's bounding square would inflate
+    // it into neighbouring tiles and randomly block an otherwise clear push.
+    kit.solidFrom(m, 0, true);
     kit.mapShape(r * 2.2, r * 2.2, x, h, z, 0xd8cfb8);
     return m;
   }
 
-  function brokenColumn(x, z, h, r = 0.45) {
+  function brokenColumn(x, z, h, r = 0.45, courtyard = false) {
     const c = column(x, z, h, r, M.wall, random() * 6);
     // a fallen drum next to it
     const drum = new THREE.Mesh(columnGeo(1.4, r), M.wall);
+    drum.name = 'fallen-column';
     drum.rotation.set(Math.PI / 2, 0, random() * 6);
     drum.position.set(x + (random() - 0.5) * 2.5, r, z + (random() - 0.5) * 2.5);
     drum.castShadow = true;
+    if (courtyard) {
+      // Keep rubble inside its blocked tile. Random debris used to spill
+      // into the required push routes (and had no collider at all).
+      const bounds = new THREE.Box3().setFromObject(drum);
+      const size = bounds.getSize(new THREE.Vector3());
+      drum.scale.setScalar(Math.min(1, 1.7 / Math.max(size.x, size.z)));
+      drum.updateMatrixWorld(true);
+      bounds.setFromObject(drum);
+      const centre = bounds.getCenter(new THREE.Vector3());
+      drum.position.x += x - centre.x;
+      drum.position.z += z - centre.z;
+      drum.position.y += 0.1 - bounds.min.y;
+    }
     kit.add(drum);
+    kit.solidFrom(drum);
+    kit.walkables.push(drum);
     return c;
   }
 
@@ -251,8 +269,8 @@ export function build(kit, api, { save = null } = {}) {
   // Gothic guardian statues at the temple entrance.
   kit.prop('gothic-statue', { pos: [-3.6, 0, -12.6], rot: Math.PI * 0.08, height: 2.6, inset: 0.15 });
   kit.prop('gothic-statue', { pos: [3.6, 0, -12.6], rot: -Math.PI * 0.08, height: 2.6, inset: 0.15 });
-  kit.prop('antique-ceramic-vase-01', { pos: [-8.5, 0, -8.5], height: 0.9, solid: false });
-  kit.prop('antique-ceramic-vase-01', { pos: [9.2, 0, 10.6], rot: 1, height: 0.75, solid: false });
+  kit.prop('antique-ceramic-vase-01', { pos: [-8.5, 0, -8.5], height: 0.9 });
+  kit.prop('antique-ceramic-vase-01', { pos: [9.2, 0, 10.6], rot: 1, height: 0.75 });
 
   /* ===================================================================
      B. Courtyard of Weights — push-block puzzle on a 2 m grid
@@ -272,7 +290,7 @@ export function build(kit, api, { save = null } = {}) {
   const blocked = new Set(['2,4', '5,5', '0,5', '7,2']);
   for (const key of blocked) {
     const [c, r] = key.split(',').map(Number);
-    brokenColumn(tileX(c), tileZ(r), 0.9 + random() * 0.5, 0.62);
+    brokenColumn(tileX(c), tileZ(r), 0.9 + random() * 0.5, 0.62, true);
   }
 
   // Pressure plates — glyph rings glow when weighted.
@@ -320,14 +338,33 @@ export function build(kit, api, { save = null } = {}) {
     return !blocks.some((b) => b !== except && b.c === c && b.r === r);
   }
 
+  const pushSweep = new THREE.Box3();
+  const pushEnd = new THREE.Box3();
+  const pushDelta = new THREE.Vector3();
+  function blockPathFree(block, c, r) {
+    kit.refreshSolid(block.mesh);
+    pushDelta.set(tileX(c), 0.9, tileZ(r)).sub(block.mesh.position);
+    pushSweep.copy(block.mesh.userData.solidBox);
+    pushEnd.copy(pushSweep).translate(pushDelta);
+    pushSweep.union(pushEnd);
+    // A straight one-tile sweep catches thin/low obstacles along the entire
+    // path, including debris, walls, reset stone and the other block.
+    for (const obstacle of kit.colliders) {
+      if (obstacle === block.mesh || !obstacle.userData.solidBox) continue;
+      if (pushSweep.intersectsBox(obstacle.userData.solidBox)) return false;
+    }
+    return true;
+  }
+
   function pushBlock(block, ax, az) {
-    if (block.moving > 0 || state.gateOpen) return;
+    if (blocks.some(b => b.moving > 0) || state.gateOpen) return false;
+    if (Math.abs(ax) + Math.abs(az) !== 1) return false;
     // World −Z is "row +1" (north).
     const nc = block.c + ax;
     const nr = block.r - az;
-    if (!cellFree(nc, nr, block)) {
+    if (!cellFree(nc, nr, block) || !blockPathFree(block, nc, nr)) {
       api.sound('stone-thud', { volume: 0.5, rate: 0.8 });
-      return;
+      return false;
     }
     block.from.copy(block.mesh.position);
     block.to.set(tileX(nc), 0.9, tileZ(nr));
@@ -336,6 +373,7 @@ export function build(kit, api, { save = null } = {}) {
     block.moving = 1;
     api.sound('stone-slide', { volume: 0.9, rate: 0.6 });
     api.shake(0.12);
+    return true;
   }
 
   kit.update((dt) => {
@@ -351,7 +389,7 @@ export function build(kit, api, { save = null } = {}) {
 
   function checkPlates() {
     plateCells.forEach(([c, r], i) => {
-      const on = blocks.some((b) => b.c === c && b.r === r);
+      const on = blocks.some((b) => b.moving === 0 && b.c === c && b.r === r);
       if (on !== state.plates[i]) {
         state.plates[i] = on;
         api.sound(on ? 'bell' : 'stone-thud', { volume: 0.6, rate: on ? 1.2 : 0.7 });
@@ -373,16 +411,21 @@ export function build(kit, api, { save = null } = {}) {
   resetGlyph.position.set(-3.6, 1.115, -17.2);
   kit.add(resetGlyph);
   kit.interact(resetStone, () => (state.gateOpen ? null : 'Reset the weights'), () => {
-    blocks.forEach((b, i) => {
-      b.from.copy(b.mesh.position);
-      b.c = blockStarts[i][0];
-      b.r = blockStarts[i][1];
-      b.to.set(tileX(b.c), 0.9, tileZ(b.r));
-      b.moving = 1;
-    });
+    resetBlocks();
     api.sound('crumble', { volume: 0.6 });
-    api.message('The weights grind back to where they began.', 2200);
+    api.message('The weights return to their starting tiles.', 2200);
   });
+
+  function resetBlocks() {
+    blocks.forEach((b, i) => {
+      [b.c, b.r] = blockStarts[i]; b.moving = 0;
+      b.mesh.position.set(tileX(b.c), 0.9, tileZ(b.r));
+      kit.refreshSolid(b.mesh);
+    });
+    // Reset is instantaneous: a long rewind animation would pass through
+    // intervening rubble and leave collision boxes out of sync with saves.
+    checkPlates();
+  }
 
   // The Sun Gate (iron portcullis) in the courtyard's north arch.
   const gate = kit.prop('large-iron-gate', { pos: [0, 0, -34.6], height: 4.15, solid: false });
@@ -477,7 +520,7 @@ export function build(kit, api, { save = null } = {}) {
       m.target -= Math.PI / 2;     // mirrorAngle() steps by −90° per orientation
       api.sound('creak', { volume: 0.8, rate: 1.1 });
       traceBeam();
-    });
+    }, { label: 'Bronze mirror' });
     mirrors.push(m);
   }
   // Pivot space: disc normal is +X. Rotating by θ about Y sends +X to (cos θ, −sin θ).
@@ -763,7 +806,7 @@ export function build(kit, api, { save = null } = {}) {
     coreLight.intensity = 0;
     api.completeLevel(core.position);
     return 'pickup';
-  });
+  }, { kind: 'clue', label: 'Ancient Core', radius: 3.6 });
   kit.update((dt, t) => {
     if (coreRise <= 0 || state.coreTaken) return;
     coreRise = Math.min(1, coreRise + dt / 2.5);
@@ -806,7 +849,7 @@ export function build(kit, api, { save = null } = {}) {
     slab.rotation.y = spot.rot;
     slab.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     kit.add(slab);
-    kit.interact(slab, () => (state.tablets[i] ? 'Read the tablet again' : 'Examine the carved tablet'), () => {
+    kit.interact(slab, () => (state.tablets[i] ? 'Read the tablet again' : 'Read and collect the carved tablet'), () => {
       const first = !state.tablets[i];
       state.tablets[i] = true;
       mat.emissiveIntensity = 0.9;
@@ -818,7 +861,9 @@ export function build(kit, api, { save = null } = {}) {
       } else {
         api.message(`The ${glyph}, hour ${NUMERALS[hour]}.`, 2000);
       }
-    });
+      return 'read';
+    }, { kind: 'clue', label: 'Carved tablet', radius: 3.6, guideRadius: 8,
+      point: [0, 0, 0.2], pending: () => !state.tablets[i] });
     tabletMeshes.push(slab);
     // A few ferns half-hide each tablet.
   });
@@ -840,11 +885,11 @@ export function build(kit, api, { save = null } = {}) {
   kit.scatter('rock-moss-set-01', [
     { pos: [-24, 0, -6], rot: 0.3, scale: 0.9 }, { pos: [24, 0, -26], rot: 2, scale: 0.8 }, { pos: [-22, 0, -46], rot: 1, scale: 1.1 },
     { pos: [-16, 0, -74], rot: 4, scale: 0.8 }, { pos: [18, 0, 20], rot: 5, scale: 0.9 },
-  ]);
+  ], { solid: true });
   kit.scatter('rock-moss-set-02', [
     { pos: [20, 0, -12], rot: 1.2, scale: 0.8 }, { pos: [-20, 0, 18], rot: 3, scale: 1 }, { pos: [16, 0, -78], rot: 0.5, scale: 0.9 },
-  ]);
-  kit.prop('dead-tree-trunk', { pos: [-19, 0.35, -2], rot: [0, 0.6, Math.PI / 2], height: 0.8, solid: false });
+  ], { solid: true });
+  kit.prop('dead-tree-trunk', { pos: [-19, 0.35, -2], rot: [0, 0.6, Math.PI / 2], height: 0.8 });
   kit.prop('tree-stump-01', { pos: [-17, 0, 10], height: 1.2, solid: true });
   kit.prop('tree-stump-01', { pos: [15.5, 0, 12.5], rot: 2, height: 1, solid: true });
 
@@ -910,6 +955,7 @@ export function build(kit, api, { save = null } = {}) {
       kicker: 'Clue · Rune tablets', title: 'Collect the three carved tablets',
       html: '<ul><li>Each tablet shows a <b>symbol</b> and a <b>number</b> (I, II or III).</li>'
         + '<li>There are <b>three</b> hidden around the temple — they <b>glow and sparkle</b>. Look behind the pool, in the courtyard corners and in the Sun Court.</li>'
+        + '<li>Follow the nearby arrow, walk close and press <kbd>E</kbd> when prompted. You do not need to aim precisely at the carving.</li>'
         + '<li>Every tablet you read is saved in your <b>journal</b> (<kbd>J</kbd>). You will need them at the altar.</li></ul>',
     },
     altar: {
@@ -1057,6 +1103,9 @@ export function build(kit, api, { save = null } = {}) {
     enteredCourt = s.enteredCourt; inSunCourt = s.inSunCourt; checkpointBridge = s.checkpointBridge;
     blocks.forEach((b, i) => { [b.c, b.r] = s.blocks[i]; b.moving = 0;
       b.mesh.position.set(tileX(b.c), .9, tileZ(b.r)); kit.refreshSolid(b.mesh); });
+    // Older saves could leave a block inside decorative geometry. Repair
+    // only the unsolved weight positions; keep clues and other progress.
+    if (!state.gateOpen && blocks.some(b => !blockPathFree(b, b.c, b.r))) resetBlocks();
     checkPlates();
     mirrors.forEach((m, i) => { m.o = s.mirrors[i]; m.angle = m.target = mirrorAngle(m.o); m.pivot.rotation.y = m.angle; });
     traceBeam();

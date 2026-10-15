@@ -247,6 +247,13 @@ kbd {
 @keyframes wpPulse { 50% { transform: rotate(45deg) scale(1.25); } }
 #waypoint .wp-arrow { position: absolute; left: -9px; top: -32px; width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 14px solid var(--accent); transform-origin: 9px 32px; display: none; filter: drop-shadow(0 0 6px var(--accent-glow)); }
 #waypoint.edge .wp-arrow { display: block; }
+#interaction-guide { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; color: var(--accent); z-index: 3; }
+#interaction-guide .interaction-card { position: absolute; left: -140px; bottom: 34px; width: 280px; text-align: center; }
+#interaction-name, #interaction-help { display: table; max-width: 100%; margin: 0 auto; padding: 3px 10px; background: rgba(4, 6, 12, .94); border-radius: 6px; line-height: 1.3; font-size: 1rem; overflow-wrap: anywhere; }
+#interaction-name { color: #fff; }
+#interaction-help { margin-top: 2px; }
+#interaction-arrow { position: absolute; left: -16px; top: -32px; width: 32px; text-align: center; font-size: 32px; font-weight: 700; line-height: 32px; text-shadow: 0 2px 5px #000; }
+#interaction-guide.ready { color: #8dffb1; }
 #wp-dist { position: absolute; left: -40px; top: 16px; width: 80px; text-align: center; font-weight: 700; font-size: 0.95rem; text-shadow: 0 1px 4px #000; }
 #tutorial-card { position: absolute; top: 96px; left: 50%; transform: translateX(-50%); width: min(560px, 90vw); padding: 1rem 1.4rem 0.8rem;
   border-radius: 12px; background: rgba(6, 8, 14, 0.82); border: 1px solid var(--accent); box-shadow: 0 0 30px var(--accent-glow), 0 20px 50px rgba(0,0,0,0.5);
@@ -303,7 +310,7 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 #skip-cinematic { position: absolute; top: 18px; right: 24px; pointer-events: auto; padding: .55rem .9rem; background: #111520; color: var(--gold); border: 1px solid var(--gold); border-radius: 7px; cursor: pointer; font: inherit; }
 #skip-hint { bottom: 3vh; }
 #tutorial-card { position: fixed; z-index: 27; top: 50%; transform: translate(-50%, -50%); max-height: 72vh; overflow-y: auto; pointer-events: auto; background: rgba(6,8,14,.96); animation: none; }
-body.reading .hud-top-left, body.reading #message-banner, body.reading #interact-prompt, body.reading #waypoint { visibility: hidden; }
+body.reading .hud-top-left, body.reading #message-banner, body.reading #interact-prompt, body.reading #waypoint, body.reading #interaction-guide { visibility: hidden; }
 #developer-credits { text-align: center; padding: 1.2rem 0; border-bottom: 1px solid var(--line); margin-bottom: 1.2rem; }
 #developer-credits p { font-size: 1.18rem; line-height: 1.7; color: var(--text); }
 #caption { background: rgba(4,6,12,.93); }

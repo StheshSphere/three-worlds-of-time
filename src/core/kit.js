@@ -118,9 +118,10 @@ export function createKit(ctx) {
 
   function add(obj) { objects.push(obj); return obj; }
 
-  function solidFrom(obj, pad = 0) {
+  function solidFrom(obj, pad = 0, precise = false) {
     obj.updateMatrixWorld(true);
-    obj.userData.solidBox = new THREE.Box3().setFromObject(obj);
+    obj.userData.solidPrecise = precise;
+    obj.userData.solidBox = new THREE.Box3().setFromObject(obj, precise);
     if (pad) obj.userData.solidBox.expandByScalar(pad);
     colliders.push(obj);
     if (!cameraColliders.includes(obj)) cameraColliders.push(obj);
@@ -129,7 +130,7 @@ export function createKit(ctx) {
 
   function refreshSolid(obj) {
     obj.updateMatrixWorld(true);
-    if (obj.userData.solidBox) obj.userData.solidBox.setFromObject(obj);
+    if (obj.userData.solidBox) obj.userData.solidBox.setFromObject(obj, !!obj.userData.solidPrecise);
   }
 
   function removeCollider(obj) {
@@ -233,11 +234,12 @@ export function createKit(ctx) {
    * Many copies of one prop as InstancedMesh (one draw call per sub-mesh
    * instead of one per copy) — ferns, rocks, debris.
    */
-  function scatter(name, items, { cast = true, receive = true } = {}) {
+  function scatter(name, items, { cast = true, receive = true, solid = false } = {}) {
     const src = assets.gltf(name);
     if (!src) return null;
     const group = new THREE.Group();
     src.scene.updateMatrixWorld(true);
+    const sourceBounds = solid ? new THREE.Box3().setFromObject(src.scene) : null;
     const inst = new THREE.Matrix4();
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
@@ -260,6 +262,16 @@ export function createKit(ctx) {
       im.computeBoundingSphere();
       group.add(im);
     });
+    if (solid) {
+      const size = new THREE.Vector3(), center = new THREE.Vector3();
+      for (const item of items) {
+        e.set(0, item.rot || 0, 0); q.setFromEuler(e); s.setScalar(item.scale || 1);
+        inst.compose(_v.fromArray(item.pos), q, s);
+        _box.copy(sourceBounds).applyMatrix4(inst);
+        _box.getSize(size); _box.getCenter(center);
+        proxy({ size: size.toArray(), pos: center.toArray() });
+      }
+    }
     objects.push(group);
     return group;
   }
@@ -280,7 +292,17 @@ export function createKit(ctx) {
    * Make something interactable. prompt may be a string or a function
    * returning a string (or null to hide the prompt).
    */
-  function interact(obj, prompt, onInteract) {
+  function interact(obj, prompt, onInteract, options = {}) {
+    // Cache a local anchor once. Imported props often have a pivot on the
+    // floor; their visible centre is a much more useful interaction target.
+    obj.updateWorldMatrix(true, true);
+    const point = new THREE.Vector3();
+    if (options.point) point.fromArray(options.point);
+    else {
+      _box.setFromObject(obj).getCenter(point);
+      obj.worldToLocal(point);
+    }
+    obj.userData.interaction = { ...options, point };
     obj.userData.prompt = prompt;
     obj.userData.onInteract = (...args) => { const result = onInteract(...args); ctx.api?.progress?.(); return result; };
     if (!interactables.includes(obj)) interactables.push(obj);

@@ -437,7 +437,7 @@ export function build(kit, api, { save = null } = {}) {
     api.journal('Incident log: power is out, the Lab Core is sealed in the vault. Reroute power in the <b>Power Room</b> (north, past the Archive). The Archive code is known only to <b>Prof. Adeyemi</b> (office, west).', 'incident');
     if (firstRead && !state.flashlight) api.setObjective('Find Prof. Adeyemi’s office');
     return 'read';
-  });
+  }, { kind: 'clue', label: 'Incident log', radius: 3.6, pending: () => !state.readIncident });
 
   /* ===================================================================
      Prof. Adeyemi's office (west)
@@ -490,7 +490,7 @@ export function build(kit, api, { save = null } = {}) {
     api.message('Flashlight — press F to switch it on or off. Some notes here are only visible in its beam…', 3800);
     api.setObjective('Search the dark Archive (north)');
     return 'pickup';
-  });
+  }, { kind: 'clue', label: 'Flashlight', radius: 3.6 });
   kit.interact(profLaptop, 'Read Prof. Adeyemi’s notes', () => {
     api.sound('computer', { volume: 0.6 });
     api.reader({
@@ -507,7 +507,7 @@ export function build(kit, api, { save = null } = {}) {
     });
     api.journal('Prof. Adeyemi: the Archive code is written in <b>phosphor ink</b> along the Archive walls — visible only in the <b>flashlight</b> beam. Each mark is a digit; its <b>dots</b> give its position (1 dot = first).', 'prof');
     return 'read';
-  });
+  }, { kind: 'clue', label: 'Professor’s notes', radius: 3.6 });
   kit.interact(chalk, 'Read the chalkboard', () => {
     api.reader({
       kicker: 'Chalkboard',
@@ -518,7 +518,7 @@ export function build(kit, api, { save = null } = {}) {
         + 'DON’T sweep fast — let the light linger.',
     });
     return 'read';
-  });
+  }, { kind: 'clue', label: 'Chalkboard', radius: 3.6 });
   kit.update((dt, t) => {
     officeLamp.intensity = state.power ? 0 : officeLamp.userData.base * (0.9 + 0.1 * Math.sin(t * 9));
     flashHalo.update(t);
@@ -564,7 +564,16 @@ export function build(kit, api, { save = null } = {}) {
     m.rotation.y = r;
     kit.add(m);
     inkMats.push(mat);
-    marks.push({ mesh: m, pos, digit, seen: 0 });
+    const mark = { mesh: m, pos, digit, seen: 0 };
+    marks.push(mark);
+    // Keep flashlight discovery, and also offer an accessible close-range
+    // E action. The selector checks reach and walls before this runs.
+    kit.interact(m, () => (!state.marks[pos] && api.player.flashlightOn ? 'Read the phosphor ink' : null), () => {
+      if (!api.player.flashlightOn || state.marks[pos]) return null;
+      discoverMark(mark);
+      return 'read';
+    }, { kind: 'clue', label: 'Phosphor ink', radius: 3.6, guideRadius: 6,
+      point: [0, 0, 0.04], pending: () => !state.marks[pos] });
   });
   // Decoy scribbles (also invisible ink — the archive is full of notes).
   for (const [x, y, z, r, text] of [[3.0, 2.6, -15.8, -Math.PI / 2, 'THE CLOCK LIES'], [-3.0, 2.6, -19.7, Math.PI / 2, 'Δt ≠ 0  →'], [0, 2.75, -29.85, 0, 'AGAIN. AGAIN. AGAIN.']]) {
@@ -591,7 +600,7 @@ export function build(kit, api, { save = null } = {}) {
     for (const mk of marks) {
       _toMark.subVectors(mk.mesh.position, fl.pos);
       const d = _toMark.length();
-      const lit = d < 9 && _toMark.normalize().dot(fl.dir) > 0.94;
+      const lit = d < 9 && _toMark.normalize().dot(fl.dir) > 0.94 && api.player.hasInteractionLineOfSight(mk.mesh);
       mk.seen = lit ? mk.seen + dt : 0;
       if (mk.seen > 0.4 && !state.marks[mk.pos]) {
         discoverMark(mk);
@@ -606,6 +615,7 @@ export function build(kit, api, { save = null } = {}) {
         const n = state.marks.filter(Boolean).length;
         api.journal(`Archive ink: digit <b>${mk.digit}</b> with <b>${mk.pos + 1}</b> dot${mk.pos ? 's' : ''} → position ${mk.pos + 1} of the code.`, `mark-${mk.pos}`);
         api.message(`Phosphor ink: a ${mk.digit} with ${mk.pos + 1} dot${mk.pos ? 's' : ''}. (${n}/4 — saved to journal, J)`, 3000);
+        api.progress();
   }
 
   // Security door + keypad at the end of the corridor.
@@ -934,7 +944,7 @@ export function build(kit, api, { save = null } = {}) {
     coreLight.intensity = 0;
     api.completeLevel(core.position);
     return 'pickup';
-  });
+  }, { kind: 'clue', label: 'Lab Core', radius: 3.6 });
 
   /* ===================================================================
      Member 2 — power-restoration payoff (completion-guide task 3)
@@ -1081,7 +1091,7 @@ export function build(kit, api, { save = null } = {}) {
     flashlight: { kicker: 'New tool · Flashlight', title: 'The flashlight reveals hidden ink',
       html: '<ul><li>Press <kbd>F</kbd> to switch it on or off.</li><li>Prof. Adeyemi wrote the Archive code in <b>phosphor ink</b> that only glows inside the beam.</li><li>Go to the dark <b>Archive (north)</b> and sweep the walls <b>slowly</b>.</li></ul>' },
     archive: { kicker: 'Puzzle · The Archive', title: 'Find the four ink digits',
-      html: '<ul><li>Point the flashlight at the walls between the shelves and hold it there.</li><li>Each mark is a <b>digit</b> with <b>dots</b> under it: 1 dot = first digit … 4 dots = last.</li><li>Found digits are saved in your journal (<kbd>J</kbd>). Then use the <b>keypad</b> by the door at the end.</li></ul>' },
+      html: '<ul><li>With your flashlight on, follow the nearby arrow and press <kbd>E</kbd> close to an ink mark. Holding the beam on a mark also reads it.</li><li>Each mark is a <b>digit</b> with <b>dots</b> under it: 1 dot = first digit … 4 dots = last.</li><li>Found digits are saved in your journal (<kbd>J</kbd>). Then use the <b>keypad</b> by the door at the end.</li></ul>' },
     power: { kicker: 'Puzzle · Power room', title: 'Route the power',
       html: '<ul><li>Look at a tile on the wall console and press <kbd>E</kbd> to rotate it.</li><li>Connect <b>GRID IN</b> (left, middle row) to <b>VAULT OUT</b> (right, middle row).</li><li>Tiles carrying power <b>light up</b> — follow the glow.</li></ul>' },
   };
@@ -1120,7 +1130,7 @@ export function build(kit, api, { save = null } = {}) {
     if (!state.flashlight) return 'Prof. Adeyemi’s office is through the west door. Her desk lamp is still on.';
     if (!state.doorOpen) {
       if (p.z > -12.6) return 'The Archive is north of the hall. Switch the flashlight on (F).';
-      if (n < 4) return `Sweep the Archive walls slowly with your flashlight. Ink marks found: ${n}/4.`;
+      if (n < 4) return `Flashlight on (F): approach an ink mark and press E, or hold the beam on it. Found: ${n}/4.`;
       return 'Enter the four digits at the keypad — in dot order (1 dot first).';
     }
     if (!state.power) return 'Rotate the conduit tiles until power flows from GRID IN to VAULT OUT.';

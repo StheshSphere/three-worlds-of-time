@@ -510,7 +510,7 @@ export function build(kit, api, { save = null } = {}) {
     api.sound('bell', { volume: 0.45, rate: 1.3 });            // chime layered under the shared core-get fanfare
     api.completeLevel(core.position);
     return 'pickup';
-  });
+  }, { kind: 'clue', label: 'Neon Core', radius: 3.6 });
   kit.update((dt, t) => {
     core.rotation.y += dt * 1.6;
     core.position.y = 4.7 + Math.sin(t * 2.2) * 0.15;
@@ -570,8 +570,8 @@ export function build(kit, api, { save = null } = {}) {
     nodes.push(node);
     const press = () => activateNode(node);
     const prompt = () => (state.puzzleSolved ? null : `Touch the node (${PUZZLE_NAMES[node.ci]})`);
-    kit.interact(orb, prompt, press);
-    kit.interact(pylon, prompt, press);
+    kit.interact(orb, prompt, press, { label: `Energy node ${i + 1}` });
+    kit.interact(pylon, prompt, press, { label: `Energy node ${i + 1}` });
   });
 
   const panelTex = kit.canvasTexture(512, 256, (g) => drawPanelTo(g));

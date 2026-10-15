@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createHero } from './character.js';
 import { settings } from './core/settings.js';
+import { InteractionSelector, interactionPoint, interactionVisible } from './core/interaction.js';
 
 const GRAVITY = 24;
 const WALK_SPEED = 4.6;
@@ -20,7 +21,6 @@ const DASH_COOLDOWN = 1.0;
 const TP_DISTANCE = 4.4;
 const TP_HEIGHT = 0.55;
 const TP_SHOULDER = 0.6;
-const INTERACT_RANGE = 3.1;
 
 // Scratch objects reused every frame — never allocate inside the loop (brief §6.1).
 const _origin = new THREE.Vector3();
@@ -93,6 +93,7 @@ export class Player extends THREE.EventDispatcher {
     this.walkables = [];
     this.interactables = [];
     this.nearbyInteractable = null;
+    this.interaction = new InteractionSelector();
     this.bounds = 120;
     this.killY = -14;
     this.defaultSurface = 'stone';
@@ -122,11 +123,9 @@ export class Player extends THREE.EventDispatcher {
     this.flashlightOn = false;
 
     this._groundRay = new THREE.Raycaster();
-    this._interactRay = new THREE.Raycaster();
     this._camRay = new THREE.Raycaster();
     this._groundHits = [];
     this._cameraHits = [];
-    this._interactionHits = [];
 
     this._bindInput();
   }
@@ -217,11 +216,16 @@ export class Player extends THREE.EventDispatcher {
 
   /* ----------------------------- actions ---------------------------- */
   tryInteract() {
+    if (this.frozen || !this.inputEnabled) return;
+    // Revalidate at key-down: an item may have moved, vanished, or become
+    // unavailable since the last rendered prompt.
+    this._updateInteraction();
     const obj = this.nearbyInteractable;
-    if (!obj || !obj.userData.onInteract || this.frozen) return;
+    if (!obj || !obj.userData.onInteract) return;
     const r = obj.userData.onInteract(obj);
     this.hero.play(r === 'pickup' ? 'pickup' : 'interact', { speed: 1.7 });
     this.dispatchEvent({ type: 'interact', object: obj, result: r });
+    this._updateInteraction();
   }
 
   tryDash() {
@@ -332,6 +336,7 @@ export class Player extends THREE.EventDispatcher {
     this._camDist = TP_DISTANCE;
     this.speed = 0;
     this.nearbyInteractable = null;
+    this.interaction.clear();
     if (this.hasCheckpoint) {
       this.rig.position.copy(this.checkpoint);
       this.yaw = this.checkpointYaw;
@@ -626,25 +631,14 @@ export class Player extends THREE.EventDispatcher {
   }
 
   _updateInteraction() {
-    this.nearbyInteractable = null;
-    if (!this.interactables.length || this.frozen) return;
-    this._interactRay.set(this.camera.position, _look);
-    this._interactRay.far = (this.mode === 'third' ? this._camDist + 0.6 : 0) + INTERACT_RANGE;
-    this._interactionHits.length = 0;
-    const hits = this._interactRay.intersectObjects(this.interactables, true, this._interactionHits);
-    for (const hit of hits) {
-      if (hit.point.distanceTo(_head) > INTERACT_RANGE + 0.4) continue;
-      let o = hit.object;
-      for (let i = 0; i < 6 && o; i++) {
-        if (o.userData && o.userData.onInteract) {
-          const prompt = typeof o.userData.prompt === 'function' ? o.userData.prompt() : o.userData.prompt;
-          if (prompt) { this.nearbyInteractable = o; return; }
-          break;
-        }
-        o = o.parent;
-      }
-      break; // the first thing hit blocks anything behind it
-    }
+    this.interaction.update(this);
+    this.nearbyInteractable = this.interaction.target;
+  }
+
+  hasInteractionLineOfSight(obj) {
+    this.head.getWorldPosition(_head);
+    interactionPoint(obj, _target);
+    return interactionVisible(_head, _target, obj, this.colliders);
   }
 
   _updateFlashlight() {

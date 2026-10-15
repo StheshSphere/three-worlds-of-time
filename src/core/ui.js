@@ -76,6 +76,7 @@ export class UI {
     this.clearMessage();
     this.hideTutorial();
     this.setPrompt(null);
+    this.setInteractionGuide(false);
     this.setHint('');
   }
   /** True just after a panel opened — stops the opening keypress from also closing it. */
@@ -157,6 +158,20 @@ export class UI {
     this._set('wp-dist', 'text', `${Math.round(dist)} m`);
   }
   setHint(text) { this._set('hint', 'text', text || ''); }
+
+  /** One nearby object at a time; its label always agrees with the E target. */
+  setInteractionGuide(visible, x = 0, y = 0, label = '', status = '', distance = 0, angle = null) {
+    this._set('interaction-guide', 'hidden', !visible);
+    if (!visible) return;
+    const el = $('interaction-guide');
+    el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+    el.classList.toggle('ready', status === 'ready');
+    $('interaction-arrow').style.transform = `rotate(${angle ?? 0}rad)`;
+    this._set('interaction-name', 'text', label);
+    this._set('interaction-help', 'text', status === 'ready' ? 'Press E' :
+      status === 'blocked' ? 'Move around the obstacle' :
+      status === 'turn' ? 'Turn towards this object' : `Move closer · ${Math.ceil(distance)} m`);
+  }
 
   setStability(frac, secondsLeft) {
     this._set('stability-fill', 'width', `${Math.max(0, frac * 100).toFixed(1)}%`);

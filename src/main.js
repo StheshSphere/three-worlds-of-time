@@ -412,6 +412,36 @@ function updateWaypoint() {
   ui.setWaypoint(true, x, y, dist, Math.atan2(dy, dx) + Math.PI / 2);
 }
 
+const _guidePoint = new THREE.Vector3();
+const _guideLocal = new THREE.Vector3();
+function updateInteractionGuide() {
+  const guide = player.interaction;
+  if (mode !== 'playing' || levels.state !== 'playing' || levels.warming || ui.dialogue.active || ui.panelOpen || !guide.guide) {
+    ui.setInteractionGuide(false); return;
+  }
+  _guidePoint.copy(guide.point); _guidePoint.y += 0.35;
+  _guideLocal.copy(_guidePoint).applyMatrix4(camera.matrixWorldInverse);
+  _guidePoint.project(camera);
+  const w = window.innerWidth, h = window.innerHeight;
+  const mx = Math.min(150, w * 0.25), top = Math.min(180, h * 0.3), bottom = h - 105;
+  let x = (_guidePoint.x * 0.5 + 0.5) * w;
+  let y = (-_guidePoint.y * 0.5 + 0.5) * h;
+  const behind = _guideLocal.z >= 0;
+  let angle = null;
+  if (behind || x < mx || x > w - mx || y < top || y > bottom) {
+    let dx = behind ? _guideLocal.x : x - w / 2;
+    let dy = behind ? Math.max(0.5, -_guideLocal.y) : y - h / 2;
+    if (Math.abs(dx) + Math.abs(dy) < 0.001) dy = 1;
+    const k = Math.min((w / 2 - mx) / Math.max(Math.abs(dx), 0.001),
+      Math.max(1, (dy < 0 ? h / 2 - top : bottom - h / 2)) / Math.max(Math.abs(dy), 0.001));
+    x = w / 2 + dx * k; y = h / 2 + dy * k;
+    angle = Math.atan2(dy, dx) - Math.PI / 2;
+  }
+  const obj = guide.guide;
+  const label = obj.userData.interaction?.label || (typeof obj.userData.prompt === 'function' ? obj.userData.prompt() : obj.userData.prompt);
+  ui.setInteractionGuide(true, x, y, label, guide.status, guide.distance, angle);
+}
+
 function formatTime(sec) {
   const s = Math.round(sec);
   return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
@@ -463,13 +493,14 @@ function frame() {
   if (mode === 'playing') {
     const obj = player.nearbyInteractable;
     const prompt = obj ? (typeof obj.userData.prompt === 'function' ? obj.userData.prompt() : obj.userData.prompt) : null;
-    ui.setPrompt(levels.state === 'playing' ? prompt : null);
+    ui.setPrompt(levels.state === 'playing' && !reading && !ui.panelOpen ? prompt : null);
     ui.setDash(player.canDash, player.dashReady);
     minimap.enabled = settings.get('minimap') && window.innerWidth > 760;
     ui.setMinimapVisible(minimap.enabled);
   }
 
   updateWaypoint();
+  updateInteractionGuide();
   if (!levels.warming) postfx.render(t);
   if (mode === 'playing' && minimap.enabled && !levels.warming) minimap.render(player.position, player.facing, t);
 
