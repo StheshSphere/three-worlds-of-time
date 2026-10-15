@@ -242,11 +242,13 @@ kbd {
 #checklist li.done { color: rgba(255, 255, 255, 0.45); text-decoration: line-through; }
 #checklist li.done::before { content: '✓'; color: #7dffa8; text-decoration: none; }
 #hint { max-width: 38vw; }
-#waypoint { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; }
-#waypoint .wp-diamond { position: absolute; left: -11px; top: -11px; width: 22px; height: 22px; transform: rotate(45deg); border: 3px solid var(--accent); background: rgba(0, 0, 0, 0.35); box-shadow: 0 0 14px var(--accent-glow); animation: wpPulse 1.2s ease-in-out infinite; }
-@keyframes wpPulse { 50% { transform: rotate(45deg) scale(1.25); } }
-#waypoint .wp-arrow { position: absolute; left: -9px; top: -32px; width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 14px solid var(--accent); transform-origin: 9px 32px; display: none; filter: drop-shadow(0 0 6px var(--accent-glow)); }
-#waypoint.edge .wp-arrow { display: block; }
+/* Fixed distance badge; no spatial coordinates or directional arrow. */
+#waypoint { position: absolute; left: 26px; bottom: 60px; top: auto; display: flex; align-items: center; gap: 12px;
+  pointer-events: none; padding: 7px 11px; border-radius: 9px; background: rgba(4, 12, 22, .78);
+  border: 1px solid rgba(111, 211, 255, .35); color: #b3e9ff; }
+#waypoint .wp-diamond { width: 14px; height: 14px; flex: none; transform: rotate(45deg); border: 2px solid #6fd3ff; box-shadow: 0 0 8px rgba(111,211,255,.5); }
+#waypoint .wp-arrow { display: none !important; }
+#wp-dist { position: static; width: auto; white-space: nowrap; font-weight: 700; font-size: .95rem; text-shadow: 0 1px 4px #000; }
 #interaction-guide { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; color: var(--accent); z-index: 3; }
 #interaction-guide .interaction-card { position: absolute; left: -140px; bottom: 34px; width: 280px; text-align: center; }
 #interaction-name, #interaction-help { display: table; max-width: 100%; margin: 0 auto; padding: 3px 10px; background: rgba(4, 6, 12, .94); border-radius: 6px; line-height: 1.3; font-size: 1rem; overflow-wrap: anywhere; }
@@ -254,7 +256,7 @@ kbd {
 #interaction-help { margin-top: 2px; }
 #interaction-arrow { position: absolute; left: -16px; top: -32px; width: 32px; text-align: center; font-size: 32px; font-weight: 700; line-height: 32px; text-shadow: 0 2px 5px #000; }
 #interaction-guide.ready { color: #8dffb1; }
-#wp-dist { position: absolute; left: -40px; top: 16px; width: 80px; text-align: center; font-weight: 700; font-size: 0.95rem; text-shadow: 0 1px 4px #000; }
+
 #tutorial-card { position: absolute; top: 96px; left: 50%; transform: translateX(-50%); width: min(560px, 90vw); padding: 1rem 1.4rem 0.8rem;
   border-radius: 12px; background: rgba(6, 8, 14, 0.82); border: 1px solid var(--accent); box-shadow: 0 0 30px var(--accent-glow), 0 20px 50px rgba(0,0,0,0.5);
   animation: capIn 0.4s ease both; text-align: left; }
@@ -325,3 +327,5 @@ body.reading .hud-top-left, body.reading #message-banner, body.reading #interact
   .title-wrap .menu { gap: .3rem; }
   .title-wrap .menu-btn { padding: .5rem 1.4rem; }
 }
+
+@media (max-width: 760px) { #waypoint { left: 12px; bottom: 12px; padding: 5px 9px; } }

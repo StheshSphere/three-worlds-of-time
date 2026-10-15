@@ -3,6 +3,8 @@ import * as THREE from 'three';
 // Interaction uses the character's reach, not the third-person camera's distance.
 // Exact aiming wins for adjacent puzzle controls; nearby clues need no pixel hunting.
 export const INTERACT_RANGE = 3.1;
+export const CLUE_REACH = 4.2;
+export const NEARBY_GUIDE_RANGE = 5.5;
 const _ray = new THREE.Ray();
 const _direction = new THREE.Vector3();
 const _hit = new THREE.Vector3();
@@ -42,6 +44,25 @@ export function interactionVisible(origin, point, obj, colliders) {
   return true;
 }
 
+/**
+ * Clues can be collected without precise camera aim. Try a small number of
+ * natural sightlines (eyes/chest to centre/upper face), because a low desk or
+ * thick tablet border should not make an obviously reachable clue unclickable.
+ * Every ray is still tested against real world colliders: no through-wall E.
+ * Non-clue puzzle controls retain the strict original ray test.
+ */
+const _reachOrigin = new THREE.Vector3();
+const _reachPoint = new THREE.Vector3();
+export function interactionReachable(origin, point, obj, colliders) {
+  if (interactionVisible(origin, point, obj, colliders)) return true;
+  if (obj.userData.interaction?.kind !== 'clue') return false;
+  _reachPoint.copy(point).y += 0.25;
+  if (interactionVisible(origin, _reachPoint, obj, colliders)) return true;
+  _reachOrigin.copy(origin).y -= 0.40;
+  if (interactionVisible(_reachOrigin, point, obj, colliders)) return true;
+  return interactionVisible(_reachOrigin, _reachPoint, obj, colliders);
+}
+
 export class InteractionSelector {
   constructor() {
     this.target = null;
@@ -66,7 +87,7 @@ export class InteractionSelector {
     player.camera.updateMatrixWorld(true);
     player.camera.getWorldDirection(this._look);
     this._ray.set(player.camera.position, this._look);
-    this._ray.far = player.camera.position.distanceTo(this._origin) + 4;
+    this._ray.far = player.camera.position.distanceTo(this._origin) + 5;
     this._hits.length = 0;
     this._ray.intersectObjects(player.interactables, true, this._hits);
     for (const hit of this._hits) {
@@ -74,9 +95,10 @@ export class InteractionSelector {
       while (obj && !obj.userData.onInteract) obj = obj.parent;
       if (!obj || !player.interactables.includes(obj) || !interactionPrompt(obj)) continue;
       interactionPoint(obj, this._point);
-      const radius = obj.userData.interaction?.radius ?? INTERACT_RANGE;
+      const opts = obj.userData.interaction || {};
+      const radius = opts.kind === 'clue' ? Math.max(opts.radius ?? CLUE_REACH, CLUE_REACH) : (opts.radius ?? INTERACT_RANGE);
       if (this._point.distanceTo(this._origin) > radius) continue;
-      if (!interactionVisible(this._origin, this._point, obj, player.colliders)) continue;
+      if (!interactionReachable(this._origin, this._point, obj, player.colliders)) continue;
       this.target = obj;
       break;
     }
@@ -89,16 +111,19 @@ export class InteractionSelector {
       interactionPoint(obj, this._point);
       this._towards.subVectors(this._point, this._origin);
       const distance = this._towards.length();
-      const radius = opts.radius ?? INTERACT_RANGE;
-      if (distance > (opts.guideRadius ?? 7)) continue;
+      const radius = opts.kind === 'clue' ? Math.max(opts.radius ?? CLUE_REACH, CLUE_REACH) : (opts.radius ?? INTERACT_RANGE);
+      if (distance > Math.min(opts.guideRadius ?? NEARBY_GUIDE_RANGE, NEARBY_GUIDE_RANGE)) continue;
       const alignment = distance > 0.001 ? this._towards.dot(this._look) / distance : 1;
-      const clear = interactionVisible(this._origin, this._point, obj, player.colliders);
+      const clear = interactionReachable(this._origin, this._point, obj, player.colliders);
       const pending = !opts.pending || opts.pending();
       const easyReach = opts.kind === 'clue' || alignment > 0.4;
       const ready = clear && distance <= radius && (easyReach || exact === obj);
       // Read clues remain available but do not crowd out the next unread clue.
       const score = distance + (1 - alignment) * (opts.kind === 'clue' ? 0.3 : 2) + (pending ? 0 : 3);
-      if (!exact && ready && score < best) { best = score; this.target = obj; }
+      // Prefer pending, close clues when not aiming precisely at another
+      // control. A clue needs only proximity + a clear line, never pixel aim.
+      const readyScore = distance + (opts.kind === 'clue' ? -0.7 : 0) + (pending ? 0 : 4);
+      if (!exact && ready && readyScore < best) { best = readyScore; this.target = obj; }
       if (pending && score + (clear ? 0 : 4) < guideScore) {
         guideScore = score + (clear ? 0 : 4);
         this.guide = obj;

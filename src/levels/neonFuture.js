@@ -44,7 +44,7 @@ export const meta = {
     kicker: 'The Future · Your goal', title: 'Survive the collapsing skyline',
     html: '<ul><li>New ability — <b>Chrono-Dash</b>: press <kbd>Q</kbd> or <b>right-click</b> (works in mid-air).</li>'
       + '<li>The first gap is too wide to jump: <b>sprint</b> (<kbd>Shift</kbd>), <b>jump</b> (<kbd>Space</kbd>), then <b>dash</b> in the air.</li>'
-      + '<li>Falling costs stability, but you restart from the last <b>checkpoint</b>. Follow the <b>◆ marker</b> to the Neon Core.</li>'
+      + '<li>Falling costs stability, but you restart from the last <b>checkpoint</b>. The blue badge shows distance only; search the platforms yourself.</li>'
       + '<li>The core is sealed — break the small <b>sequence lock</b> at the end to take it.</li></ul>',
   },
 };

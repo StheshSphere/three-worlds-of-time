@@ -147,15 +147,12 @@ export class UI {
   }
   hideTutorial() { $('tutorial-card').classList.add('hidden'); this._tutorial = null; }
 
-  /** Screen-space waypoint. edgeAngle (radians) set → pinned to the screen edge, arrow pointing out. */
-  setWaypoint(visible, x = 0, y = 0, dist = 0, edgeAngle = null) {
+  /** A non-directional distance readout. Never points at or tracks clues. */
+  setWaypoint(visible, x = 0, y = 0, dist = 0, subject = 'clue') {
     const el = $('waypoint');
     if (!visible) { if (!this._cache.wpHidden) { el.classList.add('hidden'); this._cache.wpHidden = true; } return; }
     if (this._cache.wpHidden !== false) { el.classList.remove('hidden'); this._cache.wpHidden = false; }
-    el.style.transform = `translate(${x.toFixed(0)}px, ${y.toFixed(0)}px)`;
-    el.classList.toggle('edge', edgeAngle !== null);
-    if (edgeAngle !== null) el.querySelector('.wp-arrow').style.transform = `rotate(${edgeAngle}rad)`;
-    this._set('wp-dist', 'text', `${Math.round(dist)} m`);
+    this._set('wp-dist', 'text', `${Math.round(dist)} m to ${subject}`);
   }
   setHint(text) { this._set('hint', 'text', text || ''); }
 
@@ -168,9 +165,9 @@ export class UI {
     el.classList.toggle('ready', status === 'ready');
     $('interaction-arrow').style.transform = `rotate(${angle ?? 0}rad)`;
     this._set('interaction-name', 'text', label);
-    this._set('interaction-help', 'text', status === 'ready' ? 'Press E' :
-      status === 'blocked' ? 'Move around the obstacle' :
-      status === 'turn' ? 'Turn towards this object' : `Move closer · ${Math.ceil(distance)} m`);
+    this._set('interaction-help', 'text', status === 'ready' ? 'Press E now' :
+      status === 'blocked' ? 'Follow the nearby arrow to a clear side' :
+      status === 'turn' ? 'Face the object and press E' : `Approach the glowing arrow · ${Math.ceil(distance)} m`);
   }
 
   setStability(frac, secondsLeft) {

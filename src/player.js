@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createHero } from './character.js';
 import { settings } from './core/settings.js';
-import { InteractionSelector, interactionPoint, interactionVisible } from './core/interaction.js';
+import { InteractionSelector, interactionPoint, interactionReachable } from './core/interaction.js';
 
 const GRAVITY = 24;
 const WALK_SPEED = 4.6;
@@ -638,7 +638,7 @@ export class Player extends THREE.EventDispatcher {
   hasInteractionLineOfSight(obj) {
     this.head.getWorldPosition(_head);
     interactionPoint(obj, _target);
-    return interactionVisible(_head, _target, obj, this.colliders);
+    return interactionReachable(_head, _target, obj, this.colliders);
   }
 
   _updateFlashlight() {

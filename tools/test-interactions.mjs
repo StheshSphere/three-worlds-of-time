@@ -247,14 +247,53 @@ test('The full weight puzzle remains solvable with normal walking pushes and sol
 });
 test('UI guide changes between approach, obstruction and E-ready and clears on reset', () => {
   ui.setInteractionGuide(true, 400, 200, 'Carved tablet', 'closer', 5.2);
-  assert.equal(document.getElementById('interaction-help').textContent, 'Move closer · 6 m');
+  assert.equal(document.getElementById('interaction-help').textContent, 'Approach the glowing arrow · 6 m');
   ui.setInteractionGuide(true, 400, 200, 'Carved tablet', 'blocked', 2);
-  assert.equal(document.getElementById('interaction-help').textContent, 'Move around the obstacle');
+  assert.equal(document.getElementById('interaction-help').textContent, 'Follow the nearby arrow to a clear side');
   ui.setInteractionGuide(true, 400, 200, 'Carved tablet', 'ready', 2);
-  assert.equal(document.getElementById('interaction-help').textContent, 'Press E');
+  assert.equal(document.getElementById('interaction-help').textContent, 'Press E now');
   ui.resetTransient(); assert.equal(document.getElementById('interaction-guide').classList.contains('hidden'), true);
 });
 
+// No directional waypoint, and it always labels a distance only.
+test('Blue badge is distance-only, does not transform into a compass', () => {
+  ui.setWaypoint(true, 9999, -8888, 18);
+  assert.equal(document.getElementById('wp-dist').textContent, '18 m to clue');
+  assert.equal(document.getElementById('waypoint').style.transform, undefined);
+  ui.setWaypoint(false);
+  assert.equal(document.getElementById('waypoint').classList.contains('hidden'), true);
+});
+// All levels use the same shared close-range clue marker. No distant arrows.
+const { ClueGuidance } = await import('../src/core/clueGuidance.js');
+test('Shared physical clue arrows appear nearby and hide from a distance or after collection', () => {
+  const effect = new ClueGuidance(scene);
+  try {
+    load(0); player.mode = 'third'; pose([6.8, .1, -46.4], Math.PI);
+    effect.update(player, 1/60, 1, true);
+    const wallTablet = player.interactables.find(o => o.userData.interaction?.label === 'Carved tablet' && o.position.z < -45);
+    assert.equal(effect.markers.get(wallTablet)?.ring.visible, true, 'near-but-not-ready tablet should offer a reachable stand-here ring');
+    for (const era of [0, 1, 2]) {
+      load(era);
+      if (era === 2) {
+        pose([-2.9, 3, -138.5]); play(.1);
+        assert.equal(levels.debug.solvePuzzle(), true); play(2);
+      }
+      const clue = player.interactables.find(o => o.userData.interaction?.kind === 'clue' && promptOf(o));
+      assert.ok(clue, `era ${era} must have at least one clue`);
+      const point = new THREE.Vector3();
+      clue.updateWorldMatrix(true, false);
+      point.copy(clue.userData.interaction.point).applyMatrix4(clue.matrixWorld);
+      pose([point.x + 1.1, point.y - player.head.position.y + 0.1, point.z]);
+      effect.update(player, 1/60, 1, true);
+      assert.equal(effect.markers.get(clue)?.sprite.visible, true, `era ${era} clue not marked`);
+      pose([point.x + 30, point.y - player.head.position.y, point.z]);
+      effect.update(player, 1/60, 2, true);
+      assert.equal(effect.markers.get(clue)?.sprite.visible, false, `era ${era} distant clue wrongly visible`);
+      effect.update(player, 1/60, 2, false);
+      assert.equal(effect.root.visible, false);
+    }
+  } finally { effect.reset(); scene.remove(effect.root); effect.ringGeo.dispose(); effect.texture.dispose(); }
+});
 ui.resetTransient();
 console.log(JSON.stringify({ suite: 'Collision and nearby E interaction regressions (real Three.js, DOM/audio doubles)', passed: results.filter(r => r.status === 'PASS').length, failed: results.filter(r => r.status === 'FAIL').length, results }, null, 2));
 process.exit(results.some(r => r.status === 'FAIL') ? 1 : 0);

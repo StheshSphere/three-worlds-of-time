@@ -42,7 +42,7 @@ export const meta = {
   introCard: {
     kicker: 'The Present · Your goal', title: 'Investigate the lab and recover the Lab Core',
     html: '<ul><li>This era is about <b>finding information</b>: read laptops, notes and boards (<kbd>E</kbd>).</li>'
-      + '<li>Every clue goes into your <b>journal</b> (<kbd>J</kbd>). The <b>◆ marker</b> and checklist show the next step.</li>'
+      + '<li>Every clue goes into your <b>journal</b> (<kbd>J</kbd>). The <b>checklist</b> shows your next task. The blue clue badge gives distance only; clues reveal nearby arrows.</li>'
       + '<li>Start with the <b>laptop on the east workbench</b>, near the windows.</li></ul>',
   },
 };

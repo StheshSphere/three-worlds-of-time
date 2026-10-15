@@ -6,6 +6,8 @@ import { PostFX } from './core/postfx.js';
 import { UI } from './core/ui.js';
 import { Minimap } from './core/minimap.js';
 import { Player } from './player.js';
+import { ClueGuidance } from './core/clueGuidance.js';
+import { interactionPrompt, interactionPoint } from './core/interaction.js';
 import { createTimeMachine } from './timeMachine.js';
 import { createLevelManager } from './levelManager.js';
 import { Cutscene } from './core/cutscene.js';
@@ -62,6 +64,7 @@ await new Promise((resolve) => setTimeout(resolve, 50));
 
 const player = new Player(camera, renderer.domElement);
 scene.add(player.object, player.worldFx);
+const clueGuidance = new ClueGuidance(scene);
 const timeMachine = createTimeMachine();
 scene.add(timeMachine);
 
@@ -381,65 +384,51 @@ window.addEventListener('resize', () => {
   postfx.setSize(window.innerWidth, window.innerHeight);
 });
 
-/* On-screen waypoint: project the current objective into screen space. Off
-   screen (or behind the camera) it sticks to the edge with an arrow pointing
-   the way — the player always knows where to go next. */
-const _wp = new THREE.Vector3();
+/* Distance-only clue HUD. It never projects a goal into screen space,
+   points towards a destination or sticks to the edge of the screen. */
+const _clueDistancePoint = new THREE.Vector3();
 function updateWaypoint() {
-  const m = levels.marker;
-  if (!m || mode !== 'playing' || levels.state !== 'playing') { ui.setWaypoint(false); return; }
-  const dist = Math.hypot(m.x - player.position.x, m.z - player.position.z);
-  if (dist < 2.2) { ui.setWaypoint(false); return; }
-  _wp.set(m.x, (m.y || player.position.y) + 1.6, m.z).project(camera);
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-  const behind = _wp.z > 1;
-  let x = (_wp.x * 0.5 + 0.5) * w;
-  let y = (-_wp.y * 0.5 + 0.5) * h;
-  if (behind) { x = w - x; y = Math.max(y, h * 0.75); }
-  const mx = 56;
-  const top = 130;
-  const off = behind || x < mx || x > w - mx || y < top || y > h - mx;
-  if (!off) { ui.setWaypoint(true, x, y, dist); return; }
-  const cx = w / 2;
-  const cy = h / 2;
-  let dx = x - cx;
-  let dy = y - cy;
-  if (Math.abs(dx) < 1e-3 && Math.abs(dy) < 1e-3) dy = 1;
-  const k = Math.min((w / 2 - mx) / Math.abs(dx || 1e-6), (h / 2 - mx) / Math.abs(dy || 1e-6));
-  x = cx + dx * k;
-  y = Math.max(top, cy + dy * k);
-  ui.setWaypoint(true, x, y, dist, Math.atan2(dy, dx) + Math.PI / 2);
+  if (mode !== 'playing' || levels.state !== 'playing' || levels.warming) {
+    ui.setWaypoint(false); return;
+  }
+  let nearest = Infinity;
+  for (const obj of player.interactables) {
+    if (obj.userData.interaction?.kind !== 'clue' || !interactionPrompt(obj)) continue;
+    const pending = obj.userData.interaction?.pending;
+    if (pending && !pending()) continue;
+    interactionPoint(obj, _clueDistancePoint);
+    const dist = Math.hypot(_clueDistancePoint.x - player.position.x, _clueDistancePoint.z - player.position.z);
+    if (dist < nearest) nearest = dist;
+  }
+  // When no further collectible clue is available, show remaining distance
+  // to the level's next objective (no direction, exactly the same HUD).
+  const clueAvailable = Number.isFinite(nearest);
+  if (!clueAvailable && levels.marker)
+    nearest = Math.hypot(levels.marker.x - player.position.x, levels.marker.z - player.position.z);
+  ui.setWaypoint(Number.isFinite(nearest), 0, 0, nearest, clueAvailable ? 'clue' : 'goal');
 }
 
 const _guidePoint = new THREE.Vector3();
 const _guideLocal = new THREE.Vector3();
 function updateInteractionGuide() {
   const guide = player.interaction;
-  if (mode !== 'playing' || levels.state !== 'playing' || levels.warming || ui.dialogue.active || ui.panelOpen || !guide.guide) {
+  if (mode !== 'playing' || levels.state !== 'playing' || levels.warming || ui.dialogue.active || ui.panelOpen || !guide.guide || guide.distance > 5.5) {
     ui.setInteractionGuide(false); return;
   }
-  _guidePoint.copy(guide.point); _guidePoint.y += 0.35;
+  _guidePoint.copy(guide.point); _guidePoint.y += 0.65;
   _guideLocal.copy(_guidePoint).applyMatrix4(camera.matrixWorldInverse);
   _guidePoint.project(camera);
   const w = window.innerWidth, h = window.innerHeight;
-  const mx = Math.min(150, w * 0.25), top = Math.min(180, h * 0.3), bottom = h - 105;
-  let x = (_guidePoint.x * 0.5 + 0.5) * w;
-  let y = (-_guidePoint.y * 0.5 + 0.5) * h;
-  const behind = _guideLocal.z >= 0;
-  let angle = null;
-  if (behind || x < mx || x > w - mx || y < top || y > bottom) {
-    let dx = behind ? _guideLocal.x : x - w / 2;
-    let dy = behind ? Math.max(0.5, -_guideLocal.y) : y - h / 2;
-    if (Math.abs(dx) + Math.abs(dy) < 0.001) dy = 1;
-    const k = Math.min((w / 2 - mx) / Math.max(Math.abs(dx), 0.001),
-      Math.max(1, (dy < 0 ? h / 2 - top : bottom - h / 2)) / Math.max(Math.abs(dy), 0.001));
-    x = w / 2 + dx * k; y = h / 2 + dy * k;
-    angle = Math.atan2(dy, dx) - Math.PI / 2;
+  const x = (_guidePoint.x * 0.5 + 0.5) * w;
+  const y = (-_guidePoint.y * 0.5 + 0.5) * h;
+  // Unlike the objective HUD, this is glued to the physical clue only.
+  // Never pin it to an edge where it could act as a distant compass.
+  if (_guideLocal.z >= 0 || x < 95 || x > w - 95 || y < 140 || y > h - 115) {
+    ui.setInteractionGuide(false); return;
   }
   const obj = guide.guide;
-  const label = obj.userData.interaction?.label || (typeof obj.userData.prompt === 'function' ? obj.userData.prompt() : obj.userData.prompt);
-  ui.setInteractionGuide(true, x, y, label, guide.status, guide.distance, angle);
+  const label = obj.userData.interaction?.label || interactionPrompt(obj);
+  ui.setInteractionGuide(true, x, y, label, guide.status, guide.distance);
 }
 
 function formatTime(sec) {
@@ -501,6 +490,7 @@ function frame() {
 
   updateWaypoint();
   updateInteractionGuide();
+  clueGuidance.update(player, dt, t, mode === 'playing' && levels.state === 'playing' && !levels.warming && !reading && !ui.panelOpen);
   if (!levels.warming) postfx.render(t);
   if (mode === 'playing' && minimap.enabled && !levels.warming) minimap.render(player.position, player.facing, t);
 
