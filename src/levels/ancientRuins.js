@@ -41,7 +41,7 @@ export const meta = {
     kicker: 'The Past · Your goal', title: 'Find the Ancient Core in this temple',
     html: '<ul><li>The <b>blue badge</b> shows how far the next clue is, but does not point towards it. Explore to find clues.</li>'
       + '<li>The <b>checklist</b> (top-left) tracks every step of the temple’s puzzles.</li>'
-      + '<li>Approach clues and follow the nearby arrow. When <b>Press E</b> appears, press <kbd>E</kbd> to read or collect. <kbd>J</kbd> opens your journal; <kbd>H</kbd> shows help again.</li>'
+      + '<li>Step within a few metres of any clue. An <b>E</b> prompt appears automatically; you do not need to aim at the clue. <kbd>J</kbd> opens your journal; <kbd>H</kbd> shows help again.</li>'
       + '<li>Keep an eye on <b>Timeline stability</b> (top) — if it runs out, the era collapses and you rewind.</li></ul>',
   },
 };
@@ -955,14 +955,14 @@ export function build(kit, api, { save = null } = {}) {
       kicker: 'Clue · Rune tablets', title: 'Collect the three carved tablets',
       html: '<ul><li>Each tablet shows a <b>symbol</b> and a <b>number</b> (I, II or III).</li>'
         + '<li>There are <b>three</b> hidden around the temple — they <b>glow and sparkle</b>. Look behind the pool, in the courtyard corners and in the Sun Court.</li>'
-        + '<li>Follow the nearby arrow, walk close and press <kbd>E</kbd> when prompted. You do not need to aim precisely at the carving.</li>'
+        + '<li>Walk near the carving until the <b>E</b> prompt appears. You can collect it from any accessible point inside its invisible interaction circle.</li>'
         + '<li>Every tablet you read is saved in your <b>journal</b> (<kbd>J</kbd>). You will need them at the altar.</li></ul>',
     },
     altar: {
       kicker: 'Puzzle · The Sanctum', title: 'Set the rune drums',
       html: '<ul><li>Press <kbd>E</kbd> on a drum to turn it to its next symbol.</li>'
         + '<li>Set drum <b>I</b> to the symbol on tablet <b>I</b>, drum <b>II</b> to tablet <b>II</b>, drum <b>III</b> to tablet <b>III</b>.</li>'
-        + '<li>Check your journal (<kbd>J</kbd>) for the symbols. Missing a tablet? Use the blue distance readout, explore, and look for close-range glowing arrows.</li></ul>',
+        + '<li>Check your journal (<kbd>J</kbd>) for the symbols. Missing a tablet? Use the blue distance readout, explore, and press E when you step close to a tablet.</li></ul>',
     },
   };
 
@@ -1009,7 +1009,7 @@ export function build(kit, api, { save = null } = {}) {
     if (!state.gateOpen) return 'Walk into a block to push it. Both glowing plates need a block on them.';
     if (!state.crystalLit) return 'Press E on the marked mirror to turn it. Follow the beam.';
     if (!checkpointBridge) return 'The bridge is up — cross the chasm to the north.';
-    if (!state.tablets.every(Boolean)) return 'You need all three tablets. The blue badge shows distance only; search for glowing arrows when close.';
+    if (!state.tablets.every(Boolean)) return 'You need all three tablets. The blue badge shows distance only; step near the carved tablets to get an E prompt.';
     if (!state.dialsSolved) return 'Match drums I, II, III to tablets I, II, III (journal: J).';
     return 'Take the core floating above the altar.';
   });

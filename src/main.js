@@ -6,7 +6,6 @@ import { PostFX } from './core/postfx.js';
 import { UI } from './core/ui.js';
 import { Minimap } from './core/minimap.js';
 import { Player } from './player.js';
-import { ClueGuidance } from './core/clueGuidance.js';
 import { interactionPrompt, interactionPoint } from './core/interaction.js';
 import { createTimeMachine } from './timeMachine.js';
 import { createLevelManager } from './levelManager.js';
@@ -64,7 +63,6 @@ await new Promise((resolve) => setTimeout(resolve, 50));
 
 const player = new Player(camera, renderer.domElement);
 scene.add(player.object, player.worldFx);
-const clueGuidance = new ClueGuidance(scene);
 const timeMachine = createTimeMachine();
 scene.add(timeMachine);
 
@@ -490,7 +488,6 @@ function frame() {
 
   updateWaypoint();
   updateInteractionGuide();
-  clueGuidance.update(player, dt, t, mode === 'playing' && levels.state === 'playing' && !levels.warming && !reading && !ui.panelOpen);
   if (!levels.warming) postfx.render(t);
   if (mode === 'playing' && minimap.enabled && !levels.warming) minimap.render(player.position, player.facing, t);
 

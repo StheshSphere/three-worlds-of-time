@@ -166,8 +166,8 @@ export class UI {
     $('interaction-arrow').style.transform = `rotate(${angle ?? 0}rad)`;
     this._set('interaction-name', 'text', label);
     this._set('interaction-help', 'text', status === 'ready' ? 'Press E now' :
-      status === 'blocked' ? 'Follow the nearby arrow to a clear side' :
-      status === 'turn' ? 'Face the object and press E' : `Approach the glowing arrow · ${Math.ceil(distance)} m`);
+      status === 'blocked' ? 'Move to an accessible side' :
+      status === 'turn' ? 'Face the object and press E' : `Move closer · ${Math.ceil(distance)} m`);
   }
 
   setStability(frac, secondsLeft) {

@@ -42,7 +42,7 @@ export const meta = {
   introCard: {
     kicker: 'The Present · Your goal', title: 'Investigate the lab and recover the Lab Core',
     html: '<ul><li>This era is about <b>finding information</b>: read laptops, notes and boards (<kbd>E</kbd>).</li>'
-      + '<li>Every clue goes into your <b>journal</b> (<kbd>J</kbd>). The <b>checklist</b> shows your next task. The blue clue badge gives distance only; clues reveal nearby arrows.</li>'
+      + '<li>Every clue goes into your <b>journal</b> (<kbd>J</kbd>). The <b>checklist</b> shows your next task. The blue clue badge gives distance only. Step close to a clue until Press E appears — no precise aiming needed.</li>'
       + '<li>Start with the <b>laptop on the east workbench</b>, near the windows.</li></ul>',
   },
 };
@@ -1091,7 +1091,7 @@ export function build(kit, api, { save = null } = {}) {
     flashlight: { kicker: 'New tool · Flashlight', title: 'The flashlight reveals hidden ink',
       html: '<ul><li>Press <kbd>F</kbd> to switch it on or off.</li><li>Prof. Adeyemi wrote the Archive code in <b>phosphor ink</b> that only glows inside the beam.</li><li>Go to the dark <b>Archive (north)</b> and sweep the walls <b>slowly</b>.</li></ul>' },
     archive: { kicker: 'Puzzle · The Archive', title: 'Find the four ink digits',
-      html: '<ul><li>With your flashlight on, follow the nearby arrow and press <kbd>E</kbd> close to an ink mark. Holding the beam on a mark also reads it.</li><li>Each mark is a <b>digit</b> with <b>dots</b> under it: 1 dot = first digit … 4 dots = last.</li><li>Found digits are saved in your journal (<kbd>J</kbd>). Then use the <b>keypad</b> by the door at the end.</li></ul>' },
+      html: '<ul><li>With your flashlight on, step near an ink mark and press <kbd>E</kbd> when the prompt appears. Holding the beam on a mark also reads it.</li><li>Each mark is a <b>digit</b> with <b>dots</b> under it: 1 dot = first digit … 4 dots = last.</li><li>Found digits are saved in your journal (<kbd>J</kbd>). Then use the <b>keypad</b> by the door at the end.</li></ul>' },
     power: { kicker: 'Puzzle · Power room', title: 'Route the power',
       html: '<ul><li>Look at a tile on the wall console and press <kbd>E</kbd> to rotate it.</li><li>Connect <b>GRID IN</b> (left, middle row) to <b>VAULT OUT</b> (right, middle row).</li><li>Tiles carrying power <b>light up</b> — follow the glow.</li></ul>' },
   };

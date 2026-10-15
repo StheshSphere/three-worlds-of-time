@@ -34,13 +34,13 @@ Open <http://localhost:8000> in Chrome. **Never** open `index.html` as a `file:/
 | Mouse | Look |
 | Shift | Sprint |
 | Space | Jump (hold for a higher jump) |
-| E / left click | Interact — push, rotate, read, take. Clues are proximity-selectable without precise aim. |
+| E / left click | Interact — push, rotate, read, take. Every clue has an invisible interaction circle; stepping inside shows E without precise aim. |
 | Walk into a stone block | Push it one tile (the Past) |
 | F | Flashlight (the Present, once found) |
 | Q / right click | Chrono-Dash (the Future) |
 | V | First / third person |
 | M | Minimap on/off |
-| Nearby clue arrows | Appear only within a few metres of an available clue. Follow their floor-side indicator until **Press E now** appears; the blue badge shows distance only. |
+| Invisible clue circles | Walk within roughly 3.6 m of any available clue; **Press E** appears automatically, without camera aiming or world-space arrows. The blue badge displays distance only. |
 | J | Field journal (clues you've found) |
 | Esc | Pause (options, controls, credits, restart) |
 | Enter / click | Advance the current subtitle or important instruction |
@@ -67,7 +67,7 @@ Chrome/Ubuntu checks. Earlier member reports are retained as historical handoff 
 - **Viewing** — third-person over-the-shoulder camera with wall collision + first-person toggle; orthographic
   **minimap** (second camera, layer-filtered); animated rigged hero; cinematic title and finale cameras.
 - **Control & Playability** — acceleration-based movement, coyote time + jump buffering, push-blocks, dash, moving
-  platform carry. Clear objectives, hints, a distance-only clue badge (no directional arrow), and close-range physical clue arrows. **Fail states**: timeline-stability countdown per era,
+  platform carry. Clear objectives, hints, a distance-only clue badge (no directional arrow), and invisible clue interaction circles. **Fail states**: timeline-stability countdown per era,
   falls, barrier shocks, lasers, the rift. Checkpoints.
 - **3D Effects** — PBR materials (albedo + normal + AO/roughness/metal maps), image-based lighting from each era's sky,
   shadow-mapped sun that follows the player, a shadow-casting flashlight, **planar reflections** (temple pool, lab floor),

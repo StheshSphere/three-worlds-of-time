@@ -16,6 +16,7 @@ const { createTimeMachine } = await import('../src/timeMachine.js');
 const { createLevelManager } = await import('../src/levelManager.js');
 const { createKit } = await import('../src/core/kit.js');
 const { UI } = await import('../src/core/ui.js');
+const { clueInZone, interactionPoint, CLUE_ZONE_RADIUS } = await import('../src/core/interaction.js');
 const { Cutscene } = await import('../src/core/cutscene.js');
 const { assets } = await import('../src/core/assets.js');
 const { ARRIVALS, ERA_CARDS } = await import('../src/story.js');
@@ -79,17 +80,15 @@ for (const view of ['first', 'third']) {
     assert.equal(ui.journal.filter(j => j.key?.startsWith('tablet-')).length, 3);
     pressE(); continueDialogue(); assert.equal(ui.journal.filter(j => j.key?.startsWith('tablet-')).length, 3, 'rereading does not duplicate clues');
   });
-  test(`${view}: tablet guide appears before reach; walls and distance prevent collection`, () => {
+  test(`${view}: invisible tablet circle is limited to nearby accessible space`, () => {
     load(0); player.mode = view;
-    pose([6.8, .1, -46.4], Math.PI);
-    assert.equal(player.nearbyInteractable?.id, undefined, promptOf(player.nearbyInteractable || { userData: {} }));
-    assert.equal(player.interaction.guide?.userData.interaction.label, 'Carved tablet');
-    assert.equal(player.interaction.status, 'closer'); pressE();
-    assert.equal(levels.debug.state.tablets[2], false);
-    pose([14.2, .1, -47]); // other side of the Sun Court wall
-    assert.equal(player.nearbyInteractable?.id, undefined, promptOf(player.nearbyInteractable || { userData: {} }));
-    assert.equal(player.interaction.status, 'blocked'); pressE();
-    assert.equal(levels.debug.state.tablets[2], false);
+    const tablet = player.interactables.find(o => o.userData.interaction?.label === 'Carved tablet' && o.position.z < -45);
+    pose([6.8, .1, -46.4], Math.PI); // 4+ metres away: outside circle
+    assert.notEqual(player.nearbyInteractable?.id, tablet.id);
+    pressE(); assert.equal(levels.debug.state.tablets[2], false);
+    pose([14.2, .1, -47]); // far/opposite side of the Sun Court wall
+    assert.notEqual(player.nearbyInteractable?.id, tablet.id);
+    pressE(); assert.equal(levels.debug.state.tablets[2], false);
   });
   test(`${view}: Lab logs, tiny flashlight and ink can be collected with E`, () => {
     load(1); player.mode = view;
@@ -247,9 +246,9 @@ test('The full weight puzzle remains solvable with normal walking pushes and sol
 });
 test('UI guide changes between approach, obstruction and E-ready and clears on reset', () => {
   ui.setInteractionGuide(true, 400, 200, 'Carved tablet', 'closer', 5.2);
-  assert.equal(document.getElementById('interaction-help').textContent, 'Approach the glowing arrow · 6 m');
+  assert.equal(document.getElementById('interaction-help').textContent, 'Move closer · 6 m');
   ui.setInteractionGuide(true, 400, 200, 'Carved tablet', 'blocked', 2);
-  assert.equal(document.getElementById('interaction-help').textContent, 'Follow the nearby arrow to a clear side');
+  assert.equal(document.getElementById('interaction-help').textContent, 'Move to an accessible side');
   ui.setInteractionGuide(true, 400, 200, 'Carved tablet', 'ready', 2);
   assert.equal(document.getElementById('interaction-help').textContent, 'Press E now');
   ui.resetTransient(); assert.equal(document.getElementById('interaction-guide').classList.contains('hidden'), true);
@@ -263,36 +262,58 @@ test('Blue badge is distance-only, does not transform into a compass', () => {
   ui.setWaypoint(false);
   assert.equal(document.getElementById('waypoint').classList.contains('hidden'), true);
 });
-// All levels use the same shared close-range clue marker. No distant arrows.
-const { ClueGuidance } = await import('../src/core/clueGuidance.js');
-test('Shared physical clue arrows appear nearby and hide from a distance or after collection', () => {
-  const effect = new ClueGuidance(scene);
-  try {
-    load(0); player.mode = 'third'; pose([6.8, .1, -46.4], Math.PI);
-    effect.update(player, 1/60, 1, true);
-    const wallTablet = player.interactables.find(o => o.userData.interaction?.label === 'Carved tablet' && o.position.z < -45);
-    assert.equal(effect.markers.get(wallTablet)?.ring.visible, true, 'near-but-not-ready tablet should offer a reachable stand-here ring');
-    for (const era of [0, 1, 2]) {
-      load(era);
-      if (era === 2) {
-        pose([-2.9, 3, -138.5]); play(.1);
-        assert.equal(levels.debug.solvePuzzle(), true); play(2);
-      }
-      const clue = player.interactables.find(o => o.userData.interaction?.kind === 'clue' && promptOf(o));
-      assert.ok(clue, `era ${era} must have at least one clue`);
-      const point = new THREE.Vector3();
-      clue.updateWorldMatrix(true, false);
-      point.copy(clue.userData.interaction.point).applyMatrix4(clue.matrixWorld);
-      pose([point.x + 1.1, point.y - player.head.position.y + 0.1, point.z]);
-      effect.update(player, 1/60, 1, true);
-      assert.equal(effect.markers.get(clue)?.sprite.visible, true, `era ${era} clue not marked`);
-      pose([point.x + 30, point.y - player.head.position.y, point.z]);
-      effect.update(player, 1/60, 2, true);
-      assert.equal(effect.markers.get(clue)?.sprite.visible, false, `era ${era} distant clue wrongly visible`);
-      effect.update(player, 1/60, 2, false);
-      assert.equal(effect.root.visible, false);
+// All clues across all eras use the SAME invisible floor-space proximity zone.
+test('Invisible clue circles in all three eras; no 3D arrows or floor rings', () => {
+  assert.ok(!scene.children.some(c => c.name === 'CloseRangeClueArrows'));
+  for (const era of [0, 1, 2]) {
+    load(era);
+    if (era === 2) {
+      pose([-2.9, 3, -138.5]); play(.1);
+      assert.equal(levels.debug.solvePuzzle(), true); play(2);
     }
-  } finally { effect.reset(); scene.remove(effect.root); effect.ringGeo.dispose(); effect.texture.dispose(); }
+    const clue = player.interactables.find(o => o.userData.interaction?.kind === 'clue' && promptOf(o));
+    assert.ok(clue, `era ${era} must include collectible clues`);
+    const point = interactionPoint(clue, new THREE.Vector3());
+    const foot = new THREE.Vector3(point.x + .2, point.y - 1.5, point.z);
+    assert.equal(clueInZone(foot, point, clue, []), true, `era ${era}: centre of circle should activate`);
+    foot.x = point.x + CLUE_ZONE_RADIUS + .2;
+    assert.equal(clueInZone(foot, point, clue, []), false, `era ${era}: outside circle must not activate`);
+    assert.equal(scene.children.some(c => c.name === 'CloseRangeClueArrows'), false, 'no visible markers');
+  }
+});
+test('Real world lab desk furniture does not block the invisible clue circle', () => {
+  load(1); player.mode = 'third';
+  // Where the reported bug occurs: left side of professor's desk, eyes facing
+  // away from the tiny flashlight mesh, with desk collision between them.
+  pose([-21, 0, -3.5], 0, -.2);
+  assert.equal(player.nearbyInteractable?.userData.interaction.label, 'Flashlight');
+  assert.equal(player.interaction.status, 'ready');
+  pressE(); assert.equal(levels.debug.state.flashlight, true);
+});
+test('The E prompt and action use precisely the same invisible clue zone', () => {
+  const f = fixture();
+  pose([0, 0, 0], Math.PI, .9);
+  assert.equal(player.nearbyInteractable?.id, f.clue.id);
+  assert.equal(promptOf(player.nearbyInteractable), 'Collect');
+  // Place solid furniture in the middle; it must not shrink the E circle.
+  f.kit.proxy({ size: [.6, 1, 1.1], pos: [.9, .6, 0] });
+  player._updateInteraction();
+  assert.equal(player.nearbyInteractable?.id, f.clue.id);
+  pressE(); assert.equal(f.count(), 1);
+  pose([-5, 0, 0]);
+  assert.equal(player.nearbyInteractable?.id, undefined);
+  pressE(); assert.equal(f.count(), 1);
+});
+test('Architectural walls prevent E-through-wall even when inside the circle', () => {
+  const f = fixture();
+  const wall = f.kit.proxy({ size: [.2, 3, 5], pos: [.9, 1.5, 0] });
+  pose([0, 0, 0]);
+  assert.equal(player.nearbyInteractable?.id, undefined);
+  pressE(); assert.equal(f.count(), 0);
+  f.kit.removeCollider(wall);
+  player._updateInteraction();
+  assert.equal(player.nearbyInteractable?.id, f.clue.id);
+  pressE(); assert.equal(f.count(), 1);
 });
 ui.resetTransient();
 console.log(JSON.stringify({ suite: 'Collision and nearby E interaction regressions (real Three.js, DOM/audio doubles)', passed: results.filter(r => r.status === 'PASS').length, failed: results.filter(r => r.status === 'FAIL').length, results }, null, 2));

@@ -1,13 +1,17 @@
 import * as THREE from 'three';
 
-// Interaction uses the character's reach, not the third-person camera's distance.
-// Exact aiming wins for adjacent puzzle controls; nearby clues need no pixel hunting.
+// Clues are collected by ENTERING AN INVISIBLE CIRCLE around the clue, not by
+// pointing the camera at a tiny mesh or finding a desk's one clear sightline.
+// Ordinary puzzle controls keep their smaller, precision-based interaction.
 export const INTERACT_RANGE = 3.1;
-export const CLUE_REACH = 4.2;
+export const CLUE_ZONE_RADIUS = 3.6;        // 7.2 m diameter, measured on the floor
+export const CLUE_ZONE_HEIGHT = 4.6;        // permits elevated tablets and raised cores
 export const NEARBY_GUIDE_RANGE = 5.5;
 const _ray = new THREE.Ray();
 const _direction = new THREE.Vector3();
 const _hit = new THREE.Vector3();
+const _wallOrigin = new THREE.Vector3();
+const _wallEnd = new THREE.Vector3();
 
 export function interactionPrompt(obj) {
   if (!obj?.userData.onInteract) return null;
@@ -22,7 +26,7 @@ export function interactionPoint(obj, out) {
   return point ? out.copy(point).applyMatrix4(obj.matrixWorld) : obj.getWorldPosition(out);
 }
 
-/** Invisible physics proxies count too. Only the target's own body is ignored. */
+/** Original line-of-sight test for precise machinery/puzzle controls. */
 export function interactionVisible(origin, point, obj, colliders) {
   _direction.subVectors(point, origin);
   const distance = _direction.length();
@@ -36,31 +40,51 @@ export function interactionVisible(origin, point, obj, colliders) {
       if (parent === obj) { ownBody = true; break; }
     }
     if (ownBody) continue;
-    // A wall-mounted clue's anchor sits just in front of its wall. Do not
-    // ignore boxes merely because they contain the target (locked fields!).
     if (box.containsPoint(origin)) return false;
     if (_ray.intersectBox(box, _hit) && _hit.distanceTo(origin) < distance - 0.025) return false;
   }
   return true;
 }
 
-/**
- * Clues can be collected without precise camera aim. Try a small number of
- * natural sightlines (eyes/chest to centre/upper face), because a low desk or
- * thick tablet border should not make an obviously reachable clue unclickable.
- * Every ray is still tested against real world colliders: no through-wall E.
- * Non-clue puzzle controls retain the strict original ray test.
- */
-const _reachOrigin = new THREE.Vector3();
-const _reachPoint = new THREE.Vector3();
+/** Old precise line test is ONLY for non-clue controls. */
 export function interactionReachable(origin, point, obj, colliders) {
-  if (interactionVisible(origin, point, obj, colliders)) return true;
-  if (obj.userData.interaction?.kind !== 'clue') return false;
-  _reachPoint.copy(point).y += 0.25;
-  if (interactionVisible(origin, _reachPoint, obj, colliders)) return true;
-  _reachOrigin.copy(origin).y -= 0.40;
-  if (interactionVisible(_reachOrigin, point, obj, colliders)) return true;
-  return interactionVisible(_reachOrigin, _reachPoint, obj, colliders);
+  return interactionVisible(origin, point, obj, colliders);
+}
+
+/**
+ * A clue's zone is a flat, completely INVISIBLE circle centred on the object.
+ * Player enters it => on-screen E prompt AND E actually works. Furniture,
+ * desks, pedestals and camera orientation NEVER reduce this circle.
+ *
+ * Only full-height architectural walls/gates can divide the trigger area;
+ * this prevents picking up clues from a neighbouring locked room. The ray
+ * checks horizontal traversal at the player's chest height, NOT the tiny
+ * clue mesh on top of a desk or its detailed collision proxies.
+ */
+export function clueInZone(playerFeet, cluePoint, obj, colliders = []) {
+  const opts = obj.userData.interaction || {};
+  const radius = Math.max(CLUE_ZONE_RADIUS, opts.radius ?? 0);
+  if (Math.hypot(playerFeet.x - cluePoint.x, playerFeet.z - cluePoint.z) > radius) return false;
+  if (Math.abs(playerFeet.y - cluePoint.y) > (opts.zoneHeight ?? CLUE_ZONE_HEIGHT)) return false;
+
+  _wallOrigin.set(playerFeet.x, playerFeet.y + 1.2, playerFeet.z);
+  _wallEnd.set(cluePoint.x, playerFeet.y + 1.2, cluePoint.z);
+  _direction.subVectors(_wallEnd, _wallOrigin);
+  const length = _direction.length();
+  if (length < 0.001) return true;
+  _ray.set(_wallOrigin, _direction.multiplyScalar(1 / length));
+  for (const obstacle of colliders) {
+    if (obstacle === obj.userData.proxy) continue;
+    const box = obstacle.userData.solidBox;
+    if (!box) continue;
+    const width = box.max.x - box.min.x;
+    const depth = box.max.z - box.min.z;
+    const height = box.max.y - box.min.y;
+    // Furniture is never a wall. Long, tall, thin obstacles are walls/doors.
+    if (height < 2.15 || Math.min(width, depth) > 1.45 || Math.max(width, depth) < 1.1) continue;
+    if (_ray.intersectBox(box, _hit) && _hit.distanceTo(_wallOrigin) < length - 0.07) return false;
+  }
+  return true;
 }
 
 export class InteractionSelector {
@@ -90,44 +114,82 @@ export class InteractionSelector {
     this._ray.far = player.camera.position.distanceTo(this._origin) + 5;
     this._hits.length = 0;
     this._ray.intersectObjects(player.interactables, true, this._hits);
+
+    // Keep precision selection for adjacent machinery controls (conduit tiles,
+    // dials, switches, energy nodes). This does not gate ANY clue.
     for (const hit of this._hits) {
       let obj = hit.object;
       while (obj && !obj.userData.onInteract) obj = obj.parent;
       if (!obj || !player.interactables.includes(obj) || !interactionPrompt(obj)) continue;
-      interactionPoint(obj, this._point);
       const opts = obj.userData.interaction || {};
-      const radius = opts.kind === 'clue' ? Math.max(opts.radius ?? CLUE_REACH, CLUE_REACH) : (opts.radius ?? INTERACT_RANGE);
-      if (this._point.distanceTo(this._origin) > radius) continue;
+      if (opts.kind === 'clue') continue;
+      interactionPoint(obj, this._point);
+      if (this._point.distanceTo(this._origin) > (opts.radius ?? INTERACT_RANGE)) continue;
       if (!interactionReachable(this._origin, this._point, obj, player.colliders)) continue;
       this.target = obj;
       break;
     }
 
-    let best = Infinity, guideScore = Infinity;
-    const exact = this.target;
+    // Search EVERY readable or collectible clue in all eras using the SAME
+    // invisible circle rule. No camera/mesh raycast, no desk obstruction.
+    let bestClue = null;
+    let bestScore = Infinity;
     for (const obj of player.interactables) {
-      if (!interactionPrompt(obj)) continue;
       const opts = obj.userData.interaction || {};
+      if (opts.kind !== 'clue') continue;
+      const prompt = interactionPrompt(obj);
+      if (!prompt) continue; // still locked/collected/hidden => no E
       interactionPoint(obj, this._point);
-      this._towards.subVectors(this._point, this._origin);
-      const distance = this._towards.length();
-      const radius = opts.kind === 'clue' ? Math.max(opts.radius ?? CLUE_REACH, CLUE_REACH) : (opts.radius ?? INTERACT_RANGE);
-      if (distance > Math.min(opts.guideRadius ?? NEARBY_GUIDE_RANGE, NEARBY_GUIDE_RANGE)) continue;
-      const alignment = distance > 0.001 ? this._towards.dot(this._look) / distance : 1;
-      const clear = interactionReachable(this._origin, this._point, obj, player.colliders);
-      const pending = !opts.pending || opts.pending();
-      const easyReach = opts.kind === 'clue' || alignment > 0.4;
-      const ready = clear && distance <= radius && (easyReach || exact === obj);
-      // Read clues remain available but do not crowd out the next unread clue.
-      const score = distance + (1 - alignment) * (opts.kind === 'clue' ? 0.3 : 2) + (pending ? 0 : 3);
-      // Prefer pending, close clues when not aiming precisely at another
-      // control. A clue needs only proximity + a clear line, never pixel aim.
-      const readyScore = distance + (opts.kind === 'clue' ? -0.7 : 0) + (pending ? 0 : 4);
-      if (!exact && ready && readyScore < best) { best = readyScore; this.target = obj; }
-      if (pending && score + (clear ? 0 : 4) < guideScore) {
-        guideScore = score + (clear ? 0 : 4);
-        this.guide = obj;
-        this.status = !clear ? 'blocked' : distance > radius ? 'closer' : 'turn';
+      if (!clueInZone(player.position, this._point, obj, player.colliders)) continue;
+      const distance = Math.hypot(this._point.x - player.position.x, this._point.z - player.position.z);
+      // Prefer uncollected clues and pickups if zones overlap (e.g. the lab
+      // flashlight and professor's laptop both sit on the same desk).
+      const pendingPenalty = opts.pending && !opts.pending() ? 5 : 0;
+      const pickupBonus = /^(take|collect|pick up)\b/i.test(prompt) ? 1.5 : 0;
+      const score = distance + pendingPenalty - pickupBonus;
+      if (score < bestScore) { bestScore = score; bestClue = obj; }
+    }
+    if (bestClue && !this.target) this.target = bestClue;
+
+    // Non-clue controls keep the legacy easy reach as well: players should
+    // still be able to operate a nearby console/pylon without pixel aiming.
+    // A direct camera hit always beats this fallback, and a nearby clue takes
+    // precedence unless the player deliberately aims at the other control.
+    if (!this.target) {
+      let fallbackScore = Infinity;
+      for (const obj of player.interactables) {
+        const opts = obj.userData.interaction || {};
+        if (opts.kind === 'clue' || !interactionPrompt(obj)) continue;
+        interactionPoint(obj, this._point);
+        this._towards.subVectors(this._point, this._origin);
+        const distance = this._towards.length();
+        if (distance > (opts.radius ?? INTERACT_RANGE)) continue;
+        const alignment = distance > 0.001 ? this._towards.dot(this._look) / distance : 1;
+        if (alignment <= 0.4 || !interactionReachable(this._origin, this._point, obj, player.colliders)) continue;
+        const score = distance + (1 - alignment) * 2;
+        if (score < fallbackScore) { fallbackScore = score; this.target = obj; }
+      }
+    }
+
+    // Keep the older contextual approach guide for non-clue controls only.
+    if (!this.target) {
+      let guideScore = Infinity;
+      for (const obj of player.interactables) {
+        const opts = obj.userData.interaction || {};
+        if (opts.kind === 'clue' || !interactionPrompt(obj)) continue;
+        interactionPoint(obj, this._point);
+        this._towards.subVectors(this._point, this._origin);
+        const distance = this._towards.length();
+        if (distance > Math.min(opts.guideRadius ?? NEARBY_GUIDE_RANGE, NEARBY_GUIDE_RANGE)) continue;
+        const alignment = distance > 0.001 ? this._towards.dot(this._look) / distance : 1;
+        const clear = interactionReachable(this._origin, this._point, obj, player.colliders);
+        const radius = opts.radius ?? INTERACT_RANGE;
+        const score = distance + (1 - alignment) * 2 + (clear ? 0 : 4);
+        if (score < guideScore) {
+          guideScore = score;
+          this.guide = obj;
+          this.status = !clear ? 'blocked' : distance > radius ? 'closer' : 'turn';
+        }
       }
     }
     if (this.target) { this.guide = this.target; this.status = 'ready'; }
