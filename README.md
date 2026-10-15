@@ -13,7 +13,7 @@ era, and it ends with an epilogue in the lab the next morning, an end card and a
 |---|---|---|
 | **I · The Past** — Temple of the First Hour | **Solve** | The world itself is the puzzle: you push stone blocks across a grid, rotate bronze mirrors to steer a sunbeam, and decode carved rune tablets. |
 | **II · The Present** — Chronos Research Facility | **Investigate** | You win with information: read logs, find a flashlight whose beam reveals invisible phosphor ink, crack a keypad code and reroute power — which transforms the whole level from emergency red to full light. |
-| **III · The Future** — The Fractured Skyline, 2187 | **Survive** | A new ability (the Chrono-Dash) and a timing gauntlet over a bottomless neon city: moving and phasing platforms, barriers you dash *through*, lasers, and a collapsing bridge chased by a time rift. |
+| **III · The Future** — The Fractured Skyline, 2187 | **Survive** | Two clear forward jumps (normal and very big) and a timing gauntlet over a bottomless neon city: moving and phasing platforms, timed barriers, lasers, and a collapsing bridge chased by a time rift. |
 
 ## Run it locally
 
@@ -30,17 +30,19 @@ Open <http://localhost:8000> in Chrome. **Never** open `index.html` as a `file:/
 
 | Key | Action |
 |---|---|
-| WASD / arrows | Move (camera-relative) |
+| WASD / ↑ ↓ | Move (camera-relative); A/D strafe |
+| ← / → | Turn camera and flashlight left/right (mouse look also works) |
 | Mouse | Look |
-| Shift | Sprint |
-| Space | Jump (hold for a higher jump) |
-| E / left click | Interact — push, rotate, read, take. Every clue has an invisible interaction circle; stepping inside shows E without precise aim. |
+| Shift | Sprint; hold with W or ↑ and press Space for a BIG forward jump in the Future |
+| W / ↑ + Space | Normal forward jump (hold forward, press Space). |
+| Shift + W / ↑ + Space | Very big forward jump in the Future; use it for the first wide gap. |
+| E / left click | Interact — push, read, take, or open a console. Most clues use a generous invisible E circle. |
+| Present power-console puzzle | Approach the large wall console and press E to open the entire 3×3 tile grid. Click a tile or press 1–9 to rotate clockwise; Esc closes the panel. Connect GRID IN (middle-left) to VAULT OUT (middle-right). Bright cyan pipes are powered. |
 | Walk into a stone block | Push it one tile (the Past) |
 | F | Flashlight (the Present, once found) |
-| Q / right click | Chrono-Dash (the Future) |
 | V | First / third person |
 | M | Minimap on/off |
-| Invisible clue circles | Walk within roughly 3.6 m of any available clue; **Press E** appears automatically, without camera aiming or world-space arrows. The blue badge displays distance only. |
+| Invisible clue circles | Most clues use the 6m-radius easy proximity circle. **Exception:** Present Archive phosphor ink only offers **Press E** when the flashlight beam actually lights the mark. |
 | J | Field journal (clues you've found) |
 | Esc | Pause (options, controls, credits, restart) |
 | Enter / click | Advance the current subtitle or important instruction |
@@ -80,7 +82,7 @@ Chrome/Ubuntu checks. Earlier member reports are retained as historical handoff 
   screens, restart without refresh, consistent per-era colour scheme, quality presets with an automatic downgrade on
   slow machines, FPS counter.
 - **Innovation** — own procedural Time Machine, trees, rock cliffs, procedural city; flashlight-revealed ink;
-  dash-phasing through barriers; one place transformed across three eras.
+  timing through pulsing barriers; one place transformed across three eras.
 
 ## Project structure
 
@@ -155,3 +157,35 @@ npm --prefix tools install
 VIEW=third node tools/play.mjs tools/tests/member4-release.json out/third
 VIEW=first node tools/play.mjs tools/tests/member4-release.json out/first
 ```
+
+
+### E-ZONES V3 — reliable clue collection (October 2026)
+
+**Ordinary clues can be activated within a 6 m radius (12 m diameter)** without looking at the small model, including the office flashlight and Past tablets. **Present Archive phosphor ink is deliberately harder:** it requires a flashlight-on, accurately aimed beam on the wall mark before the E prompt and collection are available. Use the left/right arrow keys or mouse to turn the beam; aiming alone never auto-collects ink. The same shared nearest-clue resolver drives both the green **E** prompt and the actual E action. The E handler independently rechecks the clue circle at key-down, so nearby machinery and raycasts cannot steal clue pickups. Architectural walls still prevent picking items through inaccessible rooms; completed/locked items preserve their level-specific behaviour. The blue HUD still shows distance only.
+
+**Verify that the new code really loaded:** In the game's top-right HUD, look for `JUMP V9 · HOLD SHIFT + FORWARD, TAP SPACE`. If this badge is missing, you are playing an older copy or cached version (serve the folder containing this `index.html`, stop old Python servers, then hard-refresh with Ctrl+Shift+R).
+
+### Pipe-grid V5 — clear full-screen power-routing puzzle
+
+In the Present power room, walk to the wall console and press E. Instead of rotating tiny 3D wall tiles, this opens a 3×3 close-up grid like the Archive keypad. Click tiles (or use number keys 1–9 in reading order) to rotate their pipes 90° clockwise. Connect GRID IN at the left-middle edge to VAULT OUT at the right-middle edge; connected pipes glow cyan. The panel can be closed with Esc and reopened without resetting rotations. Completion still uses the original pipe-connection algorithm, level transformation, progress save, and vault-opening sequence. Other levels and the flashlight-only ink clue mechanic are unchanged.
+
+
+### Future jump input fix V8
+- Hold **Shift**, then hold **W or ↑**, then **tap Space once** for a large forward jump.
+- Without Shift, hold **W or ↑** and tap **Space** for the normal forward jump.
+- The Space keydown captures the combination immediately; the jump buffer and edge grace make a single tap reliable even on a slow PC or just off a ledge.
+- A short **BIG JUMP!** or **NORMAL JUMP** HUD label confirms the action. The player must face the landing platform.
+
+### Future jumping and disappearing platforms (V9)
+- Hold **W** or **↑**, then tap **Space** once for a normal jump.
+- Hold **Shift** and **W** (or **↑**) at the same time, then tap **Space** once for the **BIG JUMP**. The jump begins on Space keydown, not on a later animation frame.
+- In the Future, phase-platform decks are wider (4.2 m instead of 3.4 m). The cycle is 4.7 s fully solid, 0.8 s fading, 0.65 s absent, 0.85 s reappearing. Bridge tiles now delay collapse 0.95 s rather than 0.42 s, and the rift approaches slightly more slowly.
+- A **BIG JUMP!** visual confirms the long leap fired; only the Future uses these physics.
+- To avoid serving the wrong extraction folder, run `START_GAME_V9.bat` from the root of this extracted game.
+
+
+## Future level V10 improvements
+
+- **Jump**: Hold Shift + Up arrow (or Shift + W), then tap Space once for the big jump. A normal forward jump uses Up arrow (or W) + Space. Space keyup is also handled for laptops where a three-key chord hides the keydown event. If both Space events are blocked by the keyboard hardware, browsers cannot detect the tap.
+- **Falling bricks**: Sprint with Shift + Up / W. Tiles remain solid for about 2.15 seconds; the rift moves more slowly. Falling or being caught returns to the safe pre-bridge platform and resets the bridge. Spire checkpoint is only earned after landing on the spire.
+- **Colour lock finale**: Much larger world panel with numbered colour order, persistent high-contrast HUD hint, six-second colour cycles, highlighted matching orb, easier close-range E interaction, and step confirmation.

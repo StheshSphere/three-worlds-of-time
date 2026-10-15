@@ -1,12 +1,19 @@
 import * as THREE from 'three';
 import { createHero } from './character.js';
 import { settings } from './core/settings.js';
-import { InteractionSelector, interactionPoint, interactionReachable, clueInZone } from './core/interaction.js';
+import { InteractionSelector, interactionPoint, interactionReachable, clueInZone, nearestAvailableClue } from './core/interaction.js';
 
 const GRAVITY = 24;
 const WALK_SPEED = 4.6;
 const SPRINT_SPEED = 8.2;
 const JUMP_SPEED = 8.7;
+// The Future has exactly two forward jumps: W/up + Space = normal,
+// Shift + W/up + Space = a much longer leap. No dash is required.
+// All other eras retain their original movement physics.
+const FUTURE_LEAP_JUMP_SPEED = 11.1;
+const FUTURE_LEAP_FORWARD_SPEED = 13.0;
+const FUTURE_NORMAL_JUMP_FORWARD_SPEED = 6.4;
+const FUTURE_LEAP_AIR_STEER = 2.5;
 const ACCEL_GROUND = 16;
 const ACCEL_AIR = 5;
 const EYE_HEIGHT = 1.58;
@@ -14,13 +21,16 @@ const RIG_HEIGHT = 1.75;
 const RIG_RADIUS = 0.34;
 const STEP_UP = 0.5;          // ledges lower than this are climbed, not blocked
 const COYOTE_TIME = 0.12;     // you may still jump this long after walking off a ledge
-const JUMP_BUFFER = 0.12;     // a jump pressed this long before landing still counts
+const JUMP_BUFFER = 0.12;     // standard jump buffer
+const FUTURE_JUMP_BUFFER = 0.24; // catch a single Space tap on a slow frame
+const FUTURE_COYOTE_TIME = 0.38; // jump just after walking off a platform edge
 const DASH_SPEED = 19;
 const DASH_TIME = 0.2;
 const DASH_COOLDOWN = 1.0;
 const TP_DISTANCE = 4.4;
 const TP_HEIGHT = 0.55;
 const TP_SHOULDER = 0.6;
+const KEYBOARD_TURN_SPEED = 1.9;  // Arrow keys rotate while flashlight is owned; A/D still strafe
 
 // Scratch objects reused every frame — never allocate inside the loop (brief §6.1).
 const _origin = new THREE.Vector3();
@@ -98,9 +108,15 @@ export class Player extends THREE.EventDispatcher {
     this.killY = -14;
     this.defaultSurface = 'stone';
 
-    this.keys = { forward: false, back: false, left: false, right: false, sprint: false, jump: false };
+    this.keys = { forward: false, back: false, left: false, right: false, turnLeft: false, turnRight: false, sprint: false, jump: false };
     this._coyote = 0;
     this._jumpBuffer = 0;
+    this._queuedFutureJump = null; // snapshot combo at Space KEYDOWN, not at a later physics frame
+    // Some laptop keyboards suppress Shift+Up+Space keydowns (key rollover).
+    // Remember the last physically detected held keys briefly and accept Space
+    // keyUP if the hardware/browser dropped only its keyDOWN event.
+    this._lastForwardRelease = -Infinity;
+    this._lastShiftRelease = -Infinity;
     this._stepDist = 0;
     this._fallSpeed = 0;
     this._fell = false;
@@ -109,6 +125,10 @@ export class Player extends THREE.EventDispatcher {
     this._pushTarget = null;
     this._invuln = 0;
     this.canDash = false;
+    this.canSprintLeap = false;
+    this._sprintLeap = false;
+    this._forwardJump = false;
+    this._sprintLeapDir = new THREE.Vector3();
     this._dashTime = 0;
     this._dashCooldown = 0;
     this._airDashUsed = false;
@@ -168,7 +188,7 @@ export class Player extends THREE.EventDispatcher {
     this.dom.addEventListener('mousedown', (e) => {
       if (!this.isLocked || !this.inputEnabled || this.frozen) return;
       if (e.button === 0) this.tryInteract();
-      if (e.button === 2) this.tryDash();
+      // Right click is no longer a required gameplay action.
     });
     this.dom.addEventListener('contextmenu', (e) => e.preventDefault());
     window.addEventListener('keydown', (e) => this._key(e, true));
@@ -178,6 +198,9 @@ export class Player extends THREE.EventDispatcher {
   _clearKeys() {
     for (const k in this.keys) this.keys[k] = false;
     this._jumpBuffer = 0;
+    this._queuedFutureJump = null;
+    this._lastForwardRelease = -Infinity;
+    this._lastShiftRelease = -Infinity;
     this._pushTimer = 0;
     this._pushTarget = null;
   }
@@ -185,23 +208,43 @@ export class Player extends THREE.EventDispatcher {
   _key(e, down) {
     if (!this.isLocked || !this.inputEnabled || this.frozen) { if (!down) this._key2(e.code, false); return; }
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
-    this._key2(e.code, down, e.repeat);
+    // Use physical codes when available, and fall back to the browser key.
+    const code = e.code || ({ ArrowUp: 'ArrowUp', ' ': 'Space', Shift: 'ShiftLeft' }[e.key] || e.key);
+    this._key2(code, down, e.repeat, e.shiftKey);
   }
 
-  _key2(code, down, repeat = false) {
+  _key2(code, down, repeat = false, shiftHeld = false) {
     switch (code) {
-      case 'KeyW': case 'ArrowUp': this.keys.forward = down; break;
+      case 'KeyW': case 'ArrowUp': this.keys.forward = down; if (!down) this._lastForwardRelease = performance.now(); break;
       case 'KeyS': case 'ArrowDown': this.keys.back = down; break;
-      case 'KeyA': case 'ArrowLeft': this.keys.left = down; break;
-      case 'KeyD': case 'ArrowRight': this.keys.right = down; break;
-      case 'ShiftLeft': case 'ShiftRight': this.keys.sprint = down; break;
-      case 'Space':
-        if (down && !repeat) this._jumpBuffer = JUMP_BUFFER;
-        if (!down && this.velocity.y > 3) this.velocity.y *= 0.55; // short hop when released early
+      case 'KeyA': this.keys.left = down; break;
+      case 'KeyD': this.keys.right = down; break;
+      case 'ArrowLeft': if (this.flashlightOwned) this.keys.turnLeft = down; else this.keys.left = down; break;
+      case 'ArrowRight': if (this.flashlightOwned) this.keys.turnRight = down; else this.keys.right = down; break;
+      case 'ShiftLeft': case 'ShiftRight': this.keys.sprint = down; if (!down) this._lastShiftRelease = performance.now(); break;
+      case 'Space': {
+        // In particular Shift+ArrowUp+Space must behave like Shift+W+Space.
+        // Physical keyboard rollover sometimes hides Space DOWN but still
+        // delivers UP: accept that UP once if no DOWN was registered.
+        const missedDown = !down && !this.keys.jump && this.canSprintLeap;
+        if ((!repeat && down) || missedDown) {
+          const now = performance.now();
+          const forward = !this.keys.back && (this.keys.forward || now - this._lastForwardRelease < 260);
+          const shift = this.keys.sprint || shiftHeld || now - this._lastShiftRelease < 260;
+          this._jumpBuffer = this.canSprintLeap ? FUTURE_JUMP_BUFFER : JUMP_BUFFER;
+          this._queuedFutureJump = this.canSprintLeap ? {
+            forward, big: forward && shift,
+          } : null;
+          this._attemptBufferedJump();
+        }
+        // Both Future jump types have full height on a single Space tap;
+        // other eras keep the original variable-height jump.
+        if (!down && this.velocity.y > 3 && !this._forwardJump) this.velocity.y *= 0.55;
         this.keys.jump = down;
         break;
+      }
       case 'KeyE': if (down && !repeat) this.tryInteract(); break;
-      case 'KeyQ': if (down && !repeat) this.tryDash(); break;
+      case 'KeyQ': break; // No Q control: Future movement uses only forward + Space (+ Shift).
       case 'KeyV': case 'KeyC':
         if (down && !repeat) {
           this.mode = this.mode === 'first' ? 'third' : 'first';
@@ -219,8 +262,12 @@ export class Player extends THREE.EventDispatcher {
     if (this.frozen || !this.inputEnabled) return;
     // Revalidate at key-down: an item may have moved, vanished, or become
     // unavailable since the last rendered prompt.
+    this._updateFlashlight();
     this._updateInteraction();
-    const obj = this.nearbyInteractable;
+    // Redundant pickup path on purpose: E uses the physical clue circle
+    // DIRECTLY, even if a raycast/control or a skipped frame changed the
+    // selector. This is the same resolver used by the visible prompt.
+    const obj = nearestAvailableClue(this) || this.nearbyInteractable;
     if (!obj || !obj.userData.onInteract) return;
     const r = obj.userData.onInteract(obj);
     this.hero.play(r === 'pickup' ? 'pickup' : 'interact', { speed: 1.7 });
@@ -279,6 +326,9 @@ export class Player extends THREE.EventDispatcher {
     this.killY = killY;
     this.defaultSurface = surface;
     this.canDash = false;
+    this.canSprintLeap = false;
+    this._sprintLeap = false;
+    this._forwardJump = false;
     this.clearCheckpoint();       // each era starts from its own spawn
     this.clearAttachments();
     this.reset();
@@ -328,6 +378,9 @@ export class Player extends THREE.EventDispatcher {
     this._coyote = 0;
     this._dashCooldown = 0;
     this._airDashUsed = false;
+    this._sprintLeap = false;
+    this._forwardJump = false;
+    this._sprintLeapDir.set(0, 0, 0);
     this._pushCooldown = 0;
     this._stepDist = 0;
     this._fallSpeed = 0;
@@ -370,6 +423,7 @@ export class Player extends THREE.EventDispatcher {
 
   addFlashlight() {
     this.prepareFlashlight();
+    this._clearKeys(); // arrows change from movement to aiming once the tool is owned
     this.flashlightOwned = true;
     this.setFlashlight(true);
   }
@@ -452,15 +506,48 @@ export class Player extends THREE.EventDispatcher {
     }
   }
 
+  /** Launch the jump immediately on Space keydown when grounded.
+   *  The exact keys held AT THE TAP decide its type, not the state a
+   *  later physics frame happens to observe. Also called from update()
+   *  to honour the coyote-time / early-landing jump buffer.
+   */
+  _attemptBufferedJump() {
+    if (this.frozen || !this.inputEnabled || this._jumpBuffer <= 0) return false;
+    if (!this.onGround && this._coyote <= 0) return false;
+    this._basis();
+    const queued = this._queuedFutureJump;
+    const heldForward = this.keys.forward && !this.keys.back;
+    this._forwardJump = this.canSprintLeap && (queued?.forward || heldForward) && this._dashTime <= 0;
+    this._sprintLeap = !!(this._forwardJump && (queued?.big || (heldForward && this.keys.sprint)));
+    this.velocity.y = this._sprintLeap ? FUTURE_LEAP_JUMP_SPEED : JUMP_SPEED;
+    if (this._forwardJump) {
+      this._sprintLeapDir.copy(_fwd);
+      const speed = this._sprintLeap ? FUTURE_LEAP_FORWARD_SPEED : FUTURE_NORMAL_JUMP_FORWARD_SPEED;
+      this.velocity.x = this._sprintLeapDir.x * speed;
+      this.velocity.z = this._sprintLeapDir.z * speed;
+    }
+    this._jumpBuffer = 0;
+    this._queuedFutureJump = null;
+    this._coyote = 0;
+    this.onGround = false;
+    this.hero.play('jumpStart', { speed: 2.5 });
+    this.dispatchEvent({ type: 'jump', kind: this.canSprintLeap ? (this._sprintLeap ? 'big' : 'normal') : 'standard' });
+    return true;
+  }
+
   update(dt) {
     const p = this.rig.position;
     this._dashCooldown = Math.max(0, this._dashCooldown - dt);
     this._pushCooldown = Math.max(0, this._pushCooldown - dt);
     this._invuln = Math.max(0, this._invuln - dt);
     this._jumpBuffer = Math.max(0, this._jumpBuffer - dt);
+    if (this._jumpBuffer <= 0) this._queuedFutureJump = null;
     this._coyote = Math.max(0, this._coyote - dt);
 
     if (!this.frozen) {
+      if (this.keys.turnLeft !== this.keys.turnRight) {
+        this.yaw += KEYBOARD_TURN_SPEED * dt * (this.keys.turnLeft ? 1 : -1);
+      }
       // 1. moving-platform carry
       if (this.groundObject && this.groundObject.userData.carryDelta) p.add(this.groundObject.userData.carryDelta);
 
@@ -478,20 +565,23 @@ export class Player extends THREE.EventDispatcher {
         this.velocity.x = this._dashDir.x * DASH_SPEED;
         this.velocity.z = this._dashDir.z * DASH_SPEED;
         this.velocity.y = Math.max(this.velocity.y, 0);
+      } else if (this._forwardJump && !this.onGround) {
+        // Both Future forward jumps carry momentum until landing. Shift at
+        // takeoff selects a BIG jump; without Shift it is a normal jump.
+        // The direction and jump type are fixed at takeoff, so a quick Space
+        // tap (or releasing Shift) cannot accidentally cancel the jump.
+        const airSpeed = this._sprintLeap ? FUTURE_LEAP_FORWARD_SPEED : FUTURE_NORMAL_JUMP_FORWARD_SPEED;
+        const steer = 1 - Math.exp(-FUTURE_LEAP_AIR_STEER * dt);
+        this.velocity.x += (this._sprintLeapDir.x * airSpeed - this.velocity.x) * steer;
+        this.velocity.z += (this._sprintLeapDir.z * airSpeed - this.velocity.z) * steer;
       } else {
         this.velocity.x += (_move.x * speed - this.velocity.x) * k;
         this.velocity.z += (_move.z * speed - this.velocity.z) * k;
       }
 
-      // 3. jump (buffered + coyote time)
-      if (this._jumpBuffer > 0 && (this.onGround || this._coyote > 0)) {
-        this.velocity.y = JUMP_SPEED;
-        this._jumpBuffer = 0;
-        this._coyote = 0;
-        this.onGround = false;
-        this.hero.play('jumpStart', { speed: 2.5 });
-        this.dispatchEvent({ type: 'jump' });
-      }
+      // 3. Jump if Space was buffered while briefly airborne. Regular
+      // grounded jumps have ALREADY launched directly on keydown.
+      this._attemptBufferedJump();
       if (this._dashTime <= 0) this.velocity.y = Math.max(this.velocity.y - GRAVITY * dt, -28); // terminal velocity
 
       // 4. integrate
@@ -527,8 +617,10 @@ export class Player extends THREE.EventDispatcher {
         this.velocity.y = 0;
         this.onGround = true;
         this._airDashUsed = false;
+        this._sprintLeap = false;
+        this._forwardJump = false;
         this.groundObject = hit.object;
-        this._coyote = COYOTE_TIME;
+        this._coyote = this.canSprintLeap ? FUTURE_COYOTE_TIME : COYOTE_TIME;
       } else {
         this.onGround = false;
         this.groundObject = null;
@@ -554,7 +646,7 @@ export class Player extends THREE.EventDispatcher {
 
       // 9. facing: third-person turns toward travel direction, first-person toward the camera
       let targetFacing = this.facing;
-      if (this.mode === 'first') targetFacing = this.yaw + Math.PI;
+      if (this.mode === 'first' || (this.keys.turnLeft !== this.keys.turnRight && this.speed < 0.4)) targetFacing = this.yaw + Math.PI;
       else if (Math.hypot(this.velocity.x, this.velocity.z) > 0.4) targetFacing = Math.atan2(this.velocity.x, this.velocity.z);
       let dA = targetFacing - this.facing;
       dA = Math.atan2(Math.sin(dA), Math.cos(dA));
@@ -564,8 +656,9 @@ export class Player extends THREE.EventDispatcher {
 
     this.hero.update(dt, { speed: this.frozen ? 0 : this.speed, grounded: this.onGround || this.frozen, fallSpeed: this._fallSpeed });
     this._placeCamera(dt);
-    this._updateInteraction();
+    // The prompt and E resolver must see the same up-to-date beam angle.
     this._updateFlashlight();
+    this._updateInteraction();
   }
 
   _placeCamera(dt) {

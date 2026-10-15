@@ -4,8 +4,8 @@ import * as THREE from 'three';
 // pointing the camera at a tiny mesh or finding a desk's one clear sightline.
 // Ordinary puzzle controls keep their smaller, precision-based interaction.
 export const INTERACT_RANGE = 3.1;
-export const CLUE_ZONE_RADIUS = 3.6;        // 7.2 m diameter, measured on the floor
-export const CLUE_ZONE_HEIGHT = 4.6;        // permits elevated tablets and raised cores
+export const CLUE_ZONE_RADIUS = 6.0;        // 12 m diameter, measured on the floor
+export const CLUE_ZONE_HEIGHT = 6.0;        // permits elevated tablets and raised cores
 export const NEARBY_GUIDE_RANGE = 5.5;
 const _ray = new THREE.Ray();
 const _direction = new THREE.Vector3();
@@ -63,7 +63,7 @@ export function interactionReachable(origin, point, obj, colliders) {
  */
 export function clueInZone(playerFeet, cluePoint, obj, colliders = []) {
   const opts = obj.userData.interaction || {};
-  const radius = Math.max(CLUE_ZONE_RADIUS, opts.radius ?? 0);
+  const radius = opts.zoneRadius ?? Math.max(CLUE_ZONE_RADIUS, opts.radius ?? 0);
   if (Math.hypot(playerFeet.x - cluePoint.x, playerFeet.z - cluePoint.z) > radius) return false;
   if (Math.abs(playerFeet.y - cluePoint.y) > (opts.zoneHeight ?? CLUE_ZONE_HEIGHT)) return false;
 
@@ -85,6 +85,37 @@ export function clueInZone(playerFeet, cluePoint, obj, colliders = []) {
     if (_ray.intersectBox(box, _hit) && _hit.distanceTo(_wallOrigin) < length - 0.07) return false;
   }
   return true;
+}
+
+/**
+ * The SINGLE source of truth for both the visible E prompt and the actual
+ * E-key pickup. A clue cannot be hidden behind a raycast-only interaction,
+ * and the selected item is not determined by camera aiming. This function
+ * is also used again on key-down, independent of the render frame.
+ *
+ * Pending/uncollected story clues take priority over rereadable objects.
+ * Locked clues have a null prompt and are never selectable. Architectural
+ * collision barriers still prevent taking an item from another room.
+ */
+const _candidate = new THREE.Vector3();
+export function nearestAvailableClue(player) {
+  if (!player?.interactables?.length) return null;
+  let selected = null;
+  let best = Infinity;
+  for (const obj of player.interactables) {
+    const opts = obj.userData.interaction;
+    if (opts?.kind !== 'clue') continue;
+    const prompt = interactionPrompt(obj);
+    if (!prompt) continue;
+    interactionPoint(obj, _candidate);
+    if (!clueInZone(player.position, _candidate, obj, player.colliders)) continue;
+    const distance = Math.hypot(player.position.x - _candidate.x, player.position.z - _candidate.z);
+    const completedPenalty = opts.pending && !opts.pending() ? 10 : 0;
+    const pickupBonus = /^(take|collect|pick up)\b/i.test(prompt) ? 2 : 0;
+    const score = distance + completedPenalty - pickupBonus;
+    if (score < best) { best = score; selected = obj; }
+  }
+  return selected;
 }
 
 export class InteractionSelector {
@@ -130,26 +161,10 @@ export class InteractionSelector {
       break;
     }
 
-    // Search EVERY readable or collectible clue in all eras using the SAME
-    // invisible circle rule. No camera/mesh raycast, no desk obstruction.
-    let bestClue = null;
-    let bestScore = Infinity;
-    for (const obj of player.interactables) {
-      const opts = obj.userData.interaction || {};
-      if (opts.kind !== 'clue') continue;
-      const prompt = interactionPrompt(obj);
-      if (!prompt) continue; // still locked/collected/hidden => no E
-      interactionPoint(obj, this._point);
-      if (!clueInZone(player.position, this._point, obj, player.colliders)) continue;
-      const distance = Math.hypot(this._point.x - player.position.x, this._point.z - player.position.z);
-      // Prefer uncollected clues and pickups if zones overlap (e.g. the lab
-      // flashlight and professor's laptop both sit on the same desk).
-      const pendingPenalty = opts.pending && !opts.pending() ? 5 : 0;
-      const pickupBonus = /^(take|collect|pick up)\b/i.test(prompt) ? 1.5 : 0;
-      const score = distance + pendingPenalty - pickupBonus;
-      if (score < bestScore) { bestScore = score; bestClue = obj; }
-    }
-    if (bestClue && !this.target) this.target = bestClue;
+    // Clues are first-class proximity interactions, not raycast targets.
+    // If a clue is in range, its E prompt overrides unrelated camera hits.
+    const nearbyClue = nearestAvailableClue(player);
+    if (nearbyClue) this.target = nearbyClue;
 
     // Non-clue controls keep the legacy easy reach as well: players should
     // still be able to operate a nearby console/pylon without pixel aiming.

@@ -83,6 +83,17 @@ player.addEventListener('land', (e) => { audio.play('land', { volume: Math.min(1
 player.addEventListener('dash', () => { audio.play('dash', { volume: 0.7 }); postfx.u.uWarp.value = Math.max(postfx.u.uWarp.value, 0.22); });
 player.addEventListener('fall', () => { if (levels.state === 'playing') levels.registerFall(); });
 player.addEventListener('view', (e) => { ui.message(e.mode === 'first' ? 'First-person view' : 'Third-person view', 1200); levels.requestSave(); });
+// Lightweight visual confirmation: players can see which jump actually fired.
+const futureJumpFeedback = document.getElementById('future-jump-feedback');
+let futureJumpFeedbackTimer = null;
+player.addEventListener('jump', (event) => {
+  if (!player.canSprintLeap) return;
+  futureJumpFeedback.textContent = event.kind === 'big' ? 'BIG JUMP!' : 'NORMAL JUMP';
+  futureJumpFeedback.classList.toggle('big', event.kind === 'big');
+  futureJumpFeedback.classList.remove('hidden');
+  clearTimeout(futureJumpFeedbackTimer);
+  futureJumpFeedbackTimer = setTimeout(() => futureJumpFeedback.classList.add('hidden'), 900);
+});
 player.addEventListener('flashlight', (e) => audio.play('switch', { volume: 0.6, rate: e.on ? 1.1 : 0.9 }));
 
 player.addEventListener('lock', () => {
@@ -454,7 +465,7 @@ function frame() {
 
   const running = mode === 'playing' || mode === 'title' || mode === 'cutscene' || mode === 'credits';
   const reading = mode === 'playing' && ui.dialogue.active;
-  player.inputEnabled = !reading && !levels.warming;
+  player.inputEnabled = mode === 'playing' && !reading && !levels.warming && !ui.panelOpen;
   document.body.classList.toggle('reading', reading);
   if (running && !levels.warming) {
     levels.update(dt);

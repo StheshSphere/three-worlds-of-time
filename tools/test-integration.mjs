@@ -269,7 +269,7 @@ test('Save 4: Future checkpoints, permanent lock and safe hazard reset restore',
   assert.equal(levels.debug.state.puzzleSolved,true);
   assert.deepEqual(levels.debug.puzzle().seq,futureSave.eras[2].puzzle.seq);
   assert.equal(levels.debug.collapse().riftActive,false); assert.equal(levels.debug.collapse().fallen,0);
-  assert.equal(player.canDash,true); assert.equal(player.flashlight,null);
+  assert.equal(player.canDash,false); assert.equal(player.flashlight,null);
   assert.ok(player.position.z < -138); // no repeat of the already-completed collapse
   assert.equal(tm.getCores(),2);
 });

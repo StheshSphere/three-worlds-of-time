@@ -95,6 +95,8 @@
       </div>
       <div id="fps" class="hidden"></div>
     </div>
+    <div id="future-jump-feedback" class="hidden" aria-live="off"></div>
+    <div id="clue-build-version" aria-label="Game interaction version">FUTURE V10 · UP-ARROW JUMP + SAFE BRIDGE</div>
     <div id="crosshair"></div>
     <div id="waypoint" class="hidden"><div class="wp-diamond"></div><div class="wp-arrow"></div><div id="wp-dist">0 m</div></div>
     <div id="interaction-guide" class="hidden">
@@ -111,7 +113,7 @@
     </div>
     <div id="interact-prompt" class="hidden"><kbd>E</kbd><span id="interact-label">Interact</span></div>
     <div id="message-banner"></div>
-    <div id="dash-meter" class="hidden"><kbd>Q</kbd><div class="dash-fill"></div><span>Chrono-dash</span></div>
+    <div id="dash-meter" class="hidden"><kbd>Shift</kbd><div class="dash-fill"></div><span>Run</span></div>
     <div id="minimap-frame"><span class="minimap-n">N</span></div>
     <div class="hud-keys">
       <span><kbd>H</kbd> help</span><span><kbd>J</kbd> journal</span><span><kbd>M</kbd> map</span><span><kbd>V</kbd> view</span><span><kbd>Esc</kbd> pause</span>
@@ -169,6 +171,23 @@
         <button data-key="clear">C</button><button data-key="0">0</button><button data-key="enter">⏎</button>
       </div>
       <p class="small">Type digits or click. <kbd>Esc</kbd> to step away.</p>
+    </div>
+  </div>
+
+  <!-- ===================== POWER ROUTING CONSOLE ===================== -->
+  <div id="power-grid-screen" class="screen panel-screen hidden" role="dialog" aria-modal="true" aria-labelledby="power-grid-title">
+    <div class="panel power-grid-panel">
+      <p class="kicker">Present · Emergency power console</p>
+      <h2 id="power-grid-title" class="title-font">Route the Power</h2>
+      <p id="power-grid-instructions" class="power-grid-explain">Rotate the pipes to connect the generator to the vault.</p>
+      <div class="power-grid-workspace">
+        <div class="power-port power-port-in"><span class="power-port-icon">⚡</span><b>GRID<br>IN</b><small>Power source</small></div>
+        <div id="power-grid-tiles" class="power-grid-tiles" role="group" aria-label="Nine rotating pipe tiles in three rows, numbered one to nine"></div>
+        <div class="power-port power-port-out"><span class="power-port-icon">◉</span><b>VAULT<br>OUT</b><small>Destination</small></div>
+      </div>
+      <p id="power-grid-status" class="power-grid-status" role="status" aria-live="polite"></p>
+      <div class="power-grid-legend"><span><i class="power-key lit"></i> Carrying power</span><span><i class="power-key dark"></i> No power yet</span><span><b>↻</b> Click to rotate</span></div>
+      <button id="power-grid-close" class="menu-btn primary" type="button" data-close>Return to Facility <kbd>Esc</kbd></button>
     </div>
   </div>
 
@@ -232,19 +251,21 @@
     <div class="panel controls">
       <h2 class="title-font">Controls</h2>
       <dl>
-        <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows</dt><dd>Move in the direction you are looking</dd>
+        <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>↑</kbd><kbd>↓</kbd></dt><dd>Move in the direction you are looking</dd>
+        <dt><kbd>←</kbd><kbd>→</kbd></dt><dd>Turn/aim flashlight after picking it up (the Present); otherwise strafe. Mouse look also works.</dd>
         <dt>Mouse</dt><dd>Look around</dd>
-        <dt><kbd>Shift</kbd></dt><dd>Sprint</dd>
-        <dt><kbd>Space</kbd></dt><dd>Jump — hold for a higher jump</dd>
+        <dt><kbd>W</kbd> or <kbd>↑</kbd> + <kbd>Space</kbd></dt><dd>NORMAL forward jump. Hold the forward key, then press Space.</dd>
+        <dt><kbd>Shift</kbd> + <kbd>W</kbd> or <kbd>↑</kbd> + <kbd>Space</kbd></dt><dd>VERY BIG forward jump (Future). Hold Shift AND forward, then press Space.</dd>
+        <dt><kbd>Shift</kbd></dt><dd>Run faster while held.</dd>
         <dt><kbd>E</kbd> / Left click</dt><dd>Interact — push, rotate, read, take</dd>
         <dt><kbd>F</kbd></dt><dd>Flashlight (once found)</dd>
-        <dt><kbd>Q</kbd> / Right click</dt><dd>Chrono-dash (the Future only)</dd>
+        <dt><kbd>E</kbd> at power console</dt><dd>Open the full-screen pipe-grid puzzle. Click tiles or press 1–9 to rotate; Esc closes.</dd>
         <dt><kbd>V</kbd></dt><dd>Switch first / third person</dd>
         <dt><kbd>M</kbd></dt><dd>Toggle minimap</dd>
         <dt><kbd>J</kbd></dt><dd>Field journal (clues you have found)</dd>
         <dt><kbd>H</kbd></dt><dd>Help — show the current instructions again</dd>
         <dt>◆ marker</dt><dd>Your next goal (with distance); the checklist top-left tracks your progress</dd>
-        <dt>↓ nearby arrow</dt><dd>Walk close to a clue, then press E when prompted. Precise aiming is optional for clues. Walls and locked barriers still block collection.</dd>
+        <dt>↓ nearby clue</dt><dd>Other clues use easy invisible E circles. Exception: Archive ink requires the flashlight beam to shine on the wall mark first.</dd>
         <dt><kbd>X</kbd></dt><dd>Skip the current cinematic</dd>
         <dt><kbd>Esc</kbd></dt><dd>Pause</dd>
       </dl>
@@ -327,6 +348,6 @@
   </div>
 
   <noscript>This game needs JavaScript and WebGL (Chrome recommended).</noscript>
-  <script type="module" src="./src/main.js"></script>
+  <script type="module" src="./src/main.js?v=power-grid-v5"></script>
 </body>
 </html>

@@ -4,7 +4,7 @@
 
 - **The Past (Solve):** the world itself is the puzzle — you physically push stone, steer sunlight with mirrors and decode carvings.
 - **The Present (Investigate):** you win with information — a flashlight whose beam reveals invisible ink, logs, a keypad code and a power-routing puzzle that relights the whole lab.
-- **The Future (Survive):** a new ability (the Chrono-Dash) and a timing gauntlet — moving and phasing platforms, barriers you dash through, lasers and a collapsing bridge chased by a rift.
+- **The Future (Survive):** two straightforward forward jumps (normal and very big) and a timing gauntlet — moving and phasing platforms, timed barriers, lasers and a collapsing bridge chased by a rift.
 
 ## Story beats (told in cutscenes — `src/story.js`)
 
@@ -46,9 +46,9 @@ The hero's hourglass pack fills with glowing sand as cores return.
    containment field, take the Lab Core.
 
 ### III · The Future — `src/levels/neonFuture.js`
-1. **Dash gap** — too wide to jump: sprint, jump, press **Q / right-click** in the air.
+1. **Wide gap** — hold **Shift + W / ↑**, then press **Space** for a BIG jump. For ordinary jumps, hold **W / ↑ + Space** (no Shift).
 2. **Moving platforms** (they carry you). 3. **Phase platforms** — they dissolve in a wave; go when the next is solid.
-4. **Gauntlet** — barriers pulse on/off (1.55 s on / 1.35 s off); **dashing phases you through** even when they're on;
+4. **Gauntlet** — barriers pulse on/off (1.55 s on / 1.35 s off); **wait until each barrier dims, then run through**;
    jump the sweeping lasers.
 5. **Collapse run** — tiles fall ~0.4 s after you step on them and the rift chases you; don't stop.
 6. **Sequence lock** — the Neon Core sits in a containment field. A holo panel shows a colour order (cyan / magenta / gold);

@@ -120,6 +120,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     journal: (html, key) => { ui.addJournal(html, key); requestSave(); },
     reader: (opts) => ui.openReader(opts),
     keypad: (onSubmit) => ui.openKeypad(onSubmit),
+    powerGrid: (controller) => ui.openPowerGrid(controller),
     grantFlashlight: () => { player.addFlashlight(); },
     flashlight: () => player.getFlashlightState(flashState),
     enableDash: () => { player.canDash = true; },
@@ -255,7 +256,8 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
       spawn: level.spawn, spawnYaw: level.spawnYaw ?? 0, bounds: level.bounds ?? 120,
       killY: level.killY ?? -14, surface: meta.surface,
     });
-    player.canDash = !!level.dash;      // the Future's new ability
+    player.canDash = !!level.dash;      // false in Future V7: two jumps replace Q dash
+    player.canSprintLeap = i === 2;     // Future-only: W/Up+Space normal, Shift+W/Up+Space BIG
     level.prepare?.();
     level.applyQuality?.(q);
 

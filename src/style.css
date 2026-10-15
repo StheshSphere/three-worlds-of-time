@@ -159,6 +159,51 @@ kbd {
 #fade-layer.black { background: #000; }
 #fade-layer.active { opacity: 1; }
 
+/* Power puzzle: an accessible, readable full-screen console instead of tiny 3D targets. */
+#power-grid-screen { padding: 1rem; overflow: auto; }
+.power-grid-panel { width: min(940px, 96vw); max-width: 96vw; max-height: 96vh; padding: clamp(1rem, 2.6vh, 2rem) clamp(1rem, 3vw, 2.4rem); border-color: rgba(111, 211, 255, .55); background: linear-gradient(150deg, rgba(8, 26, 39, .98), rgba(3, 9, 20, .98)); box-shadow: 0 24px 100px #000, 0 0 50px rgba(37, 165, 255, .18); }
+.power-grid-panel h2 { color: #a5eaff; margin: .1rem 0 .4rem; font-size: clamp(1.5rem, 3vw, 2.2rem); }
+.power-grid-explain { margin: .3rem auto 1rem; font-size: clamp(1rem, 1.5vw, 1.15rem); max-width: 760px; line-height: 1.3; color: #e3f5ff; }
+.power-grid-workspace { display: grid; grid-template-columns: minmax(78px, 1fr) minmax(0, 460px) minmax(78px, 1fr); align-items: center; gap: clamp(6px, 2vw, 18px); margin: .35rem auto; max-width: 760px; }
+.power-grid-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(5px, .9vw, 12px); width: 100%; }
+.power-tile { position: relative; aspect-ratio: 1; min-width: 0; padding: 0; background: linear-gradient(135deg, #162533, #07131e); border: 2px solid #526c7c; border-radius: 10px; cursor: pointer; color: #bed7e8; transition: border-color .12s ease, background .12s ease, box-shadow .12s ease; touch-action: manipulation; }
+.power-tile svg { display: block; width: 100%; height: 100%; }
+.power-tile .tile-border { fill: none; stroke: rgba(183, 218, 238, .12); stroke-width: 1.5; }
+.power-tile .tile-pipes { fill: none; stroke: #96acc0; stroke-width: 15; stroke-linecap: square; }
+.power-tile .tile-hub { fill: #b7d1df; }
+.power-tile.powered { background: linear-gradient(135deg, #103a52, #062232); border-color: #48d9ff; box-shadow: inset 0 0 25px rgba(58, 217, 255, .16), 0 0 16px rgba(58, 217, 255, .3); }
+.power-tile.powered .tile-pipes { stroke: #7deeff; filter: drop-shadow(0 0 6px #3ddcff); }
+.power-tile.powered .tile-hub { fill: #e4ffff; }
+.power-tile:hover:not(:disabled), .power-tile:focus-visible { border-color: #ffffff; background-color: #173348; outline: 3px solid #ffd88a; outline-offset: 1px; }
+.power-tile:active:not(:disabled) { transform: scale(.98); }
+.power-tile:disabled { cursor: default; }
+.power-tile-number { position: absolute; left: 8px; top: 5px; color: #d8ebf9; font-weight: 700; font-size: clamp(.7rem, 1.4vw, .9rem); text-shadow: 0 0 5px #000; }
+.power-tile-rotate { position: absolute; bottom: 2px; right: 8px; font-size: clamp(1rem, 2vw, 1.4rem); color: #d0e4ff; }
+.power-port { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .2rem; position: relative; color: #e3f8ff; font-weight: 700; font-size: clamp(.8rem, 1.8vw, 1.1rem); letter-spacing: .04em; }
+.power-port::after { content: ''; position: absolute; top: 50%; width: clamp(8px, 2vw, 25px); height: 5px; background: #52dff9; box-shadow: 0 0 8px #48dfff; }
+.power-port-in::after { left: 100%; }
+.power-port-out::after { right: 100%; background: #95a6b4; box-shadow: none; }
+.power-port-icon { color: #83eeff; font-size: clamp(1.7rem, 4vw, 2.7rem); line-height: 1; }
+.power-port small { font-size: .78rem; color: #a2bcc9; font-weight: 500; letter-spacing: 0; }
+.power-grid-status { min-height: 1.4em; color: #addcf0; font-weight: 700; margin: .85rem 0 .5rem; font-size: clamp(1rem, 2vw, 1.25rem); }
+.power-grid-status.solved { color: #85ffc9; text-shadow: 0 0 15px #36ff9b; }
+.power-grid-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem 1.5rem; color: #c2d7e7; font-size: .94rem; margin: .45rem auto .8rem; }
+.power-key { display: inline-block; vertical-align: middle; width: 12px; height: 12px; border-radius: 2px; margin-right: 4px; }
+.power-key.lit { background: #76eeff; box-shadow: 0 0 7px #76eeff; }
+.power-key.dark { background: #71889b; }
+#power-grid-close { margin: .25rem auto .1rem; }
+@media (max-width: 560px), (max-height: 680px) {
+  .power-grid-panel { padding: .6rem; }
+  .power-grid-workspace { grid-template-columns: minmax(52px, 1fr) minmax(0, 360px) minmax(52px, 1fr); gap: 5px; }
+  .power-port small { display: none; }
+  .power-grid-tiles { gap: 4px; }
+  .power-tile { border-width: 1px; border-radius: 5px; }
+  .power-grid-panel h2 { margin: 0; }
+  .power-grid-legend { margin: .3rem auto; }
+  #power-grid-close { min-width: min(220px, 80vw); padding: .4rem .75rem; }
+}
+@media (prefers-reduced-motion: reduce) { .power-tile { transition: none; } }
+
 /* ----------------------------- panels ------------------------------ */
 .options label { display: flex; justify-content: space-between; align-items: center; gap: 1.2rem; margin: 0.55rem 0; font-size: 1.1rem; text-align: left; }
 .options label.check { justify-content: flex-start; }
@@ -329,3 +374,39 @@ body.reading .hud-top-left, body.reading #message-banner, body.reading #interact
 }
 
 @media (max-width: 760px) { #waypoint { left: 12px; bottom: 12px; padding: 5px 9px; } }
+
+/* E-ZONES V3: persistent visible proof that the correct game version loaded.
+   This badge is intentionally subtle but unambiguous when troubleshooting. */
+#clue-build-version { position: absolute; right: 26px; top: 99px;
+  padding: 4px 8px; border: 1px solid rgba(130,255,190,.42); border-radius: 5px;
+  background: rgba(0,0,0,.75); color: #b0ffd1; font: 700 11px/1.4 monospace;
+  letter-spacing: .04em; pointer-events: none; }
+#interact-prompt:not(.hidden) { top: auto; bottom: 9%; transform: translateX(-50%);
+  background: rgba(1,18,15,.96); color: #f4fff9; border: 2px solid #72ffc1;
+  box-shadow: 0 0 0 4px rgba(4,14,12,.68), 0 0 25px rgba(114,255,193,.38);
+  font-size: clamp(17px, 2vw, 23px); z-index: 20; }
+#interact-prompt kbd { display: inline-block; padding: 3px 10px;
+  background: #85ffc6; color: #04140c; border-radius: 5px; }
+
+/* Short, unobtrusive feedback confirms normal vs big Future jump. */
+#future-jump-feedback {
+  position: absolute; left: 50%; bottom: 18%; transform: translateX(-50%);
+  z-index: 7; padding: 7px 16px; border-radius: 18px;
+  font-weight: 800; font-size: 1rem; letter-spacing: .08em;
+  color: #7bedff; background: rgba(4, 13, 28, .9);
+  border: 1px solid #50d8ef; pointer-events: none;
+  box-shadow: 0 0 18px rgba(40, 217, 240, .3);
+}
+#future-jump-feedback.big { color: #fff1a3; border-color: #ffdf70; box-shadow: 0 0 20px rgba(255, 207, 80, .6); }
+
+/* Final Future colour lock: readable during movement, not only on a distant texture. */
+#future-lock-guide {
+  position: fixed; left: 50%; top: 17%; transform: translateX(-50%);
+  z-index: 8; width: min(760px, 78vw); padding: 14px 22px;
+  background: rgba(9, 4, 25, .95); border: 3px solid #ff5be0;
+  border-radius: 12px; box-shadow: 0 0 26px rgba(255, 91, 224, .4);
+  color: #f6f7ff; text-align: center; font: 800 18px/1.5 Rajdhani, sans-serif;
+  letter-spacing: .015em; pointer-events: none;
+}
+body.reading #future-lock-guide { visibility: hidden; }
+@media(max-width:760px) { #future-lock-guide { top: 15%; width: 90vw; padding: 8px; font-size: 15px; } }

@@ -28,6 +28,7 @@ export class UI {
     });
     this._bindOptions();
     this._bindKeypad();
+    this._bindPowerGrid();
   }
 
   /* ----------------------------- screens ---------------------------- */
@@ -54,6 +55,7 @@ export class UI {
     this.dialogue.setPaused('panel', this.panelOpen);
     if (id === 'confirm-screen') $('confirm-yes').onclick = null;
     if (id === 'keypad-screen') { clearTimeout(this._keypadTimer); this.onKeypadSubmit = null; }
+    if (id === 'power-grid-screen') this._powerGrid = null;
     this.audio.play('ui-close', { volume: 0.4 });
     if (this.onPanelClosed) this.onPanelClosed(id);
     if (!document.pointerLockElement && this._panelFocus?.isConnected) this._panelFocus.focus({ preventScroll: true });
@@ -64,6 +66,7 @@ export class UI {
     while (this.stack.length) this.hide(this.stack.pop());
     clearTimeout(this._keypadTimer);
     this.onKeypadSubmit = null;
+    this._powerGrid = null;
     $('confirm-yes').onclick = null;
     this._panelFocus = null;
     this.dialogue.setPaused('panel', false);
@@ -311,6 +314,71 @@ export class UI {
     $('keypad-display').classList.remove('error', 'ok');
     this.onKeypadSubmit = onSubmit;
     this.openPanel('keypad-screen');
+  }
+
+  /* ------------------------- full-screen power routing ------------- */
+  _bindPowerGrid() {
+    // Pointer lock is released by openPanel. Use ordinary buttons, so the
+    // grid also works on touchscreens and while keyboard focus is active.
+    window.addEventListener('keydown', (e) => {
+      if (!this.isOpen('power-grid-screen') || e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
+      const digit = /^Digit([1-9])$/.exec(e.code) || /^Numpad([1-9])$/.exec(e.code);
+      if (digit) {
+        e.preventDefault();
+        this.rotatePowerTile(Number(digit[1]) - 1);
+      }
+    });
+  }
+
+  openPowerGrid(controller) {
+    // The level owns rotations and the original powered-tile algorithm.
+    // UI is only a view, and never exposes a shortcut to solve the puzzle.
+    if (!controller || typeof controller.getState !== 'function' || typeof controller.rotate !== 'function') return;
+    this._powerGrid = controller;
+    this._renderPowerGrid();
+    this.openPanel('power-grid-screen');
+  }
+
+  rotatePowerTile(index) {
+    if (!this.isOpen('power-grid-screen') || !this._powerGrid) return;
+    const snapshot = this._powerGrid.getState();
+    if (snapshot.solved || !Number.isInteger(index) || index < 0 || index >= 9) return;
+    this._powerGrid.rotate(index);
+    this._renderPowerGrid(index);
+  }
+
+  _renderPowerGrid(focusTile = -1) {
+    if (!this._powerGrid) return;
+    const { tiles, litCount, solved } = this._powerGrid.getState();
+    const container = $('power-grid-tiles');
+    if (!Array.isArray(tiles) || tiles.length !== 9) return;
+    container.innerHTML = '';
+    const bits = [[1, 'M50 50 V5'], [2, 'M50 50 H95'], [4, 'M50 50 V95'], [8, 'M50 50 H5']];
+    tiles.forEach((t, i) => {
+      // t.mask comes from a fixed in-game 4-bit pipe model, not user input.
+      const mask = t.mask & 15;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'power-tile';
+      button.classList.toggle('powered', !!t.powered);
+      button.classList.toggle('complete', !!solved);
+      button.disabled = !!solved;
+      button.dataset.index = String(i);
+      button.setAttribute('aria-label', `Pipe ${i + 1}, ${t.type}, ${t.powered ? 'carrying power' : 'unpowered'}. Rotate clockwise.`);
+      button.setAttribute('title', `Tile ${i + 1} · rotate clockwise`);
+      button.innerHTML = `<svg viewBox="0 0 100 100" aria-hidden="true" focusable="false"><rect x="2" y="2" width="96" height="96" rx="10" class="tile-border"/><g class="tile-pipes">${bits.filter(([bit]) => (mask & bit)).map(([, path]) => `<path d="${path}"/>`).join('')}</g><circle cx="50" cy="50" r="8" class="tile-hub"/></svg><span class="power-tile-number">${i + 1}</span><span class="power-tile-rotate" aria-hidden="true">↻</span>`;
+      button.addEventListener('click', () => this.rotatePowerTile(i));
+      container.appendChild(button);
+    });
+    $('power-grid-status').textContent = solved
+      ? 'POWER RESTORED — GRID IN is connected to VAULT OUT!'
+      : `Live tiles: ${litCount} / 9 · Turn the pipes to carry power from left to right`;
+    $('power-grid-status').classList.toggle('solved', !!solved);
+    $('power-grid-instructions').textContent = solved
+      ? 'Excellent! The facility is coming back online. Return to the game to continue.'
+      : 'Click any tile to rotate it 90° clockwise (or press 1–9). Bright cyan pipes carry electricity. The pipe ends must meet to form a continuous route.';
+    if (focusTile >= 0 && !solved) container.children[focusTile]?.focus({ preventScroll: true });
+    if (solved) $('power-grid-close').focus({ preventScroll: true });
   }
 
   /* ----------------------------- options ---------------------------- */

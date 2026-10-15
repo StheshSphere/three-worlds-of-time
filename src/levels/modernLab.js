@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { flashlightHitsInk } from '../core/flashlightInk.js';
 import { createRandom } from '../core/save.js';
 import { createParticles } from '../shaders/effects.js';
 import {
@@ -540,6 +541,14 @@ export function build(kit, api, { save = null } = {}) {
 
   const inkMats = [];
   const marks = [];
+  const fl = { on: false, pos: new THREE.Vector3(), dir: new THREE.Vector3() };
+  // Live check for the prompt AND the E handler: flashlight ON is not enough.
+  // No glowing label, interaction, or discovery until the actual beam is on ink.
+  function inkLit(mark) {
+    Object.assign(fl, api.flashlight());
+    return !state.marks[mark.pos] && flashlightHitsInk(fl, mark.mesh.position)
+      && api.player.hasInteractionLineOfSight(mark.mesh);
+  }
   const markSpots = [
     [-3.0, 1.55, -15.6, Math.PI / 2], [3.0, 1.45, -19.6, -Math.PI / 2],
     [-3.0, 1.6, -23.6, Math.PI / 2], [3.0, 1.5, -27.6, -Math.PI / 2],
@@ -564,12 +573,13 @@ export function build(kit, api, { save = null } = {}) {
     m.rotation.y = r;
     kit.add(m);
     inkMats.push(mat);
-    const mark = { mesh: m, pos, digit, seen: 0 };
+    const mark = { mesh: m, pos, digit, beamLit: false };
     marks.push(mark);
-    // Keep flashlight discovery, and also offer an accessible close-range
-    // E action. The selector checks reach and walls before this runs.
-    kit.interact(m, () => (!state.marks[pos] && api.player.flashlightOn ? 'Read the phosphor ink' : null), () => {
-      if (!api.player.flashlightOn || state.marks[pos]) return null;
+    // SPECIAL PUZZLE EXCEPTION to the game's easy clue circles:
+    // proximity makes E reachable, but the prompt AND E action require a
+    // correctly AIMED flashlight beam. No auto-discovery while sweeping.
+    kit.interact(m, () => (inkLit(mark) ? 'Read the phosphor ink' : null), () => {
+      if (!inkLit(mark) || !api.player.hasInteractionLineOfSight(m)) return null;
       discoverMark(mark);
       return 'read';
     }, { kind: 'clue', label: 'Phosphor ink', radius: 3.6, guideRadius: 6,
@@ -585,8 +595,6 @@ export function build(kit, api, { save = null } = {}) {
     kit.add(m);
     inkMats.push(mat);
   }
-  const fl = { on: false, pos: new THREE.Vector3(), dir: new THREE.Vector3() };
-  const _toMark = new THREE.Vector3();
   kit.update((dt, t) => {
     Object.assign(fl, api.flashlight());
     for (const mat of inkMats) {
@@ -595,17 +603,9 @@ export function build(kit, api, { save = null } = {}) {
       mat.uniforms.uLightDir.value.copy(fl.dir);
       mat.uniforms.uTime.value = t;
     }
-    if (!fl.on) return;
-    // The same cone test the shader does, in JS: a mark lit for 0.4 s is "read".
-    for (const mk of marks) {
-      _toMark.subVectors(mk.mesh.position, fl.pos);
-      const d = _toMark.length();
-      const lit = d < 9 && _toMark.normalize().dot(fl.dir) > 0.94 && api.player.hasInteractionLineOfSight(mk.mesh);
-      mk.seen = lit ? mk.seen + dt : 0;
-      if (mk.seen > 0.4 && !state.marks[mk.pos]) {
-        discoverMark(mk);
-      }
-    }
+    // Ink is never collected just by shining the beam: the player must E.
+    // Compute illumination for subtle nearby glints only after it is lit.
+    for (const mk of marks) mk.beamLit = inkLit(mk);
   });
 
   function discoverMark(mk) {
@@ -728,7 +728,7 @@ export function build(kit, api, { save = null } = {}) {
   });
 
   // Console.
-  kit.box({ size: [5.2, 3.4, 0.4], pos: [0, 1.9, -45.85], mat: darkSteel, tile: 1, walk: false });
+  const routingPanel = kit.box({ size: [5.2, 3.4, 0.4], pos: [0, 1.9, -45.85], mat: darkSteel, tile: 1, walk: false });
   const labelTex = textTexture(['', ' GRID IN                  VAULT OUT'], { w: 1024, h: 120, bg: '#000', fg: '#6fd3ff', title: '        POWER ROUTING — rotate each conduit tile' });
   const label = new THREE.Mesh(kit.track(new THREE.PlaneGeometry(5, 0.6)), kit.track(createScreenMaterial(labelTex, { color: 0x9fe8ff, power: 1 })));
   label.position.set(0, 3.3, -45.62);
@@ -765,18 +765,9 @@ export function build(kit, api, { save = null } = {}) {
     const tile = { mesh: m, mat, type, rot, angle: -rot * Math.PI / 2, r, c, solRot, flash: 0, litBase: 0.05 };
     m.rotation.z = tile.angle;
     kit.add(m);
-    kit.interact(m, () => (state.power ? null : 'Rotate the conduit tile'), () => {
-      tile.rot = (tile.rot + 1) % 4;
-      api.sound('switch', { volume: 0.6, rate: 1.2 });
-      const before = litCount;
-      evaluateGrid();
-      // Member 2 · input feedback: a rotation that connects more conduit
-      // bursts white-blue, one that cuts the flow flashes red (sounds land
-      // with the Lab audio pass).
-      if (litCount > before) { tile.flash = 1.4; tile.mat.emissive.setHex(0xdffaff); labSound('breaker-ok', { volume: 0.7 }); }
-      else if (litCount < before) { tile.flash = 1.2; tile.mat.emissive.setHex(0xff4530); labSound('breaker-deny', { volume: 0.7 }); }
-      else tile.flash = 0.7;
-    });
+    // The physical wall grid is a read-only preview now. Opening the console
+    // shows every tile at once in a large interactive UI (keypad style).
+    // Do NOT register each tiny tile as a separate 3D E target.
     tiles.push(tile);
   }));
   const tileAt = (r, c) => tiles.find((t) => t.r === r && t.c === c);
@@ -800,12 +791,41 @@ export function build(kit, api, { save = null } = {}) {
       }
     }
     litCount = lit.size;
-    tiles.forEach((t) => { t.mat.emissiveIntensity = lit.has(t) ? 1.6 : 0.05; t.litBase = t.mat.emissiveIntensity; });
+    tiles.forEach((t) => { t.powered = lit.has(t); t.mat.emissiveIntensity = t.powered ? 1.6 : 0.05; t.litBase = t.mat.emissiveIntensity; });
     const out = tileAt(1, 2);
     const solved = lit.has(out) && (maskOf(out) & E);
     if (solved && !state.power) restorePower();
     return solved;
   }
+  // One big target replaces nine hard-to-aim E targets. The panel's visible
+  // face is reachable from the room and its click/E action opens a full-screen
+  // interactive grid. No puzzle tile rotates directly in 3D any more.
+  function rotateConduit(index) {
+    if (state.power) return false;
+    const tile = tiles[index];
+    if (!tile) return false;
+    const before = litCount;
+    tile.rot = (tile.rot + 1) % 4;
+    api.sound('switch', { volume: 0.6, rate: 1.2 });
+    const solved = evaluateGrid();
+    if (litCount > before) { tile.flash = 1.4; tile.mat.emissive.setHex(0xdffaff); labSound('breaker-ok', { volume: 0.7 }); }
+    else if (litCount < before) { tile.flash = 1.2; tile.mat.emissive.setHex(0xff4530); labSound('breaker-deny', { volume: 0.7 }); }
+    else tile.flash = 0.7;
+    return solved;
+  }
+  const routingInterface = {
+    getState: () => ({
+      tiles: tiles.map((t) => ({ type: t.type, mask: maskOf(t), powered: !!t.powered })),
+      litCount,
+      solved: state.power,
+    }),
+    rotate: rotateConduit,
+  };
+  kit.interact(routingPanel,
+    () => (state.power ? null : 'Open the power-routing grid'),
+    () => { if (!state.power) api.powerGrid(routingInterface); },
+    { radius: 5.5, guideRadius: 5.5 });
+
   while (evaluateGridDry()) tiles.forEach((t) => { t.rot = Math.floor(random() * 4); t.angle = -t.rot * Math.PI / 2; t.mesh.rotation.z = t.angle; });
   function evaluateGridDry() {
     const s = state.power; state.power = true; const r = evaluateGrid(); state.power = s; return r;
@@ -1019,12 +1039,12 @@ export function build(kit, api, { save = null } = {}) {
   glint(2.25, 2.15, -29.66, { until: () => state.doorOpen });                           // security keypad
   glint(0, 3.35, -45.6, { radius: 7.5, size: 0.7, until: () => state.power });          // power-routing console
   glint(15.35, 1.95, -3.35, { when: () => state.power, until: () => state.fieldDown }); // vault containment console
-  // The hidden phosphor digits: while the flashlight is on, a faint halo marks
-  // walls worth sweeping — the digit itself still only appears in the beam.
+  // No advance markers: don't reveal a secret mark's location until the
+  // flashlight beam actually lands on it. The shader handles visibility.
   for (const mk of marks) {
     const p = mk.mesh.position;
     glint(p.x - Math.sign(p.x || 1) * 0.55, p.y + 0.12, p.z,
-      { radius: 4.5, size: 0.3, max: 0.26, when: () => fl.on, until: () => state.marks[mk.pos] });
+      { radius: 4.5, size: 0.3, max: 0.20, when: () => mk.beamLit, until: () => state.marks[mk.pos] });
   }
   kit.update((dt, t) => {
     const px = api.player.position.x;
@@ -1089,11 +1109,11 @@ export function build(kit, api, { save = null } = {}) {
   const _m = new THREE.Vector3();
   const CARD = {
     flashlight: { kicker: 'New tool · Flashlight', title: 'The flashlight reveals hidden ink',
-      html: '<ul><li>Press <kbd>F</kbd> to switch it on or off.</li><li>Prof. Adeyemi wrote the Archive code in <b>phosphor ink</b> that only glows inside the beam.</li><li>Go to the dark <b>Archive (north)</b> and sweep the walls <b>slowly</b>.</li></ul>' },
+      html: '<ul><li>Press <kbd>F</kbd> to switch on the flashlight.</li><li>Use the <b>mouse</b> or hold <kbd>←</kbd> / <kbd>→</kbd> to turn and aim the light at the Archive walls. <kbd>A</kbd> / <kbd>D</kbd> still move sideways.</li><li>Hidden phosphor ink becomes readable <b>only when illuminated</b>.</li></ul>' },
     archive: { kicker: 'Puzzle · The Archive', title: 'Find the four ink digits',
-      html: '<ul><li>With your flashlight on, step near an ink mark and press <kbd>E</kbd> when the prompt appears. Holding the beam on a mark also reads it.</li><li>Each mark is a <b>digit</b> with <b>dots</b> under it: 1 dot = first digit … 4 dots = last.</li><li>Found digits are saved in your journal (<kbd>J</kbd>). Then use the <b>keypad</b> by the door at the end.</li></ul>' },
+      html: '<ul><li>Turn with <kbd>←</kbd> / <kbd>→</kbd> or the mouse to sweep the flashlight over the <b>walls</b>. Keep the light on with <kbd>F</kbd>.</li><li>Only when the beam illuminates a nearby ink digit will <b>Press E</b> appear. Press <kbd>E</kbd> while the mark is lit to record it.</li><li>The dots beneath each digit give its place in the code. Press <kbd>J</kbd> to review found digits.</li></ul>' },
     power: { kicker: 'Puzzle · Power room', title: 'Route the power',
-      html: '<ul><li>Look at a tile on the wall console and press <kbd>E</kbd> to rotate it.</li><li>Connect <b>GRID IN</b> (left, middle row) to <b>VAULT OUT</b> (right, middle row).</li><li>Tiles carrying power <b>light up</b> — follow the glow.</li></ul>' },
+      html: '<ul><li>Approach the power-routing console on the north wall and press <kbd>E</kbd> to open its <b>large puzzle screen</b>.</li><li>Click a pipe tile (or press <kbd>1</kbd>–<kbd>9</kbd>) to rotate it by 90°.</li><li>Connect <b>GRID IN</b> (left, middle row) to <b>VAULT OUT</b> (right, middle row). Every pipe junction must connect on both sides.</li><li><b>Bright blue</b> shows pipes currently carrying power. Press <kbd>Esc</kbd> to step away and resume later.</li></ul>' },
   };
   api.setChecklist(() => {
     const n = state.marks.filter(Boolean).length;
@@ -1130,10 +1150,10 @@ export function build(kit, api, { save = null } = {}) {
     if (!state.flashlight) return 'Prof. Adeyemi’s office is through the west door. Her desk lamp is still on.';
     if (!state.doorOpen) {
       if (p.z > -12.6) return 'The Archive is north of the hall. Switch the flashlight on (F).';
-      if (n < 4) return `Flashlight on (F): approach an ink mark and press E, or hold the beam on it. Found: ${n}/4.`;
+      if (n < 4) return `Aim the flashlight with ←/→ or the mouse. Press E only when an ink digit glows in the beam. Found: ${n}/4.`;
       return 'Enter the four digits at the keypad — in dot order (1 dot first).';
     }
-    if (!state.power) return 'Rotate the conduit tiles until power flows from GRID IN to VAULT OUT.';
+    if (!state.power) return 'Approach the wall console and press E to open the full pipe-grid puzzle. Click tiles to route GRID IN to VAULT OUT.';
     if (!state.fieldDown) return 'The vault is east of the experiment hall. Use the console to drop the field.';
     return 'Take the Lab Core.';
   });
@@ -1173,7 +1193,7 @@ export function build(kit, api, { save = null } = {}) {
     Object.assign(state, s.state, { marks: [...s.state.marks] }); cpDone = s.cpDone; cpFlash = 0;
     flashGroup.visible = flashHalo.mesh.visible = !state.flashlight;
     if (state.flashlight) api.grantFlashlight();
-    marks.forEach(m => { m.seen = state.marks[m.pos] ? .5 : 0; });
+    marks.forEach(m => { m.beamLit = false; });
     tiles.forEach((t, i) => { t.rot = s.tiles[i]; t.angle = -t.rot * Math.PI / 2; t.mesh.rotation.z = t.angle; });
     evaluateGridDry();
     if (state.doorOpen) secDoor.restoreOpen();
