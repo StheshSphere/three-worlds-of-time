@@ -34,6 +34,7 @@ const CUT_AFTER = 2.4;      // seconds into line 2 before the reveal cut
 const OUTRO = 0.9;          // seconds to hand the view back
 const MIN_D = 1.45;         // the camera never comes closer than this
 const PAD = 0.2;            // clearance kept from walls and props
+const SAFE_SHOT_ANGLES = [0, 0.5, -0.5, 0.95, -0.95, 1.35, -1.35];
 
 const ease = (k) => k * k * (3 - 2 * k);
 
@@ -175,7 +176,7 @@ export class StoryCam {
     );
     const full = this._a.length();
     this._b.copy(this._a).divideScalar(full);
-    const want = Math.max(1.2, this._sweep(this._head, this._b, full));
+    const want = Math.max(0.5, this._sweep(this._head, this._b, full));
     this._pos.copy(this._head).addScaledVector(this._b, want);
     return {
       pos: [this._pos.x, this._pos.y, this._pos.z],
@@ -190,12 +191,25 @@ export class StoryCam {
    *  against the walkable meshes and camera colliders (as cinematic.js does),
    *  so an intro shot never sits in a wall. Returns a [x, y, z] array. */
   _place(ang, dist, lift) {
-    this._dir.copy(this._gaze).applyAxisAngle(UP, ang);
+    // Keep the director's authored angle whenever it is safe. If a wall
+    // covers it, search alternate front-facing angles; NEVER force MIN_D
+    // past a wall (the old Math.max did exactly that).
+    let bestDist = 0;
+    let bestAngle = ang;
+    for (const delta of SAFE_SHOT_ANGLES) {
+      const testAngle = ang + delta;
+      this._dir.copy(this._gaze).applyAxisAngle(UP, testAngle);
+      this._a.copy(this._dir).multiplyScalar(dist).setY(lift);
+      const full = this._a.length();
+      this._b.copy(this._a).divideScalar(full);
+      const safe = this._sweep(this._face, this._b, full);
+      if (safe > bestDist) { bestDist = safe; bestAngle = testAngle; }
+      if (safe >= full - 0.01) break;  // original/first clean shot wins
+    }
+    this._dir.copy(this._gaze).applyAxisAngle(UP, bestAngle);
     this._a.copy(this._dir).multiplyScalar(dist).setY(lift);
-    const full = this._a.length();
-    this._b.copy(this._a).divideScalar(full);
-    const want = Math.max(MIN_D, this._sweep(this._face, this._b, full));
-    this._pos.copy(this._face).addScaledVector(this._b, want);
+    this._b.copy(this._a).normalize();
+    this._pos.copy(this._face).addScaledVector(this._b, Math.max(0.5, bestDist));
     return [this._pos.x, this._pos.y, this._pos.z];
   }
 

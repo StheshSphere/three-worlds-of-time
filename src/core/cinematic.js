@@ -31,7 +31,7 @@ import { voiceKeyFor, isAriKey } from './voice.js';
  */
 const CLOSE_FOV = 42;         // close-up field of view
 const CLOSE_DIST = 2.1;       // nominal camera distance from the head anchor (eye level; the chibi head itself is ~0.6 m deep)
-const MIN_DIST = 1.4;         // a candidate closer than this is rejected (macro shot)
+const MIN_DIST = 1.1;         // closer shots are rejected (face clipping)
 const CAM_LIFT = 0.10;        // camera sits slightly above the face target
 const FACE_LIFT = -0.12;      // aim below the eye anchor so the whole face sits above the caption box
 const ENGAGE_K = 5.0;         // blend rate into the shot (1/s)
@@ -41,9 +41,10 @@ const TAIL = 0.8;             // keep the shot this long after the voice ends
 // timeline this much early so the audible waveform and the visible shape
 // peak together (offset measured by the test harness, see the report).
 const LIP_LEAD = 0.04;
-const ANGLES = [0.5, -0.5, 0.95, -0.95, 1.4, -1.4];   // ¾ first, then profiles (rad)
+const ANGLES = [0.5, -0.5, 0, 0.95, -0.95, 1.35, -1.35];
+const FACE_OFFSETS = [0, -0.22, 0.22];   // ¾ first, then profiles (rad)
 
-// Viseme → morph-target weights (the task's table): M/B/P pressed, A/AH jaw
+// Viseme → independent replacement-mouth weights: M/B/P pressed, A/AH jaw
 // open, E/EE wide, O/OO round, F/V lip-teeth, S/Z teeth close, W/U protrude.
 const SHAPES = {
   rest: {},
@@ -87,12 +88,15 @@ export class Cinematic {
     this._pos = new THREE.Vector3();          // current close-up pose
     this._quat = new THREE.Quaternion();
     this._havePose = false;
+    this._shotDist = CLOSE_DIST;
     this._ray = new THREE.Raycaster();
     this._lookMat = new THREE.Matrix4();
     this._up = new THREE.Vector3(0, 1, 0);
     this._hits = [];
     this._box = new THREE.Box3();
     this._hit = new THREE.Vector3();
+    this._faceRight = new THREE.Vector3();
+    this._rayOrigin = new THREE.Vector3();
   }
 
   get engaged() { return this.f > 0.5; }
@@ -164,7 +168,10 @@ export class Cinematic {
     }
     this.camera.position.lerpVectors(this._playPos, this._pos, e);
     this.camera.quaternion.slerpQuaternions(this._playQuat, this._quat, e);
-    const fov = this._playFov + (CLOSE_FOV - this._playFov) * e;
+    // Increase FOV if a nearby wall forced a tighter camera placement, so
+    // the nose is not cropped by the camera while the wall stays outside it.
+    const safeFov = Math.min(64, Math.max(CLOSE_FOV, CLOSE_FOV * 1.65 / this._shotDist));
+    const fov = this._playFov + (safeFov - this._playFov) * e;
     if (Math.abs(this.camera.fov - fov) > 0.01) {
       this.camera.fov = fov;
       this.camera.updateProjectionMatrix();
@@ -197,18 +204,24 @@ export class Cinematic {
         return true;
       }
     }
-    return this._havePose;
+    // Never reuse a now-obstructed close-up pose; it can put a wall between
+    // Ari and the camera if the level's geometry changes during speech.
+    this._havePose = false;
+    return false;
   }
 
   _compose(dist) {
     this._pos.copy(this._target).addScaledVector(this._dir, dist);
+    this._shotDist = dist;
     this._lookMat.lookAt(this._pos, this._target, this._up);
     this._quat.setFromRotationMatrix(this._lookMat);
     this._havePose = true;
   }
 
-  /** Sweep the candidate angle; stores the unit direction in this._dir and
-   *  returns how far the camera can sit from the face without clipping. */
+  /** Sweep a *thick* face-to-camera corridor, not just one centre ray.
+   * A centre-only test can pass a camera whose frame is partly behind a wall.
+   * Sample the central ray and both sides of the visible face. Candidate
+   * angles that cannot frame an unobstructed face are rejected. */
   _clearance(idx) {
     const a = ANGLES[idx];
     const fx = Math.sin(this.player.facing);
@@ -220,23 +233,37 @@ export class Cinematic {
     this._dir.set(dx * CLOSE_DIST, CAM_LIFT, dz * CLOSE_DIST);
     const full = this._dir.length();
     this._dir.divideScalar(full);
-    this._ray.set(this._target, this._dir);
+    this._faceRight.set(-this._dir.z, 0, this._dir.x).normalize();
+    let clearance = full;
+    // Side samples ensure an architectural edge does not cover the mouth,
+    // cheek or one half of Ari's face even if the centre ray is clear.
+    for (const offset of FACE_OFFSETS) {
+      this._rayOrigin.copy(this._target).addScaledVector(this._faceRight, offset);
+      clearance = Math.min(clearance, this._sweepFrom(this._rayOrigin, full));
+      if (clearance < MIN_DIST) break;
+    }
+    return clearance;
+  }
+
+  _sweepFrom(origin, full) {
+    this._ray.set(origin, this._dir);
     this._ray.far = full;
-    let want = full;
+    let safe = full;
     this._hits.length = 0;
     const h = this._ray.intersectObjects(this.player.walkables, false, this._hits)[0];
-    if (h) want = Math.min(want, Math.max(0.05, h.distance - 0.18));
+    if (h) safe = Math.min(safe, Math.max(0.05, h.distance - 0.24));
     for (const obj of this.player.cameraColliders) {
       const box = obj.userData.solidBox;
       if (!box) continue;
-      this._box.copy(box).expandByScalar(0.18);
-      // If expansion swallows the face, use the unexpanded boundary.
-      if (this._box.containsPoint(this._target)) this._box.copy(box);
+      this._box.copy(box).expandByScalar(0.22);
+      // A broad gameplay AABB can enclose the face. If it does, use its
+      // unexpanded extent; the camera must remain before the exit face.
+      if (this._box.containsPoint(origin)) this._box.copy(box);
       if (this._ray.ray.intersectBox(this._box, this._hit)) {
-        want = Math.min(want, Math.max(0.05, this._hit.distanceTo(this._target) - 0.05));
+        safe = Math.min(safe, Math.max(0.05, this._hit.distanceTo(origin) - 0.12));
       }
     }
-    return want;
+    return safe;
   }
 
   /* ------------------------------ lip-sync ------------------------------ */

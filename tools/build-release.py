@@ -94,6 +94,15 @@ for key, folder, suffix in [('textures', 'textures', None), ('music', 'audio/mus
         for ending in (['/color.webp', '/normal.webp', '/arm.webp'] if suffix is None else [suffix]):
             require(ROOT / 'assets' / folder / (name + ending))
 
+# Spoken dialogue is part of the deployed game, not a dev-only asset.
+# Keep the 29 pre-rendered MP3s in the LAMP archive alongside the models.
+voice_block = re.search(r"\bvoice:\s*\[([^\]]*)\]", manifest, re.S)
+if not voice_block:
+    errors.append('Missing voice asset manifest')
+else:
+    for name in re.findall(r"['\"]([a-z0-9-]+)['\"]", voice_block[1]):
+        require(ROOT / 'assets' / 'audio' / 'voice' / (name + '.mp3'))
+
 for p in list(required):
     if p.is_relative_to(ROOT / 'assets') and not re.fullmatch(r'[a-z0-9/_.-]+', p.relative_to(ROOT / 'assets').as_posix()):
         errors.append(f'Asset name must be lowercase and contain no spaces: {p.name}')
