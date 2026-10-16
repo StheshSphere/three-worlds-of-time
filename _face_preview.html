@@ -1,0 +1,20 @@
+<!doctype html><html><head><meta charset="utf-8"><script type="importmap">{"imports":{"three":"./libs/three/three.module.js","three/addons/":"./libs/three/addons/"}}</script></head><body style="margin:0;background:#9298a2"><script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {MeshoptDecoder} from 'three/addons/libs/meshopt_decoder.module.js';
+import {createAriFaceMakeover} from './src/core/faceMakeover.js';
+import {createAriMouth} from './src/core/mouthRig.js';
+const gltf=await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync('./assets/models/hero/scientist.glb');
+const model=gltf.scene;
+const scene=new THREE.Scene();scene.background=new THREE.Color(0xadb9c2);scene.add(model);
+scene.add(new THREE.HemisphereLight(0xffffff,0x8093b3,2.5));
+let light=new THREE.DirectionalLight(0xffe6d4,3.1);light.position.set(3,5,5);scene.add(light);
+const camera=new THREE.PerspectiveCamera(34,1.5,0.01,100);camera.position.set(0,1.57,3.15);camera.lookAt(0,1.51,0);
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});renderer.setSize(960,640);document.body.append(renderer.domElement);
+const headMesh=model.getObjectByName('Mage_Head'),headBone=model.getObjectByName('head');
+const face=createAriFaceMakeover(headMesh,headBone,[]);const mouth=createAriMouth(headMesh,headBone,[]);
+window.test={face,mouth,headMesh,headBone,model,camera,renderer,scene};
+window.speak=(amount)=>{mouth.setMouth({aa:amount,wide:amount*.4},amount);renderer.render(scene,camera);};
+window.render=()=>{model.updateMatrixWorld(true);renderer.render(scene,camera);};
+window.render();window.ready=true;
+</script></body></html>

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { assets } from './core/assets.js';
 import { createAriMouth } from './core/mouthRig.js';
+import { createAriFaceMakeover } from './core/faceMakeover.js';
 
 /**
  * The hero — Ari, Prof. Adeyemi's student inventor. Base model: KayKit's
@@ -146,11 +147,12 @@ export function createHero() {
   const wrist = bone('wrist.r') || bone('hand.r');
   if (wrist) { wrist.add(gauntlet); gauntlet.rotation.x = Math.PI / 2; gauntlet.scale.setScalar(1.3); }
 
-  /* -------------------------- replacement mouth -------------------------- */
-  // Remove the source model's six-triangle painted mouth overlay, then attach
-  // ONE wider, human-shaped lip rig at the original mouth position. The head
-  // and nose vertices, voice timelines and body animation remain unchanged.
+  /* -------------------------- Ari facial makeover -------------------------- */
+  // Recolour Ari's ORIGINAL skinned eyes with brown irises and pupils, and
+  // soften the original eyebrows. No separate eye or nose meshes: the prior
+  // detached-eye regression cannot occur. Retain the audio-driven mouth.
   const headMesh = model.getObjectByName('Mage_Head');
+  const faceMakeover = createAriFaceMakeover(headMesh, headBone, disposables);
   const face = createAriMouth(headMesh, headBone, disposables);
 
   // KayKit characters are authored ~1.8 units tall, which matches our metre
@@ -218,6 +220,7 @@ export function createHero() {
     if (st.grounded && !wasGrounded && st.fallSpeed > 9 && !oneShot) play('land', { speed: 1.6 });
     wasGrounded = st.grounded;
     mixer.update(dt);
+    faceMakeover?.update(dt);
 
     // gear: sand glow tracks recovered cores, gauntlet pulses
     sandMat.emissiveIntensity = 0.35 + cores * 0.9 + Math.sin(time * 3) * 0.08;
@@ -245,6 +248,7 @@ export function createHero() {
     goggles,
     face,
     reset() {
+      faceMakeover?.reset();
       oneShot = null;
       for (const a of Object.values(actions)) a.stop();
       base = 'idle';
