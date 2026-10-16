@@ -725,13 +725,16 @@ test('V9: the collapse bridge gives a longer warning before falling', () => {
 });
 
 // Future V10: test the exact trouble reports from the live game screenshot.
-test('V10: Shift + Up + single Space triggers BIG jump even if Space keyDOWN was suppressed', () => {
+test('Space tap: missed press recovers while Shift and Up remain held, without an arrow release', () => {
   load(2); pose([0, 0, -4.4], 0); player.onGround = true; player.inputEnabled = true;
   player.isLocked = true;
   player._key2('ShiftLeft', true); player._key2('ArrowUp', true);
-  // Simulate physical 3-key ghosting: no Space down event, just a release.
+  // Some event streams report only the end of a tap. Shift and Up remain
+  // held throughout; no release of the forward key is used or required.
   player._key2('Space', false, false, true);
   assert.equal(player._sprintLeap, true);
+  assert.equal(player.keys.sprint && player.keys.forward, true);
+  assert.equal(player.keys.jump, false);
   assert.ok(player.velocity.z < -12);
   player._key2('ArrowUp', false); player._key2('ShiftLeft', false); player.isLocked = false;
 });

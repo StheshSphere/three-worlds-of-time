@@ -31,6 +31,13 @@ const TP_DISTANCE = 4.4;
 const TP_HEIGHT = 0.55;
 const TP_SHOULDER = 0.6;
 const KEYBOARD_TURN_SPEED = 1.9;  // Arrow keys rotate while flashlight is owned; A/D still strafe
+const MOVEMENT_CODES = new Set(['KeyW', 'KeyS', 'KeyA', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight']);
+const KEY_FALLBACKS = {
+  w: 'KeyW', W: 'KeyW', s: 'KeyS', S: 'KeyS', a: 'KeyA', A: 'KeyA', d: 'KeyD', D: 'KeyD',
+  ' ': 'Space', Spacebar: 'Space', Shift: 'ShiftLeft',
+  Up: 'ArrowUp', Down: 'ArrowDown', Left: 'ArrowLeft', Right: 'ArrowRight',
+};
+const LEGACY_KEY_CODES = { 16: 'ShiftLeft', 32: 'Space', 37: 'ArrowLeft', 38: 'ArrowUp', 39: 'ArrowRight', 40: 'ArrowDown', 65: 'KeyA', 68: 'KeyD', 83: 'KeyS', 87: 'KeyW' };
 
 // Scratch objects reused every frame — never allocate inside the loop (brief §6.1).
 const _origin = new THREE.Vector3();
@@ -109,14 +116,10 @@ export class Player extends THREE.EventDispatcher {
     this.defaultSurface = 'stone';
 
     this.keys = { forward: false, back: false, left: false, right: false, turnLeft: false, turnRight: false, sprint: false, jump: false };
+    this._heldMovementCodes = new Set(); // each physical alias has its own held state
     this._coyote = 0;
     this._jumpBuffer = 0;
     this._queuedFutureJump = null; // snapshot combo at Space KEYDOWN, not at a later physics frame
-    // Some laptop keyboards suppress Shift+Up+Space keydowns (key rollover).
-    // Remember the last physically detected held keys briefly and accept Space
-    // keyUP if the hardware/browser dropped only its keyDOWN event.
-    this._lastForwardRelease = -Infinity;
-    this._lastShiftRelease = -Infinity;
     this._stepDist = 0;
     this._fallSpeed = 0;
     this._fell = false;
@@ -193,44 +196,63 @@ export class Player extends THREE.EventDispatcher {
     this.dom.addEventListener('contextmenu', (e) => e.preventDefault());
     window.addEventListener('keydown', (e) => this._key(e, true));
     window.addEventListener('keyup', (e) => this._key(e, false));
+    // Compatibility path for a Space press reported without a usable
+    // keydown. The held-state guard still allows only one launch per tap.
+    window.addEventListener('keypress', (e) => {
+      if (e.code === 'Space' || e.key === ' ' || e.key === 'Spacebar' || e.keyCode === 32) this._key(e, true);
+    });
   }
 
   _clearKeys() {
     for (const k in this.keys) this.keys[k] = false;
+    this._heldMovementCodes.clear();
     this._jumpBuffer = 0;
     this._queuedFutureJump = null;
-    this._lastForwardRelease = -Infinity;
-    this._lastShiftRelease = -Infinity;
     this._pushTimer = 0;
     this._pushTarget = null;
   }
 
   _key(e, down) {
-    if (!this.isLocked || !this.inputEnabled || this.frozen) { if (!down) this._key2(e.code, false); return; }
-    if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
-    // Use physical codes when available, and fall back to the browser key.
-    const code = e.code || ({ ArrowUp: 'ArrowUp', ' ': 'Space', Shift: 'ShiftLeft' }[e.key] || e.key);
+    if (!this.isLocked || !this.inputEnabled || this.frozen) { this._clearKeys(); return; }
+    // Normalize before suppressing browser scrolling. Some keyboard/browser
+    // events provide only key or the legacy keyCode, including Shift+Up+Space.
+    const code = e.code && e.code !== 'Unidentified' ? e.code
+      : KEY_FALLBACKS[e.key] || LEGACY_KEY_CODES[e.keyCode || e.which] || e.key;
+    if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(code)) e.preventDefault();
     this._key2(code, down, e.repeat, e.shiftKey);
   }
 
   _key2(code, down, repeat = false, shiftHeld = false) {
+    if (MOVEMENT_CODES.has(code)) {
+      const held = this._heldMovementCodes;
+      if (down) held.add(code); else held.delete(code);
+      // Releasing W must not cancel Up (nor one Shift cancel the other).
+      this.keys.forward = held.has('KeyW') || held.has('ArrowUp');
+      this.keys.back = held.has('KeyS') || held.has('ArrowDown');
+      this.keys.left = held.has('KeyA') || (!this.flashlightOwned && held.has('ArrowLeft'));
+      this.keys.right = held.has('KeyD') || (!this.flashlightOwned && held.has('ArrowRight'));
+      this.keys.turnLeft = !!this.flashlightOwned && held.has('ArrowLeft');
+      this.keys.turnRight = !!this.flashlightOwned && held.has('ArrowRight');
+      this.keys.sprint = held.has('ShiftLeft') || held.has('ShiftRight');
+      return;
+    }
     switch (code) {
-      case 'KeyW': case 'ArrowUp': this.keys.forward = down; if (!down) this._lastForwardRelease = performance.now(); break;
-      case 'KeyS': case 'ArrowDown': this.keys.back = down; break;
-      case 'KeyA': this.keys.left = down; break;
-      case 'KeyD': this.keys.right = down; break;
-      case 'ArrowLeft': if (this.flashlightOwned) this.keys.turnLeft = down; else this.keys.left = down; break;
-      case 'ArrowRight': if (this.flashlightOwned) this.keys.turnRight = down; else this.keys.right = down; break;
-      case 'ShiftLeft': case 'ShiftRight': this.keys.sprint = down; if (!down) this._lastShiftRelease = performance.now(); break;
       case 'Space': {
-        // In particular Shift+ArrowUp+Space must behave like Shift+W+Space.
-        // Physical keyboard rollover sometimes hides Space DOWN but still
-        // delivers UP: accept that UP once if no DOWN was registered.
-        const missedDown = !down && !this.keys.jump && this.canSprintLeap;
-        if ((!repeat && down) || missedDown) {
-          const now = performance.now();
-          const forward = !this.keys.back && (this.keys.forward || now - this._lastForwardRelease < 260);
-          const shift = this.keys.sprint || shiftHeld || now - this._lastShiftRelease < 260;
+        const wasDown = this.keys.jump;
+        this.keys.jump = down;
+        // Hold Shift + W/Up and TAP Space. Normally launch on keydown;
+        // releasing Space immediately must not cancel or shorten the leap.
+        // If only Space's keyup arrives, recover that tap while BOTH other
+        // keys are STILL held. Never infer either key from a recent release,
+        // and never use this recovery to queue another jump in mid-air.
+        const recoverTap = !down && !wasDown && this.canSprintLeap
+          && this.keys.forward && !this.keys.back && (this.keys.sprint || shiftHeld)
+          && (this.onGround || this._coyote > 0) && this._jumpBuffer <= 0;
+        // The first delivered DOWN may be labelled repeat after a missed
+        // event. Launch once per press, never on subsequent auto-repeats.
+        if ((down && !wasDown) || recoverTap) {
+          const forward = this.keys.forward && !this.keys.back;
+          const shift = this.keys.sprint || shiftHeld;
           this._jumpBuffer = this.canSprintLeap ? FUTURE_JUMP_BUFFER : JUMP_BUFFER;
           this._queuedFutureJump = this.canSprintLeap ? {
             forward, big: forward && shift,
@@ -239,8 +261,7 @@ export class Player extends THREE.EventDispatcher {
         }
         // Both Future jump types have full height on a single Space tap;
         // other eras keep the original variable-height jump.
-        if (!down && this.velocity.y > 3 && !this._forwardJump) this.velocity.y *= 0.55;
-        this.keys.jump = down;
+        if (!down && wasDown && this.velocity.y > 3 && !this._forwardJump) this.velocity.y *= 0.55;
         break;
       }
       case 'KeyE': if (down && !repeat) this.tryInteract(); break;
@@ -517,8 +538,8 @@ export class Player extends THREE.EventDispatcher {
     this._basis();
     const queued = this._queuedFutureJump;
     const heldForward = this.keys.forward && !this.keys.back;
-    this._forwardJump = this.canSprintLeap && (queued?.forward || heldForward) && this._dashTime <= 0;
-    this._sprintLeap = !!(this._forwardJump && (queued?.big || (heldForward && this.keys.sprint)));
+    this._forwardJump = this.canSprintLeap && (queued ? queued.forward : heldForward) && this._dashTime <= 0;
+    this._sprintLeap = !!(this._forwardJump && (queued ? queued.big : this.keys.sprint));
     this.velocity.y = this._sprintLeap ? FUTURE_LEAP_JUMP_SPEED : JUMP_SPEED;
     if (this._forwardJump) {
       this._sprintLeapDir.copy(_fwd);
@@ -565,15 +586,20 @@ export class Player extends THREE.EventDispatcher {
         this.velocity.x = this._dashDir.x * DASH_SPEED;
         this.velocity.z = this._dashDir.z * DASH_SPEED;
         this.velocity.y = Math.max(this.velocity.y, 0);
-      } else if (this._forwardJump && !this.onGround) {
-        // Both Future forward jumps carry momentum until landing. Shift at
-        // takeoff selects a BIG jump; without Shift it is a normal jump.
-        // The direction and jump type are fixed at takeoff, so a quick Space
-        // tap (or releasing Shift) cannot accidentally cancel the jump.
-        const airSpeed = this._sprintLeap ? FUTURE_LEAP_FORWARD_SPEED : FUTURE_NORMAL_JUMP_FORWARD_SPEED;
+      } else if (this._sprintLeap && !this.onGround) {
+        // Only a long jump locks its takeoff direction and speed. Neither
+        // WASD/arrows, mouse-look nor releasing Shift can steer this leap.
         const steer = 1 - Math.exp(-FUTURE_LEAP_AIR_STEER * dt);
-        this.velocity.x += (this._sprintLeapDir.x * airSpeed - this.velocity.x) * steer;
-        this.velocity.z += (this._sprintLeapDir.z * airSpeed - this.velocity.z) * steer;
+        this.velocity.x += (this._sprintLeapDir.x * FUTURE_LEAP_FORWARD_SPEED - this.velocity.x) * steer;
+        this.velocity.z += (this._sprintLeapDir.z * FUTURE_LEAP_FORWARD_SPEED - this.velocity.z) * steer;
+      } else if (this._forwardJump && !this.onGround) {
+        // Normal jumps accept camera-relative WASD/arrow steering. Keep the
+        // existing hop speed, and coast if the player releases all movement.
+        // Pressing Shift in the air cannot upgrade this into a long jump.
+        if (_move.lengthSq() > 0) {
+          this.velocity.x += (_move.x * FUTURE_NORMAL_JUMP_FORWARD_SPEED - this.velocity.x) * k;
+          this.velocity.z += (_move.z * FUTURE_NORMAL_JUMP_FORWARD_SPEED - this.velocity.z) * k;
+        }
       } else {
         this.velocity.x += (_move.x * speed - this.velocity.x) * k;
         this.velocity.z += (_move.z * speed - this.velocity.z) * k;

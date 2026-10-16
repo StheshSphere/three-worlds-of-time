@@ -186,6 +186,17 @@ In the Present power room, walk to the wall console and press E. Instead of rota
 
 ## Future level V10 improvements
 
-- **Jump**: Hold Shift + Up arrow (or Shift + W), then tap Space once for the big jump. A normal forward jump uses Up arrow (or W) + Space. Space keyup is also handled for laptops where a three-key chord hides the keydown event. If both Space events are blocked by the keyboard hardware, browsers cannot detect the tap.
+- **Jump**: Hold Shift, keep it held while holding Up arrow (or W), then **tap Space once**. You do not need to keep Space held or release Up first. Normally the big jump starts on Space keydown; if that event is missing, a delivered Space keypress or the end of the tap can recover it while Shift and forward are still held. Recently released movement keys are never treated as held. A normal forward jump uses Up arrow (or W) + Space. Normal jumps allow WASD/arrow steering; long jumps keep their takeoff direction.
 - **Falling bricks**: Sprint with Shift + Up / W. Tiles remain solid for about 2.15 seconds; the rift moves more slowly. Falling or being caught returns to the safe pre-bridge platform and resets the bridge. Spire checkpoint is only earned after landing on the spire.
 - **Colour lock finale**: Much larger world panel with numbered colour order, persistent high-contrast HUD hint, six-second colour cycles, highlighted matching orb, easier close-range E interaction, and step confirmation.
+
+### Check the three-key combination
+
+Open `tools/keyboard-check.html` in a browser (double-clicking this standalone checker is fine).
+Hold Shift, then hold Up, then tap Space while keeping Shift and Up held. The checker retains the result of the tap,
+so you do not have to catch the brief Space highlight. If no Space event appears until another key is released,
+the keyboard/browser is not delivering the requested combination; the game cannot recover a tap with no events.
+Compare the other Shift key and the working W combination.
+The checker only observes input; it does not run or alter the game.
+
+Run `node tools/test-jump-controls.mjs` for the exact held-key sequence, release behaviour and jump-steering checks.

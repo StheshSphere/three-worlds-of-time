@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Three Worlds of Time — keyboard check</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px 20px; background: #101923; color: #f0f5fb; font: 17px/1.55 system-ui, sans-serif; }
+  main { max-width: 820px; margin: auto; }
+  h1 { font-size: 28px; line-height: 1.2; }
+  .keys { display: flex; flex-wrap: wrap; gap: 12px; margin: 24px 0; }
+  .key { flex: 1 1 140px; padding: 20px 14px; border: 2px solid #697b8d; border-radius: 12px; text-align: center; }
+  .key strong, .key span { display: block; }
+  .key.on { color: #10271f; background: #88ebbf; border-color: #88ebbf; }
+  #status { padding: 16px; background: #203548; border-radius: 10px; font-weight: 650; }
+  small { color: #b9c9d8; }
+  button { padding: 10px 18px; color: #101923; background: #dceafb; border: 0; border-radius: 8px; font: inherit; cursor: pointer; }
+  pre { padding: 16px; overflow: auto; background: #0b1219; border-radius: 10px; min-height: 100px; font-size: 14px; }
+</style>
+<main>
+  <h1>Check the three keys together</h1>
+  <p>1. Hold <b>Shift</b>. 2. Keep Shift held and hold <b>↑</b>.
+     3. Keep both held and <b>tap Space once</b>.</p>
+  <p>Shift and Up should stay green; Space may flash briefly. The tap result stays visible below.
+     This page reads your keyboard directly; the game is not running here.</p>
+  <div class="keys">
+    <div class="key" id="shift"><strong>Shift</strong><span>Not detected</span></div>
+    <div class="key" id="up"><strong>↑ Up Arrow</strong><span>Not detected</span></div>
+    <div class="key" id="space"><strong>Space</strong><span>Not detected</span></div>
+    <div class="key" id="w"><strong>W (comparison)</strong><span>Not detected</span></div>
+  </div>
+  <p id="status" aria-live="polite">0 / 3 keys detected for Shift + ↑ + Space.</p>
+  <p id="tap-result" aria-live="polite">No Space tap received yet.</p>
+  <p>If no Space tap is recorded while Shift and Up are held, this page has not received that tap.
+     Release everything and try the other Shift key, then compare with Shift + W + Space.
+     A keypress that the keyboard does not report cannot be recovered by the game.</p>
+  <button id="clear" type="button">Clear the check</button>
+  <h2>Last key events</h2>
+  <small>DOWN means pressed. UP means released. PRESS is an additional browser event, if reported. Repeated events while holding a key are hidden.</small>
+  <pre id="events">No key events yet.</pre>
+</main>
+<script>
+  const held = new Set(), events = [];
+  const allowed = new Set(['ShiftLeft', 'ShiftRight', 'ArrowUp', 'Space', 'KeyW']);
+  const fallback = { Shift: 'ShiftLeft', ArrowUp: 'ArrowUp', Up: 'ArrowUp', ' ': 'Space', Spacebar: 'Space', w: 'KeyW', W: 'KeyW' };
+  const legacy = { 16: 'ShiftLeft', 32: 'Space', 38: 'ArrowUp', 87: 'KeyW' };
+  let started = performance.now();
+  function paint() {
+    const state = { shift: held.has('ShiftLeft') || held.has('ShiftRight'), up: held.has('ArrowUp'), space: held.has('Space'), w: held.has('KeyW') };
+    for (const [id, active] of Object.entries(state)) {
+      const box = document.getElementById(id);
+      box.classList.toggle('on', active);
+      box.querySelector('span').textContent = active ? 'HELD' : 'Not detected';
+    }
+    const count = Number(state.shift) + Number(state.up) + Number(state.space);
+    document.getElementById('status').textContent = count === 3
+      ? 'All three detected together — no release was required.'
+      : `${count} / 3 keys detected for Shift + ↑ + Space.`;
+    document.getElementById('events').textContent = events.join('\n') || 'No key events yet.';
+  }
+  function handle(event, down, type = down ? 'DOWN' : 'UP') {
+    const code = event.code && event.code !== 'Unidentified' ? event.code
+      : fallback[event.key] || legacy[event.keyCode || event.which];
+    if (!allowed.has(code)) return;
+    event.preventDefault();
+    const wasHeld = held.has(code);
+    if (type !== 'PRESS') {
+      if (down) held.add(code); else held.delete(code);
+    }
+    if (!(down && wasHeld)) {
+      const now = ((performance.now() - started) / 1000).toFixed(3);
+      events.unshift(`${now}s  ${type.padEnd(5)}  ${code}`);
+      events.length = Math.min(events.length, 20);
+      if (code === 'Space') {
+        const both = (held.has('ShiftLeft') || held.has('ShiftRight')) && held.has('ArrowUp');
+        document.getElementById('tap-result').textContent = both
+          ? `Space ${type} received at ${now}s while Shift and Up were still held. No arrow release was required.`
+          : `Space ${type} received at ${now}s, but Shift and Up were not both detected as held.`;
+      }
+    }
+    paint();
+  }
+  window.addEventListener('keydown', event => handle(event, true), true);
+  window.addEventListener('keyup', event => handle(event, false), true);
+  window.addEventListener('keypress', event => handle(event, true, 'PRESS'), true);
+  window.addEventListener('blur', () => { held.clear(); paint(); });
+  document.getElementById('clear').addEventListener('click', event => {
+    held.clear(); events.length = 0; started = performance.now(); paint(); event.target.blur();
+    document.getElementById('tap-result').textContent = 'No Space tap received yet.';
+  });
+</script>
+</html>
