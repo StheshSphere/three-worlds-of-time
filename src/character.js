@@ -40,7 +40,7 @@ export function createHero() {
     const m = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 1, 6, 12), new THREE.MeshStandardMaterial({ color: 0x3b3f8f }));
     m.position.y = 0.85;
     group.add(m);
-    return { group, update() {}, play() {}, release() {}, setGauntletColor() {}, setCores() {}, setDashGlow() {}, reset() {}, gauntletWorld: new THREE.Vector3() };
+    return { group, update() {}, play() {}, release() {}, setGauntletColor() {}, setCores() {}, setDashGlow() {}, reset() {}, face: null, gauntletWorld: new THREE.Vector3() };
   }
 
   const model = assets.prop('hero');
@@ -145,6 +145,85 @@ export function createHero() {
   const wrist = bone('wrist.r') || bone('hand.r');
   if (wrist) { wrist.add(gauntlet); gauntlet.rotation.x = Math.PI / 2; gauntlet.scale.setScalar(1.3); }
 
+  /* ------------------------------ face rig ------------------------------ */
+  // The Mage model ships with no jaw bone and no morph targets, so the mouth
+  // is a runtime-built rig: five morph targets injected over the mouth strip
+  // of the head geometry (UV-selected; upper lip below v 0.168, lower lip
+  // above) plus per-vertex darkening of the inner strip band, so an opened
+  // mouth reads as an opening instead of stretched lip texture. Weights are
+  // driven every frame by src/core/cinematic.js from the precomputed viseme
+  // timelines (src/core/visemes.js). No overlay geometry, no floating mouth.
+  const FACE_TARGETS = ['aa', 'wide', 'round', 'teeth', 'protrude'];
+  const face = (() => {
+    let headMesh = null;
+    model.traverse((o) => { if (!headMesh && o.isMesh && o.name === 'Mage_Head') headMesh = o; });
+    if (!headMesh || !headMesh.geometry?.attributes?.uv) return null;
+    const g = headMesh.geometry;
+    const pos = g.attributes.position;
+    const uv = g.attributes.uv;
+    const n = pos.count;
+    const strip = [];
+    const dark = [];
+    for (let i = 0; i < n; i++) {
+      const u = uv.getX(i), v = uv.getY(i);
+      if (u > 0.0415 && u < 0.059 && v > 0.145 && v < 0.192) {
+        strip.push(i);
+        const d = 1 - Math.min(1, Math.abs(v - 0.168) / 0.024);
+        if (d > 0.01) dark.push([i, d]);
+      }
+    }
+    if (!strip.length) return null;
+    if (!g.morphAttributes.position) {
+      const lower = (v) => (v > 0.168 ? 1 : 0.12);
+      const fade = (x) => Math.max(0.2, 1 - Math.abs(x) / 0.14);
+      const offsets = {
+        aa: (x, v) => [0, -0.078 * lower(v), -0.024 * lower(v) * fade(x)],
+        wide: (x, v) => [Math.sign(x) * 0.03 * lower(v), -0.012 * lower(v), 0],
+        round: (x, v) => [-x * 0.42, -0.034 * lower(v), 0.022 * lower(v)],
+        teeth: (x, v) => [0, 0.03 * lower(v), -0.014 * lower(v)],
+        protrude: (x, v) => [-x * 0.22, -0.01 * lower(v), 0.028 * lower(v)],
+      };
+      g.morphAttributes.position = FACE_TARGETS.map((name) => {
+        const a = new Float32Array(n * 3);
+        for (const i of strip) {
+          const [dx, dy, dz] = offsets[name](pos.getX(i), uv.getY(i));
+          a[i * 3] = dx; a[i * 3 + 1] = dy; a[i * 3 + 2] = dz;
+        }
+        return new THREE.Float32BufferAttribute(a, 3);
+      });
+      g.morphTargetsRelative = true;   // targets carry displacement, not positions
+    }
+    headMesh.morphTargetInfluences = new Array(FACE_TARGETS.length).fill(0);
+    if (!g.attributes.color) {
+      const col = new Float32Array(n * 3).fill(1);
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    }
+    const colour = g.attributes.color;
+    // vertexColors needs its own material — the atlas texture is shared by all
+    // six body meshes, and only the head may darken the lip band.
+    const mat = headMesh.material.clone();
+    mat.vertexColors = true;
+    mat.needsUpdate = true;
+    headMesh.material = mat;
+    disposables.push(mat);
+    const infl = headMesh.morphTargetInfluences;
+    let lastOpen = -1;
+    return {
+      /** w: { aa, wide, round, teeth, protrude } 0..1; open: 0..1 darkness. */
+      setMouth(w, open) {
+        infl[0] = w.aa; infl[1] = w.wide; infl[2] = w.round; infl[3] = w.teeth; infl[4] = w.protrude;
+        open = open < 0 ? 0 : open > 1 ? 1 : open;
+        if (Math.abs(open - lastOpen) < 0.02) return;
+        lastOpen = open;
+        for (const [i, d] of dark) {
+          const f = 1 - open * d * 0.85;
+          colour.setXYZ(i, f, f * 0.9, f * 0.85);
+        }
+        colour.needsUpdate = true;
+      },
+    };
+  })();
+
   // KayKit characters are authored ~1.8 units tall, which matches our metre
   // scale (eye height 1.6 m), so the model is used at scale 1.
 
@@ -235,6 +314,7 @@ export function createHero() {
       if (b) b.reset().fadeIn(0.25).play();
     },
     goggles,
+    face,
     reset() {
       oneShot = null;
       for (const a of Object.values(actions)) a.stop();

@@ -41,7 +41,7 @@ const tm = createTimeMachine(); scene.add(tm);
 const sounds = [];
 const positionals = new Set();
 const audio = {
-  play(name) { sounds.push(name); }, stopEffects() {}, stopMusic() {}, duck() {},
+  play(name) { sounds.push(name); }, stopEffects() {}, stopMusic() {}, duck() {}, playVoice() {}, stopVoice() {},
   playMusic(name) { this.music = name; }, setAmbience(name) { this.ambience = name; },
   positional(name, object) {
     const sound = { isPlaying: true, setVolume() {}, pause() { this.isPlaying = false; }, play() { this.isPlaying = true; } };

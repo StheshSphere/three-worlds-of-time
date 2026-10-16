@@ -26,7 +26,7 @@ class Clock {
   }
 }
 const clock = new Clock();
-const ui = new UI({ play() {} }, { dialogueClock: clock });
+const ui = new UI({ play() {}, playVoice() {}, stopVoice() {} }, { dialogueClock: clock });
 const d = ui.dialogue;
 const el = id => document.getElementById(id);
 const hidden = id => el(id).classList.contains('hidden');

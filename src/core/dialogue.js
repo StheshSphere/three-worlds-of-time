@@ -72,6 +72,7 @@ export class Dialogue {
       this.remaining = 10000;
       this.reminded = false;
       this.render(this.current);
+      this.voice?.playFor(this.current);
       this.paint();
       this.armReminder();
     } else {
@@ -85,6 +86,7 @@ export class Dialogue {
     if (!this.enabled) return false;
     const done = this.current.onDone;
     this.stopTimer();
+    this.voice?.stop();
     this.current = null;
     this.instructed = true;
     this.paint();
@@ -145,6 +147,7 @@ export class Dialogue {
 
   clear() {
     this.stopTimer();
+    this.voice?.stop();
     this.current = null;
     this.queue.length = 0;
     this.idle.length = 0;

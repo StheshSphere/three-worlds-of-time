@@ -10,6 +10,9 @@ import { interactionPrompt, interactionPoint } from './core/interaction.js';
 import { createTimeMachine } from './timeMachine.js';
 import { createLevelManager } from './levelManager.js';
 import { Cutscene } from './core/cutscene.js';
+import { Cinematic } from './core/cinematic.js';
+import { StoryCam } from './core/storyCam.js';
+import { summarizeJourney } from './core/stats.js';
 import * as prologueSet from './levels/prologue.js';
 import * as story from './story.js';
 
@@ -49,7 +52,7 @@ applyQuality();
 
 const minimap = new Minimap(renderer, scene);
 
-let mode = 'loading';         // loading | title | playing | paused | overlay | failed | won
+let mode = 'loading';         // loading | title | playing | paused | overlay | failed | credits | stats | won
 let pausedMode = 'playing';
 let userPickedQuality = false;
 
@@ -68,6 +71,13 @@ scene.add(timeMachine);
 
 const levels = createLevelManager({ scene, renderer, camera, player, timeMachine, audio, ui, postfx, minimap });
 const cutscene = new Cutscene({ camera, ui });
+// Ari's close-up + lip-sync (src/core/cinematic.js): takes the camera only
+// while her voice is actually speaking during gameplay, and drives her mouth
+// in every mode from the shipped audio clock.
+const cinematic = new Cinematic({ camera, player, audio, dialogue: ui.dialogue, levels });
+// Intro story camera for the era-arrival beats (src/core/storyCam.js): directs
+// the two ARRIVALS lines before Levels 2 and 3, then hands the view back.
+const storyCam = new StoryCam({ camera, player, levels, ui });
 const storyCtx = (set) => ({ levels, player, timeMachine, audio, postfx, ui, cs: cutscene, set });
 let creditsTimer = null;
 let pendingStats = null;
@@ -150,6 +160,7 @@ function showTitle() {
   mode = 'title';
   clearTimeout(creditsTimer);
   cutscene.cancel();
+  storyCam.cancel();
   ui.dialogue.setPaused('game', false);
   ui.rollCredits(false);
   ui.endCard(false);
@@ -177,6 +188,7 @@ function startGame() {
   ui.hide('hud');
   ui.resetJournal();
   ui.dialogue.resetJourney();
+  storyCam.cancel();
   mode = 'cutscene';
   ui.dialogue.setPaused('game', false);
   player.lock();
@@ -227,7 +239,10 @@ function endCredits() {
   ui.rollCredits(false);
   ui.endCard(false);
   ui.cinema(false);
-  showWinScreen(pendingStats || levels.stats);
+  // The measured journey record comes after the ending story and credits,
+  // before the existing win screen — never after levels 1 or 2.
+  mode = 'stats';
+  ui.showJourneyStats(summarizeJourney(levels.runStats), () => showWinScreen(pendingStats || levels.stats));
 }
 
 levels.callbacks.onFail = (reason) => {
@@ -236,7 +251,11 @@ levels.callbacks.onFail = (reason) => {
   ui.showFail(reason);
 };
 levels.callbacks.onFinale = (stats) => startEpilogue(stats);
-levels.callbacks.onEraArrive = (i) => { if (story.ARRIVALS[i]) ui.say(story.ARRIVALS[i]); };
+levels.callbacks.onEraArrive = (i) => {
+  if (!story.ARRIVALS[i]) return;
+  storyCam.play(story.ARRIVAL_AIM?.[i] || null);
+  ui.say(story.ARRIVALS[i]);
+};
 
 function showWinScreen(stats) {
   mode = 'won';
@@ -261,7 +280,7 @@ function newJourney(action = startGame) {
 function continueGame() {
   const save = levels.readSave();
   if (!save.save) { ui.setContinue(save); return; }
-  audio.unlock(); cutscene.cancel();
+  audio.unlock(); cutscene.cancel(); storyCam.cancel();
   ui.dialogue.setPaused('game', false);
   const result = levels.continueJourney(save.save);
   if (!result) { ui.savedNotice('The saved journey could not be loaded.', true); return; }
@@ -276,7 +295,7 @@ function saveManually() {
   if (!result.ok) ui.savedNotice(result.reason, true);
 }
 function retryEra() {
-  ui.hide('pause-screen'); ui.hide('fail-screen'); cutscene.cancel();
+  ui.hide('pause-screen'); ui.hide('fail-screen'); cutscene.cancel(); storyCam.cancel();
   ui.dialogue.setPaused('game', false);
   levels.retryEra(); mode = 'playing'; ui.show('hud'); player.lock();
 }
@@ -473,6 +492,8 @@ function frame() {
     else { player._clearKeys(); player.hero.update(dt, { speed: 0, grounded: true }); }
     levels.updateCamera(dt);
     cutscene.update(dt);
+    cinematic.update(dt, mode);
+    storyCam.update(dt);
   }
   timeMachine.update(dt);
   if (mode === 'credits') {
@@ -542,7 +563,7 @@ frame();
    the browser console (e.g. __game.skipTo(2)). Opt in with ?qa=1.
    ===================================================================== */
 if (new URLSearchParams(location.search).get('qa') === '1') window.__game = {
-  THREE, scene, renderer, camera, player, timeMachine, levels, audio, ui, postfx, settings,
+  THREE, scene, renderer, camera, player, timeMachine, levels, audio, ui, postfx, settings, cinematic, storyCam,
   start: startGame,
   skipTo(i) { cutscene.cancel(); player.frozen = false; levels.load(i); mode = 'playing'; ui.hide('title-screen'); ui.show('hud'); },
   cutscene, save: saveManually, continueGame, newJourney, returnToTitle, pause, resume,

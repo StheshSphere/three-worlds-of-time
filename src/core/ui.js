@@ -1,5 +1,7 @@
 import { settings } from './settings.js';
 import { Dialogue } from './dialogue.js';
+import { Voice } from './voice.js';
+import { rankFor, LEVEL_TITLES, OVERALL_TITLES, PAR_TIMES } from './stats.js';
 
 /**
  * DOM UI controller: screens, HUD, overlays. The 3D game never touches the
@@ -18,6 +20,7 @@ export class UI {
     this._messageTimer = null;
     this.journal = [];
     this.dialogue = new Dialogue({ render: entry => this._renderDialogue(entry), clock: dialogueClock });
+    this.dialogue.voice = new Voice(audio);
 
     // Generic open/close buttons.
     document.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => this.openPanel(b.dataset.open)));
@@ -29,6 +32,7 @@ export class UI {
     this._bindOptions();
     this._bindKeypad();
     this._bindPowerGrid();
+    this._bindJourneyStats();
   }
 
   /* ----------------------------- screens ---------------------------- */
@@ -416,6 +420,220 @@ export class UI {
   }
 
   setBestTime(text) { $('best-time').textContent = text || ''; }
+
+  /* ------------------------- journey statistics ---------------------- */
+  /* The final record, shown once the ending story and credits are done.
+     Four sections — one per era plus the whole journey — each acknowledged
+     with Enter/click before the next appears, like the dialogue system. */
+
+  _bindJourneyStats() {
+    const advance = () => this._advanceJourneyStats();
+    window.addEventListener('keydown', (e) => {
+      if (!this.isOpen('journey-stats-screen') || e.repeat) return;
+      if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space') { e.preventDefault(); advance(); }
+    });
+    $('journey-stats-screen').addEventListener('click', advance);
+    // The button stops the bubble so a click cannot advance twice.
+    $('journey-stats-continue').addEventListener('click', (e) => { e.stopPropagation(); advance(); });
+  }
+
+  showJourneyStats(summary, onDone) {
+    const body = $('journey-stats-body');
+    body.innerHTML = '';
+    $('journey-stats-continue').classList.add('hidden');
+    const meta = [
+      ['I', 'The Past', 'Temple of the First Hour'],
+      ['II', 'The Present', 'Blackout at the Facility'],
+      ['III', 'The Future', 'Spire of 2187'],
+    ];
+    const sections = [];
+    summary.levels.forEach((rec, i) => sections.push(this._statsLevelSection(i, meta[i], rec, summary.scores[i])));
+    sections.push(this._statsOverallSection(summary));
+    for (const s of sections) { s.classList.add('hidden'); body.appendChild(s); }
+    this._statsFlow = { sections, index: -1, onDone, last: 0 };
+    this.show('journey-stats-screen');
+    // Reveal the first era immediately; each Enter/click then shows the next.
+    setTimeout(() => this._advanceJourneyStats(), 150);
+  }
+
+  _advanceJourneyStats() {
+    const flow = this._statsFlow;
+    if (!flow || !this.isOpen('journey-stats-screen')) return;
+    const now = performance.now();
+    if (now - flow.last < 260) return;          // one reveal per acknowledgement
+    flow.last = now;
+    if (flow.index < flow.sections.length - 1) {
+      flow.index++;
+      const last = flow.index === flow.sections.length - 1;
+      this._revealStatsSection(flow.sections[flow.index], last);
+      if (last) $('journey-stats-continue').classList.remove('hidden');
+      else this.audio.play('ui-open', { volume: 0.5 });
+    } else {
+      const done = flow.onDone;
+      this._statsFlow = null;
+      this.hide('journey-stats-screen');
+      if (done) done();
+    }
+  }
+
+  _revealStatsSection(section, isOverall) {
+    section.classList.remove('hidden');
+    this._animateStatsCounters(section);
+    const badge = section.querySelector('.rank-badge');
+    if (badge) setTimeout(() => {
+      badge.classList.add('reveal');
+      this.audio.play(isOverall ? 'core-get' : 'ui-confirm', { volume: isOverall ? 0.8 : 0.7 });
+    }, 620);
+  }
+
+  _animateStatsCounters(section) {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    section.querySelectorAll('.js-value[data-count]').forEach((el) => {
+      const target = Number(el.dataset.count) || 0;
+      const total = el.dataset.total != null ? Number(el.dataset.total) : null;
+      const fmt = (v) => this._statsFormat(el.dataset.format, v, total);
+      if (reduce || !target) { el.textContent = fmt(target); return; }
+      const t0 = performance.now();
+      const dur = 900;
+      const step = (now) => {
+        const k = Math.min(1, (now - t0) / dur);
+        el.textContent = fmt(target * (1 - Math.pow(1 - k, 3)));
+        if (k < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+    // Bars start at width 0 in CSS; two frames in, the transition animates them.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      section.querySelectorAll('.js-bar i[data-w]').forEach((i) => { i.style.width = `${i.dataset.w}%`; });
+    }));
+  }
+
+  _statsFormat(format, v, total) {
+    if (format === 'time') { const s = Math.round(v); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
+    if (format === 'm') return `${Math.round(v)} m`;
+    if (total != null) return `${Math.round(v)} / ${total}`;
+    return String(Math.round(v));
+  }
+
+  _statsTile(format, count, total, label, barPct = null) {
+    const t = document.createElement('div');
+    t.className = 'js-stat';
+    const v = document.createElement('span');
+    v.className = 'js-value';
+    v.dataset.count = String(Math.round(count) || 0);
+    v.dataset.format = format;
+    if (total != null) v.dataset.total = String(Math.round(total));
+    v.textContent = this._statsFormat(format, 0, total);
+    const l = document.createElement('span');
+    l.className = 'js-label';
+    l.textContent = label;
+    t.append(v, l);
+    if (barPct != null && barPct > 0) {
+      const fill = document.createElement('i');
+      fill.dataset.w = String(Math.min(100, Math.round(barPct)));
+      const bar = document.createElement('div');
+      bar.className = 'js-bar';
+      bar.appendChild(fill);
+      t.appendChild(bar);
+    }
+    return t;
+  }
+
+  _statsHead(numeral, name, sub, rank, score) {
+    const head = document.createElement('header');
+    head.className = 'js-head';
+    const n = document.createElement('span');
+    n.className = 'js-numeral title-font';
+    n.textContent = numeral;
+    const div = document.createElement('div');
+    const h = document.createElement('h3');
+    h.textContent = name;
+    const p = document.createElement('p');
+    p.className = 'js-sub';
+    p.textContent = `${sub} · score ${score} / 100`;
+    div.append(h, p);
+    const badge = document.createElement('span');
+    badge.className = 'rank-badge';
+    badge.dataset.rank = rank;
+    badge.textContent = rank;
+    head.append(n, div, badge);
+    return head;
+  }
+
+  _statsLevelSection(i, [numeral, name, sub], rec, score) {
+    const rank = rankFor(score);
+    const s = document.createElement('section');
+    s.className = 'js-section';
+    s.appendChild(this._statsHead(numeral, name, sub, rank, score));
+    const title = document.createElement('p');
+    title.className = 'js-title';
+    title.innerHTML = `Title earned — <b>${LEVEL_TITLES[i][rank]}</b>`;
+    s.appendChild(title);
+    const grid = document.createElement('div');
+    grid.className = 'js-grid';
+    grid.append(
+      this._statsTile('clues', rec.clues, rec.cluesTotal, 'Clues found',
+        rec.cluesTotal > 0 ? (100 * rec.clues) / rec.cluesTotal : 0),
+      this._statsTile('puzzles', rec.puzzles, rec.puzzlesTotal, 'Puzzles solved',
+        rec.puzzlesTotal > 0 ? (100 * rec.puzzles) / rec.puzzlesTotal : 0),
+      this._statsTile('time', rec.time, null, 'Time in era',
+        (100 * PAR_TIMES[i]) / Math.max(1, rec.time)),
+      this._statsTile('int', (rec.falls || 0) + (rec.shocks || 0), null, 'Falls & shocks'),
+      this._statsTile('int', rec.rewinds, null, 'Era rewinds'),
+      this._statsTile('int', rec.checkpoints, null, 'Checkpoints'),
+      this._statsTile('m', rec.distance, null, 'Distance walked'),
+    );
+    s.appendChild(grid);
+    return s;
+  }
+
+  _statsOverallSection(summary) {
+    const rank = rankFor(summary.overall);
+    const t = summary.totals;
+    const s = document.createElement('section');
+    s.className = 'js-section';
+    s.appendChild(this._statsHead('∞', 'The Whole Adventure', 'All three eras combined', rank, summary.overall));
+    const title = document.createElement('p');
+    title.className = 'js-title';
+    title.innerHTML = `Title earned — <b>${OVERALL_TITLES[rank]}</b>`;
+    s.appendChild(title);
+    const medal = document.createElement('span');
+    medal.className = `js-medal ${summary.medal}`;
+    medal.textContent = `${summary.medal[0].toUpperCase()}${summary.medal.slice(1)} medal of the hourglass`;
+    s.appendChild(medal);
+    const grid = document.createElement('div');
+    grid.className = 'js-grid';
+    grid.append(
+      this._statsTile('time', t.time, null, 'Journey time',
+        (100 * t.parTotal) / Math.max(1, t.time)),
+      this._statsTile('clues', t.clues, t.cluesTotal, 'Clues found',
+        t.cluesTotal > 0 ? (100 * t.clues) / t.cluesTotal : 0),
+      this._statsTile('puzzles', t.puzzles, t.puzzlesTotal, 'Puzzles solved',
+        t.puzzlesTotal > 0 ? (100 * t.puzzles) / t.puzzlesTotal : 0),
+      this._statsTile('int', t.falls, null, 'Falls through time'),
+      this._statsTile('int', t.shocks, null, 'Shocks taken'),
+      this._statsTile('int', t.rewinds, null, 'Era rewinds'),
+      this._statsTile('int', t.checkpoints, null, 'Checkpoints reached'),
+      this._statsTile('m', t.distance, null, 'Distance walked'),
+    );
+    s.appendChild(grid);
+    const ach = document.createElement('div');
+    ach.className = 'js-achievements';
+    summary.achievements.forEach((a, i) => {
+      const el = document.createElement('div');
+      el.className = `js-ach ${a.tier}`;
+      el.style.animationDelay = `${i * 0.12}s`;
+      const b = document.createElement('b');
+      b.textContent = a.name;
+      const d = document.createElement('span');
+      d.textContent = a.detail;
+      el.append(b, d);
+      ach.appendChild(el);
+    });
+    s.appendChild(ach);
+    return s;
+  }
+
 
   /* ----------------------------- cinematics ------------------------- */
   cinema(on, letterbox = true, hint = 'X — skip cinematic · Esc — pause') {

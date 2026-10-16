@@ -28,7 +28,9 @@ export class AudioManager {
     this.musicBus = this.ctx.createGain();
     this.sfxBus = this.ctx.createGain();
     this.ambBus = this.ctx.createGain();
-    for (const bus of [this.musicBus, this.sfxBus, this.ambBus]) bus.connect(this.listener.getInput());
+    this.voiceBus = this.ctx.createGain();
+    for (const bus of [this.musicBus, this.sfxBus, this.ambBus, this.voiceBus]) bus.connect(this.listener.getInput());
+    this.voice = null;          // { source, gain } — the one line currently speaking
 
     this.music = null;          // { source, gain, name }
     this.ambience = null;       // { nodes[], gain }
@@ -50,6 +52,7 @@ export class AudioManager {
     this.musicBus.gain.setTargetAtTime(settings.get('musicVolume'), t, 0.05);
     this.sfxBus.gain.setTargetAtTime(settings.get('sfxVolume'), t, 0.05);
     this.ambBus.gain.setTargetAtTime(settings.get('sfxVolume') * 0.8, t, 0.05);
+    this.voiceBus.gain.setTargetAtTime(settings.get('sfxVolume'), t, 0.05);
   }
 
   /* ------------------------------ music ------------------------------ */
@@ -129,6 +132,51 @@ export class AudioManager {
   }
 
   stopEffects() { for (const source of this.effects) { try { source.stop(); } catch { /* ended */ } } }
+
+  /* ------------------------------ voice acting ----------------------- */
+  /**
+   * Spoken dialogue (src/core/voice.js). One line at a time: starting a new
+   * line or advancing the dialogue stops the previous one — voices never
+   * overlap. The music ducks under speech so the line stays intelligible.
+   */
+  playVoice(name) {
+    this.stopVoice();
+    const buffer = assets.audio(`voice:${name}`);
+    if (!buffer || this.ctx.state !== 'running') return;
+    const source = this.ctx.createBufferSource();
+    source.buffer = buffer;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 1.25;      // speech sits just above the mix, like a lead vocal
+    source.connect(gain).connect(this.voiceBus);
+    const startedAt = this.ctx.currentTime;
+    source.start();
+    this.voice = { source, gain, name, startedAt, duration: buffer.duration };
+    this.duck(0.4, buffer.duration + 1.2);
+    source.onended = () => {
+      if (this.voice?.source === source) this.voice = null;
+      source.disconnect(); gain.disconnect();
+    };
+  }
+
+  /**
+   * Position inside the line the listener is HEARING right now (seconds), or
+   * null when nothing is speaking. Subtracts the output device latency, so
+   * lip-sync driven by this stays in step with the actual sound.
+   */
+  voiceTime() {
+    if (!this.voice) return null;
+    const latency = this.ctx.outputLatency || this.ctx.baseLatency || 0;
+    return this.ctx.currentTime - this.voice.startedAt - latency;
+  }
+
+  stopVoice() {
+    const v = this.voice;
+    if (!v) return;
+    this.voice = null;
+    v.source.onended = null;
+    try { v.source.stop(); } catch { /* already ended */ }
+    v.source.disconnect(); v.gain.disconnect();
+  }
 
   /** Random variant: playVariant('step-grass', 4) → step-grass-0..3 */
   playVariant(prefix, count, opts) {

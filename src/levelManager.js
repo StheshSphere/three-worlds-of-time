@@ -5,6 +5,7 @@ import { createSky } from './shaders/sky.js';
 import { settings } from './core/settings.js';
 import { JourneyStore, SAVE_VERSION, validateSave } from './core/save.js';
 import { assets } from './core/assets.js';
+import { createRunStats, countPuzzles } from './core/stats.js';
 import { ERA_CARDS } from './story.js';
 import * as ancientRuins from './levels/ancientRuins.js';
 import * as modernLab from './levels/modernLab.js';
@@ -64,6 +65,10 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
   const timers = [];
   const after = (milliseconds, fn) => timers.push({ remaining: milliseconds / 1000, fn });
   const stats = { runTime: 0, falls: 0, rewinds: 0, shocks: 0 };
+  // Silent journey statistics (src/core/stats.js) — recorded during play,
+  // revealed only after the ending story. Never shown between levels.
+  const runStats = createRunStats();
+  const _walkFrom = new THREE.Vector3(Infinity, 0, Infinity);
   const callbacks = { onFail: null, onFinale: null, onLoaded: null, onEraArrive: null };
 
   /* ------------------------------ the level API ------------------------------ */
@@ -97,6 +102,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     setMarker: (pos, color) => { marker = pos ? pos.clone() : null; minimap.setObjective(marker, color); },
     checkpoint: (pos, yaw, label = 'Checkpoint — the timeline remembers this moment.') => {
       player.setCheckpoint(pos, yaw); requestSave();
+      runStats.checkpoint();
       if (label) ui.message(label, 2200);
       audio.play('checkpoint', { volume: 0.5 });
     },
@@ -109,6 +115,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
       if (state !== 'playing' || ui.dialogue.active) return;
       if (player.hurt(opts)) {
         stats.shocks++;
+        runStats.shock();
         ui.damage();
         audio.play('zap', { volume: 0.9 });
         if (opts.penalty) api.penalize(opts.penalty, opts.reason);
@@ -131,6 +138,11 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
   };
 
   /* ------------------------------ disposal ----------------------------------- */
+  // Silent statistics: every clue she interacts with counts once per level mount.
+  player.addEventListener('interact', (e) => {
+    if (e.object?.userData?.interaction?.kind === 'clue') runStats.clue(e.object);
+  });
+
   function disposeObject(root, dispose) {
     if (root.userData?.persistent) return;
     root.traverse((o) => {
@@ -207,6 +219,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     index = i;
     meta = levelMeta;
     time = 0;
+    runStats.beginEra(i);
     const q = settings.quality();
 
     // Sky dome + image-based lighting rendered from it.
@@ -338,6 +351,19 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
   /* ------------------------------ core → next era ---------------------------- */
   function beginCoreSequence() {
     if (state !== 'playing') return;
+    // Commit this level's final, measured statistics before the transition.
+    const snap = level.snapshot();
+    const cluesTotal = level.interactables.filter((o) => o.userData.interaction?.kind === 'clue').length;
+    const reached = snap.state?.reached;
+    runStats.complete(index, {
+      puzzles: countPuzzles(index, snap.state),
+      cluesTotal,
+      extras: index === 2 && Array.isArray(reached) ? {
+        sections: reached.filter(Boolean).length,
+        sectionsTotal: reached.length,
+        collapseSurvived: !!snap.state.collapseComplete,
+      } : null,
+    });
     // Commit the core milestone at a consistent checkpoint before any teleport.
     saveGame({ silent: true, checkpointOnly: true });
     state = 'transition';
@@ -368,6 +394,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
 
   function retryEra() {
     stats.rewinds++;
+    runStats.rewind();
     player.frozen = false;
     postfx.u.uFlash.value = 0;
     postfx.u.uWarp.value = 0;
@@ -381,6 +408,8 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     if (!opts.cutscene) ui.dialogue.resetJourney();
     timeMachine.reset();
     stats.runTime = 0; stats.falls = 0; stats.rewinds = 0; stats.shocks = 0;
+    runStats.reset();
+    _walkFrom.set(Infinity, 0, Infinity);
     ui.setCores(0);
     player.hero.setCores(0);
     ui.resetJournal();
@@ -457,6 +486,12 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
 
     if (state === 'playing' && !ui.dialogue.active) {
       stats.runTime += dt;
+      runStats.tick(dt);
+      const dx = player.position.x - _walkFrom.x;
+      const dz = player.position.z - _walkFrom.z;
+      const walked = Math.hypot(dx, dz);
+      if (walked < 5) runStats.walk(walked);   // large jumps are teleports, not steps
+      _walkFrom.copy(player.position);
       stability -= dt;
       const frac = stability / stabilityMax;
       ui.setStability(frac, stability);
@@ -552,6 +587,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     const save = { version: SAVE_VERSION, savedAt: Date.now(), status: completed ? 'complete' : 'active',
       era: index, cores: completed ? 3 : index, eras: eraProgress,
       player: player.savePose(checkpointOnly || index === 2), stats: { ...stats },
+      runStats: runStats.snapshot(),
       journal: ui.journal.map(j => ({ ...j })), dialogue: ui.dialogue.snapshot() };
     const result = store.write(save);
     // A failed autosave is retried at the periodic interval, never every frame.
@@ -565,6 +601,8 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     restoring = true; runActive = true; dirty = false;
     eraProgress = JSON.parse(JSON.stringify(save.eras));
     Object.assign(stats, save.stats);
+    runStats.restore(save.runStats);
+    _walkFrom.set(Infinity, 0, Infinity);   // ignore the resume teleport
     timeMachine.reset();
     let target = save.era;
     let completed = save.status === 'complete';
@@ -633,9 +671,11 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     registerFall() {
       if (ui.dialogue.active) return;
       stats.falls++;
+      runStats.fall();
       api.penalize(meta?.fallPenalty ?? 15, 'You slipped out of time');
       audio.play('warp', { volume: 0.5 });
       player.reset();
     },
+    runStats,
   };
 }

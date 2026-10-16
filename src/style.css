@@ -410,3 +410,55 @@ body.reading .hud-top-left, body.reading #message-banner, body.reading #interact
 }
 body.reading #future-lock-guide { visibility: hidden; }
 @media(max-width:760px) { #future-lock-guide { top: 15%; width: 90vw; padding: 8px; font-size: 15px; } }
+
+/* =====================================================================
+   FINAL JOURNEY STATISTICS — "Your Journey Through Time".
+   Shown once, after the ending story and credits, before the win screen.
+   ===================================================================== */
+.journey-stats { width: min(840px, 96vw); max-width: 96vw; max-height: 94vh; }
+#journey-stats-body { min-height: 330px; }
+.js-section { animation: jsIn 0.5s ease both; }
+@keyframes jsIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.js-head { display: flex; align-items: center; gap: 1rem; text-align: left; margin: 0.4rem 0 0.9rem; }
+.js-numeral { font-size: 2rem; color: var(--gold); text-shadow: 0 0 18px rgba(242, 200, 121, 0.5); width: 2.7rem; text-align: center; flex: none; }
+.js-head h3 { margin: 0; font-size: 1.45rem; color: #fff; }
+.js-sub { margin: 0.15rem 0 0; color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase; font-size: 0.78rem; }
+.js-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 0.65rem; margin: 0.5rem 0 0.8rem; }
+.js-stat { padding: 0.55rem 0.7rem; border-radius: 10px; background: rgba(255, 255, 255, 0.045); border: 1px solid var(--line); text-align: left; }
+.js-value { display: block; font-size: 1.3rem; font-weight: 700; color: var(--gold); font-variant-numeric: tabular-nums; }
+.js-label { display: block; font-size: 0.8rem; color: var(--muted); letter-spacing: 0.07em; text-transform: uppercase; margin-top: 0.1rem; }
+.js-bar { height: 4px; margin-top: 0.45rem; border-radius: 4px; background: rgba(255, 255, 255, 0.09); overflow: hidden; }
+.js-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--gold-deep), var(--gold)); box-shadow: 0 0 10px var(--accent-glow); transition: width 1.1s ease; }
+.rank-badge { margin-left: auto; width: 64px; height: 64px; flex: none; display: grid; place-items: center;
+  font: 700 2.1rem 'Cinzel', serif; color: var(--text); border: 2px solid var(--line); border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03); opacity: 0; }
+.rank-badge.reveal { animation: rankIn 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.4) both; }
+@keyframes rankIn { from { opacity: 0; transform: scale(0.4) rotate(-8deg); } to { opacity: 1; transform: scale(1); } }
+.rank-badge[data-rank="S"] { border-color: #ffd76b; color: #ffd76b; box-shadow: 0 0 26px rgba(255, 215, 107, 0.45), inset 0 0 18px rgba(255, 215, 107, 0.2); }
+.rank-badge[data-rank="A"] { border-color: #8dffb1; color: #8dffb1; box-shadow: 0 0 22px rgba(141, 255, 177, 0.35), inset 0 0 14px rgba(141, 255, 177, 0.15); }
+.rank-badge[data-rank="B"] { border-color: #7db8ff; color: #7db8ff; box-shadow: 0 0 20px rgba(125, 184, 255, 0.3), inset 0 0 12px rgba(125, 184, 255, 0.12); }
+.rank-badge[data-rank="C"] { border-color: #b9b2a3; color: #b9b2a3; }
+.js-title { margin: 0.2rem 0 0.4rem; font-size: 1.08rem; color: var(--text); letter-spacing: 0.06em; }
+.js-title b { color: var(--gold); }
+.js-medal { display: inline-block; margin: 0.25rem 0 0.7rem; padding: 0.28rem 1.2rem; border-radius: 999px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; font-size: 0.95rem; }
+.js-medal.gold { color: #ffd76b; border: 1px solid #ffd76b; box-shadow: 0 0 22px rgba(255, 215, 107, 0.35); }
+.js-medal.silver { color: #dbe4ee; border: 1px solid #dbe4ee; box-shadow: 0 0 18px rgba(219, 228, 238, 0.25); }
+.js-medal.bronze { color: #e8a06b; border: 1px solid #e8a06b; box-shadow: 0 0 18px rgba(232, 160, 107, 0.25); }
+.js-overall-rank { font-size: 1.2rem; margin: 0.4rem 0 0.1rem; color: var(--text); }
+.js-overall-rank b { color: var(--gold); letter-spacing: 0.1em; }
+.js-achievements { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0.55rem; margin: 0.7rem 0 0.2rem; text-align: left; }
+.js-ach { padding: 0.5rem 0.8rem; border-radius: 10px; background: rgba(255, 255, 255, 0.045); border-left: 3px solid var(--gold); animation: jsIn 0.45s ease both; }
+.js-ach b { display: block; color: var(--gold); font-size: 1.02rem; }
+.js-ach span { color: var(--muted); font-size: 0.9rem; }
+.js-ach.silver { border-left-color: #cdd8e6; } .js-ach.silver b { color: #dbe4ee; }
+.js-ach.bronze { border-left-color: #e8a06b; } .js-ach.bronze b { color: #e8a06b; }
+@media (prefers-reduced-motion: reduce) {
+  .js-section, .rank-badge.reveal, .js-ach { animation: none; opacity: 1; transform: none; }
+  .rank-badge { opacity: 1; }
+  .js-bar i { transition: none; }
+}
+@media (max-width: 620px) {
+  .js-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rank-badge { width: 52px; height: 52px; font-size: 1.7rem; }
+  .js-numeral { width: 2rem; font-size: 1.5rem; }
+}

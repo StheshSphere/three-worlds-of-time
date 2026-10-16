@@ -41,6 +41,28 @@ function placeHero(player, pos, facing) {
   player.hero.group.visible = true;
 }
 
+const UP = v3(0, 1, 0);
+
+/** Ari's gaze on the ground plane (same convention as cinematic.js). */
+const gazeOf = (facing) => v3(Math.sin(facing), 0, Math.cos(facing));
+
+/**
+ * A front ¾ camera shot that keeps Ari's face in frame: `ang` radians off her
+ * gaze, dollying from d0 to d1 metres at head height (the face aim matches
+ * cinematic.js). Alternating the sign of `ang` moves the shot to her other
+ * side — the same angle, seen from the other shoulder.
+ */
+function faceShot(at, gaze, ang, d0, d1, lift = 0.12, dur = 4.4) {
+  const face = at.clone().addScaledVector(gaze, 0.28).setY(1.46);
+  const dir = gaze.clone().applyAxisAngle(UP, ang);
+  return {
+    pos: face.clone().addScaledVector(dir, d0).setY(face.y + lift).toArray(),
+    toPos: face.clone().addScaledVector(dir, d1).setY(face.y + lift).toArray(),
+    look: face.toArray(),
+    dur,
+  };
+}
+
 export function prologue({ player, timeMachine: tm, audio, postfx, ui, cs, set }) {
   const A = set.anchors;
   const ari = A.ariPos;
@@ -100,6 +122,7 @@ export function prologue({ player, timeMachine: tm, audio, postfx, ui, cs, set }
 
 export function wakeUp({ player, postfx, cs, audio }) {
   const lie = v3(1.3, 0, 6.6);
+  const gaze = gazeOf(2.3);                      // on her feet, facing the plaza
   return [
     { at: 0, run: () => {
       placeHero(player, lie, 2.3);
@@ -112,10 +135,17 @@ export function wakeUp({ player, postfx, cs, audio }) {
     { at: 0, cam: { pos: [3.3, 0.85, 8.4], look: [1.3, 0.35, 6.6], toPos: [3.0, 1.1, 8.0], dur: 4.2 } },
     { at: 1.0, say: ['Ari', 'Ugh… where am I? …No — WHEN am I?', 3.2] },
     { at: 4.0, run: () => player.hero.play('getUp', { hold: true, speed: 1.1 }) },
-    { at: 4.4, cam: { pos: [3.8, 2.0, 10.4], look: [0.6, 1.6, 4], toPos: [-1.6, 3.6, 13], toLook: [0, 2.6, -8], dur: 7 } },
+    // Back on her feet: ¾ front as she takes in the machine.
+    { at: 4.4, cam: faceShot(lie, gaze, -0.5, 3.1, 2.75, 0.16, 4.6) },
     { at: 4.6, say: ['Ari', 'The machine came with me… but its sockets are empty.', 3.6] },
-    { at: 8.4, say: ['Ari', 'If I can find all three cores, I can put time back together. That temple looks like a good place to start.', 4.6] },
-    { at: 13.2, end: true },
+    // The plan forms: close on her face — "put time back together" — then a cut
+    // to the temple she names, her voice carrying over the reveal.
+    { at: 8.3, cam: faceShot(lie, gaze, 0.55, 2.1, 2.0, 0.1, 4.8) },
+    { at: 8.4, say: ['Ari', 'If I can find all three cores, I can put time back together. That temple looks like a good place to start.', 4.6],
+      cut: { after: 2.6, cam: { pos: [4.2, 3.0, 9.8], look: [-0.6, 2.6, -6], toPos: [3.6, 3.1, 9.0], dur: 2.4 } } },
+    // Settle on Ari looking towards the temple — where she is about to go.
+    { at: 11.8, cam: { pos: [3.0, 2.2, 10.6], look: [0.2, 1.5, -2], toPos: [2.4, 2.05, 10.0], dur: 3.0 } },
+    { at: 14.2, end: true },
   ];
 }
 
@@ -128,6 +158,18 @@ export const ARRIVALS = {
     ['Ari', 'Too far forward… This is still the lab — in the year 2187. The whole skyline is tearing itself apart.', 5.6],
     ['Ari', 'The last core is up on that spire. My gauntlet is humming — I think I can dash through time now.', 5.6],
   ],
+};
+
+/**
+ * What each arrival scene's environmental beat looks at, when the mid-line
+ * reveal cut fires. Era 1: the sealed vault on the east wall (its monitors
+ * still read "CORE: CONTAINED" in the blackout). Era 2: the spire far down
+ * the neon route — the core she names, up in the torn skyline. Era 0 has no
+ * arrival scene (the wake-up cutscene frames its own temple shot).
+ */
+export const ARRIVAL_AIM = {
+  1: [11.5, 1.8, 1.8],
+  2: [-3.6, 6, -141],
 };
 
 /**

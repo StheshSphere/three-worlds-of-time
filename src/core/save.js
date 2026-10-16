@@ -49,6 +49,15 @@ function dialogueValid(d) {
   });
 }
 
+/** Journey statistics (src/core/stats.js). Optional: older saves predate it. */
+function runStatsValid(r) {
+  if (r == null) return true;
+  if (!record(r) || !integer(r.era, 0, 2) || !Array.isArray(r.levels) || r.levels.length !== 3) return false;
+  return r.levels.every(l => l == null || (record(l) &&
+    ['time', 'clues', 'cluesTotal', 'puzzles', 'puzzlesTotal', 'falls', 'shocks', 'rewinds', 'checkpoints', 'distance']
+      .every(k => number(l[k], 0, 1e9)) && (l.extras == null || record(l.extras))));
+}
+
 export function validateSave(s) {
   if (!record(s) || s.version !== SAVE_VERSION || !integer(s.savedAt, 1, 1e16) ||
       !['active', 'complete'].includes(s.status) || !integer(s.era, 0, 2) || !integer(s.cores, 0, 3) ||
@@ -67,7 +76,7 @@ export function validateSave(s) {
     ['first', 'third'].includes(s.player.mode) && bool(s.player.flashlightOn) &&
     ['runTime', 'falls', 'rewinds', 'shocks'].every(k => number(s.stats[k], 0, 1e9)) &&
     Array.isArray(s.journal) && s.journal.length <= 100 && s.journal.every(j => record(j) && text(j.html, 100000) && (j.key == null || text(j.key, 100))) &&
-    dialogueValid(s.dialogue);
+    dialogueValid(s.dialogue) && runStatsValid(s.runStats);
 }
 
 export class JourneyStore {

@@ -5,6 +5,7 @@ import * as THREE from 'three';
  *
  *   { at: 4,  cam: { pos:[x,y,z], look:[x,y,z], toPos?, toLook?, dur? } }  camera shot (eased dolly)
  *   { at: 4,  say: ['Ari', 'Line of dialogue', 4.5] }                        caption (legacy duration ignored)
+ *   { at: 4,  say: […], cut: { after: 2.5, cam: {…} } }                      live cut mid-caption
  *   { at: 9,  run: (ctx) => { … } }                                          any game event
  *   { at: 30, end: true }                                                    finish
  *
@@ -38,6 +39,7 @@ export class Cutscene {
     this.waiting = false;
     this.shakeAmount = 0;
     this.tweens = [];
+    this.cuts = null;
     this.end = Math.max(...this.steps.map((s) => s.at + (s.cam?.dur || 0)));
     const endStep = this.steps.find((s) => s.end);
     if (endStep) this.end = endStep.at;
@@ -58,6 +60,7 @@ export class Cutscene {
     if (this.tweens) { for (const tw of this.tweens) tw(999); this.tweens = []; }
     this.active = false;
     this.waiting = false;
+    this.cuts = null;
     this.ui.cinema(false);
     this.ui.caption(null);
     const cb = this.onDone;
@@ -73,6 +76,7 @@ export class Cutscene {
     this.waiting = false;
     this.steps = [];
     this.tweens = [];
+    this.cuts = null;
     this.shot = null;
     this.ctx = null;
     this.onDone = null;
@@ -94,14 +98,22 @@ export class Cutscene {
       if (s.say) {
         this.t = s.at;
         this.waiting = true;
+        this.cuts = s.cut ? { left: s.cut.after, cam: s.cut.cam } : null;
         this.ui.caption(s.say[0], s.say[1], s.say[2], { onDone: () => {
           this.waiting = false;
+          this.cuts = null;
           // The old subtitle reading delay is now supplied by the player.
           // Resume at the next beat, without an extra automatic reading wait.
           const next = this.steps.find(step => !step.fired);
           if (next) this.t = next.at;
         } });
       }
+    }
+    // A mid-caption cut runs on real time: the step clock is frozen while a
+    // caption waits, but the camera may still cut under the spoken line.
+    if (this.waiting && this.cuts) {
+      this.cuts.left -= dt;
+      if (this.cuts.left <= 0) { this.shot = { ...this.cuts.cam, elapsed: 0 }; this.cuts = null; }
     }
     if (this.shot) {
       const sh = this.shot;

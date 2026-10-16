@@ -59,7 +59,8 @@ Every member should be able to talk through **at least the first five** below. E
   (Time Machine ripple), `uPulse` ← checkpoint earned (beacons).
 - *Performance?* Instancing (grass, city, traffic, leaves) keeps draw calls low; particles and traffic animate on the GPU;
   stars and distant city lights are one GPU-animated `Points` draw each and also scale down on Low quality;
-  reflections render at ⅓–½ resolution and are off on Low quality.
+  the temple-pool mirror always renders (0.4–0.7 × viewport depending on tier); the lab-floor
+  reflection follows the quality preset (off on Low).
 
 ## The Future clip — re-record it and what to narrate
 

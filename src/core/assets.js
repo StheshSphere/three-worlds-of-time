@@ -73,6 +73,22 @@ export const MANIFEST = {
   /** Member 2 · the Present — optional era-specific cues from audio/modern-lab/.
    *  Registered as 'modern-lab:<name>'; a missing file is skipped silently. */
   'modern-lab': [], // No extra recordings ship; modernLab uses the shared SFX fallbacks.
+  /**
+   * Voice acting (dev-only tool tools/generate-voice.py): the female
+   * protagonist, Prof. Adeyemi and the male storyteller. Files are plain
+   * mp3s generated ahead of time — playback needs no keys or network.
+   * Registered as 'voice:<name>'; looked up by exact dialogue text in
+   * src/core/voice.js.
+   */
+  voice: [
+    'nar-intro', 'ari-wait', 'ari-eighty', 'ari-shutdown', 'ari-cores', 'nar-shattered',
+    'ari-where', 'ari-machine', 'ari-find',
+    'ari-lab', 'ari-vault', 'ari-2187', 'ari-spire',
+    'nar-morning', 'ari-whole', 'prof-sensors', 'ari-kettle', 'nar-harmony',
+    'ari-plates', 'ari-gate-open', 'ari-beam', 'ari-bridge', 'ari-tablet1', 'ari-tablets3',
+    'ari-altar-need', 'ari-altar-set',
+    'ari-ink', 'ari-console', 'ari-powered',
+  ],
 };
 
 const textures = new Map();   // name -> { color, normal, arm }
@@ -111,7 +127,7 @@ export const assets = {
 
     const jobs = [];
     let done = 0;
-    const total = MANIFEST.textures.length * 3 + Object.keys(MANIFEST.models).length + MANIFEST.music.length + MANIFEST.sfx.length + MANIFEST['modern-lab'].length;
+    const total = MANIFEST.textures.length * 3 + Object.keys(MANIFEST.models).length + MANIFEST.music.length + MANIFEST.sfx.length + MANIFEST['modern-lab'].length + MANIFEST.voice.length;
 
     // Bar = finished jobs + the real byte share of every in-flight download,
     // over the job count. Jobs without progress events (images decode in one
@@ -172,6 +188,7 @@ export const assets = {
     };
     for (const m of MANIFEST.music) jobs.push(decode(`music:${m}`, `${BASE}audio/music/${m}.ogg`));
     for (const s of MANIFEST.sfx) jobs.push(decode(s, `${BASE}audio/sfx/${s}.ogg`));
+    for (const v of MANIFEST.voice) jobs.push(decode(`voice:${v}`, `${BASE}audio/voice/${v}.mp3`));
     // Member 2 · optional Lab cues — a missing file is skipped silently (no
     // console warning): the Lab is fully audible on the shared sounds alone.
     const decodeOptional = (name, url) => {

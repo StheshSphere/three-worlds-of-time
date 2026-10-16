@@ -19,6 +19,7 @@ const { UI } = await import('../src/core/ui.js');
 const { Cutscene } = await import('../src/core/cutscene.js');
 const { assets } = await import('../src/core/assets.js');
 const { ARRIVALS, ERA_CARDS } = await import('../src/story.js');
+const { summarizeJourney, scoreLevel } = await import('../src/core/stats.js');
 settings.set('quality', 'low');
 const results = [];
 function test(name, fn) {
@@ -35,7 +36,7 @@ const tm = createTimeMachine(); scene.add(tm);
 const sounds = [];
 const positionals = new Set();
 const audio = {
-  play(name) { sounds.push(name); }, stopEffects() {}, stopMusic() {}, duck() {},
+  play(name) { sounds.push(name); }, stopEffects() {}, stopMusic() {}, duck() {}, playVoice() {}, stopVoice() {},
   playMusic(name) { this.music = name; }, setAmbience(name) { this.ambience = name; },
   positional(name, object) {
     const sound = { isPlaying: true, setVolume() {}, pause() { this.isPlaying = false; }, play() { this.isPlaying = true; } };
@@ -288,7 +289,35 @@ test('Save 5: Repeated loads preserve object/collider/audio counts and do not du
   const loaded=levels.continueJourney(done); assert.equal(loaded.completed,true); assert.equal(tm.getCores(),3);
 });
 
-test('Save 6: Missing, malformed, future-version and inconsistent saves disable Continue safely', () => {
+test('Save 6: Measured journey stats persist through save/resume and score without double counting', () => {
+  levels.continueJourney(futureSave); continueDialogue();
+  const rs=levels.runStats;
+  rs.restore({ era: 2, levels: [
+    { time:385, clues:8, cluesTotal:9, puzzles:4, puzzlesTotal:4, falls:1, shocks:2, rewinds:0, checkpoints:3, distance:412 },
+    { time:460, clues:7, cluesTotal:8, puzzles:3, puzzlesTotal:3, falls:0, shocks:1, rewinds:1, checkpoints:2, distance:350 },
+    { time:290, clues:5, cluesTotal:6, puzzles:1, puzzlesTotal:1, falls:1, shocks:0, rewinds:0, checkpoints:4, distance:620 } ] });
+  const t0=rs.levels[2].time; play(1);
+  assert.ok(rs.levels[2].time>t0);            // live ticking only touches the current era
+  assert.equal(rs.levels[0].time,385); assert.equal(rs.levels[1].time,460);
+  const data=save();                          // runStats snapshot passes validateSave
+  assert.equal(data.runStats.era,2);
+  assert.equal(data.runStats.levels[0].clues,8); assert.equal(data.runStats.levels[1].rewinds,1);
+  levels.continueJourney(data); continueDialogue();
+  const r2=levels.runStats;
+  assert.equal(r2.levels[0].clues,8); assert.equal(r2.levels[0].distance,412);
+  assert.equal(r2.levels[1].cluesTotal,8); assert.ok(r2.levels[2].time>=290);
+  const sum=summarizeJourney(r2);
+  assert.deepEqual(sum.scores,[scoreLevel(r2.levels[0],420),scoreLevel(r2.levels[1],420),scoreLevel(r2.levels[2],315)]);
+  assert.equal(sum.overall,78);
+  assert.equal(sum.totals.clues,20); assert.equal(sum.totals.distance,1382);
+  const names=sum.achievements.map(a=>a.name);
+  assert.ok(names.includes('Guardian of the Three Worlds'));
+  assert.ok(names.includes('Swift Chrononaut')); assert.ok(names.includes('Trailblazer'));
+  assert.ok(!names.includes('Fearless Adventurer'));   // 2 falls disqualify it
+  assert.ok(!names.includes('Legendary Explorer'));    // 20 of 23 clues
+});
+
+test('Save 7: Missing, malformed, future-version and inconsistent saves disable Continue safely', () => {
   const mem=new Map(); const store=new JourneyStore(()=>({getItem:k=>mem.get(k),setItem:(k,v)=>mem.set(k,v)}));
   assert.equal(store.read().status,'missing');
   mem.set(SAVE_KEY,'{'); assert.equal(store.read().status,'corrupt');

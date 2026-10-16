@@ -249,8 +249,23 @@ export function build(kit, api, { save = null } = {}) {
   const water = createWater(10.4, 12.4, { quality: q, sunDir, scene });
   water.mesh.position.set(poolX, 0.25, poolZ);
   kit.add(water.mesh);
+  kit.add(water.rings);        // visible expanding rings (works at every quality)
+  kit.add(water.droplets);     // splash particles
   kit.track(water);
-  kit.update((dt, t) => water.update(t));
+  // Interactive water: rings trail Ari as she wades, jumps and lands in the pool.
+  const poolPlayer = api.player;
+  kit.update((dt, t) => water.update(t, dt, poolPlayer.position));
+  const onPoolStep = () => water.footstep(poolPlayer.position);
+  const onPoolLand = (e) => water.splash(poolPlayer.position, Math.min(1, (e.speed || 6) / 12));
+  const onPoolJump = () => water.splash(poolPlayer.position, 0.4);
+  poolPlayer.addEventListener('step', onPoolStep);
+  poolPlayer.addEventListener('land', onPoolLand);
+  poolPlayer.addEventListener('jump', onPoolJump);
+  kit.track({ dispose() {
+    poolPlayer.removeEventListener('step', onPoolStep);
+    poolPlayer.removeEventListener('land', onPoolLand);
+    poolPlayer.removeEventListener('jump', onPoolJump);
+  } });
   // Fountain wall behind the pool, with a walkway between.
   wall(26.5, -9, 26.5, 11, 6.5, 1.2, M.wall);
   kit.box({ size: [3, 0.1, 18], pos: [25, 0.05, 1], mat: M.floor, tile: 2, solid: false, surface: 'stone' });

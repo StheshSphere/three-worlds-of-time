@@ -305,6 +305,10 @@
               cardboard_box_01, WetFloorSign_01, vintage_grandfather_clock_01, SchoolChair_01, utility_box_01, modular_pipes
               (simplified and recompressed by our asset pipeline)</li>
           <li><b>Sound effects</b> — Kenney (kenney.nl) — CC0: Impact Sounds, Interface Sounds, Sci-Fi Sounds, RPG Audio, Music Jingles</li>
+          <li><b>Voice acting</b> — synthesised ahead of time (tools/generate-voice.py) with Microsoft Edge neural voices via edge-tts
+              (MIT licence, github.com/rany2/edge-tts): Aria (en-US-AriaNeural) as Ari, Emma (en-US-EmmaNeural) as Prof. Adeyemi,
+              and Ryan (en-GB-RyanNeural) as the storyteller narrator. The voices are synthetic; the game plays pre-generated
+              audio files and needs no network, accounts or API keys.</li>
           <li><b>Music</b> — OpenGameArt.org — CC0:
               “Mysterious Ambience (song21)” by cynicmusic / pixelsphere.org (title);
               “Zeal Soul” by Chris Murphy (zesona) (the Past);
@@ -317,6 +321,17 @@
         </ul>
       </div>
       <button class="menu-btn" data-close>Back</button>
+    </div>
+  </div>
+
+  <!-- ============ FINAL JOURNEY STATISTICS (after the ending) ======== -->
+  <div id="journey-stats-screen" class="screen panel-screen hidden">
+    <div class="panel journey-stats">
+      <p class="kicker">The timeline remembers every step</p>
+      <h2 class="title-font">Your Journey Through Time</h2>
+      <div id="journey-stats-body"></div>
+      <p id="journey-stats-hint" class="dialogue-instruction">Press Enter / Click to continue</p>
+      <button id="journey-stats-continue" class="menu-btn primary" type="button">Continue</button>
     </div>
   </div>
 
