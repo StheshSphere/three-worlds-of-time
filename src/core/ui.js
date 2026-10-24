@@ -33,6 +33,8 @@ export class UI {
     this._bindKeypad();
     this._bindPowerGrid();
     this._bindJourneyStats();
+    this._distanceMapEnabled = false;
+    this._bindDistanceHint();
   }
 
   /* ----------------------------- screens ---------------------------- */
@@ -153,6 +155,36 @@ export class UI {
     else if (this._tutorial && !this.dialogue.active) this.tutorial(this._tutorial);
   }
   hideTutorial() { $('tutorial-card').classList.add('hidden'); this._tutorial = null; }
+
+  /** Optional distance aid: each era starts with it hidden. The 3D minimap (M) is independent. */
+  _bindDistanceHint() {
+    const toggle = $('distance-hint-toggle');
+    const menu = $('distance-hint-menu');
+    $('distance-hint-action').addEventListener('click', () => this.setDistanceMapEnabled(true));
+    toggle.addEventListener('click', () => {
+      if (this._distanceMapEnabled) this.setDistanceMapEnabled(false);
+      else {
+        const open = menu.classList.toggle('hidden') === false;
+        toggle.setAttribute('aria-expanded', String(open));
+      }
+    });
+    this.setDistanceMapEnabled(false);
+  }
+
+  get distanceMapEnabled() { return this._distanceMapEnabled; }
+
+  setDistanceMapEnabled(on) {
+    this._distanceMapEnabled = !!on;
+    const toggle = $('distance-hint-toggle');
+    const menu = $('distance-hint-menu');
+    toggle.textContent = on ? 'Hint Off' : 'Hint';
+    toggle.setAttribute('aria-pressed', String(!!on));
+    toggle.setAttribute('aria-expanded', 'false');
+    menu.classList.add('hidden');
+    if (!on) this.setWaypoint(false);
+  }
+
+  toggleDistanceMap() { this.setDistanceMapEnabled(!this._distanceMapEnabled); }
 
   /** A non-directional distance readout. Never points at or tracks clues. */
   setWaypoint(visible, x = 0, y = 0, dist = 0, subject = 'clue') {
@@ -669,6 +701,7 @@ export class UI {
       $('tut-kicker').textContent = entry.card.kicker || 'How to play';
       $('tut-title').textContent = entry.card.title;
       $('tut-body').innerHTML = entry.card.html;
+      $('tut-hint-reminder').classList.toggle('hidden', entry.card.html.includes('<kbd>N</kbd>'));
     } else {
       const box = $('caption');
       box.classList.toggle('in-game', !!entry.inGame);

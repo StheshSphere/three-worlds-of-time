@@ -3,12 +3,12 @@ import { settings, records, DEFAULTS } from './core/settings.js';
 import { assets } from './core/assets.js';
 import { AudioManager } from './core/audio.js';
 import { PostFX } from './core/postfx.js';
-import { UI } from './core/ui.js';
+import { UI } from './core/ui.js?v=n-hint-verified-20261020';
 import { Minimap } from './core/minimap.js';
 import { Player } from './player.js';
 import { interactionPrompt, interactionPoint } from './core/interaction.js';
 import { createTimeMachine } from './timeMachine.js';
-import { createLevelManager } from './levelManager.js';
+import { createLevelManager } from './levelManager.js?v=n-hint-verified-20261020';
 import { Cutscene } from './core/cutscene.js';
 import { Cinematic } from './core/cinematic.js';
 import { StoryCam } from './core/storyCam.js';
@@ -398,6 +398,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.code === 'KeyM' && mode === 'playing') settings.set('minimap', !settings.get('minimap'));
   if (e.code === 'KeyH' && mode === 'playing') ui.toggleTutorial();
+  if (e.code === 'KeyN' && mode === 'playing' && !e.repeat && !ui.panelOpen) ui.toggleDistanceMap();
 });
 
 settings.onChange((key) => {
@@ -416,8 +417,16 @@ window.addEventListener('resize', () => {
    points towards a destination or sticks to the edge of the screen. */
 const _clueDistancePoint = new THREE.Vector3();
 function updateWaypoint() {
-  if (mode !== 'playing' || levels.state !== 'playing' || levels.warming) {
+  if (mode !== 'playing' || levels.state !== 'playing' || levels.warming || !ui.distanceMapEnabled) {
     ui.setWaypoint(false); return;
+  }
+  // Level 2's blue distance badge follows the current checklist objective,
+  // not older, rereadable clues or flashlight-dependent interaction prompts.
+  if (levels.index === 1) {
+    const target = levels.marker;
+    ui.setWaypoint(!!target, 0, 0, target
+      ? Math.hypot(target.x - player.position.x, target.z - player.position.z) : 0, 'clue');
+    return;
   }
   let nearest = Infinity;
   for (const obj of player.interactables) {

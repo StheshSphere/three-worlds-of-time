@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>The Three Worlds of Time — The Broken Hourglass</title>
-  <link rel="stylesheet" href="./src/style.css" />
+  <link rel="stylesheet" href="./src/style.css?v=n-hint-verified-20261020" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 96'%3E%3Cpath d='M8 4h48M8 92h48M14 4c0 26 36 30 36 44S14 70 14 92M50 4c0 26-36 30-36 44s36 22 36 44' stroke='%23f2c879' stroke-width='6' fill='none'/%3E%3C/svg%3E" />
 
   <!-- Import map: the browser resolves "three" with no bundler. Three.js r160 is
@@ -81,6 +81,13 @@
       <ul id="checklist"></ul>
       <div id="hint"></div>
     </div>
+    <!-- Optional distance-only hint: off by default; N toggles it instantly. -->
+    <div id="distance-hint-control" aria-label="Optional distance hint">
+      <button id="distance-hint-toggle" type="button" aria-expanded="false" aria-controls="distance-hint-menu" title="Distance hint (N)">Hint</button>
+      <div id="distance-hint-menu" class="hidden">
+        <button id="distance-hint-action" type="button">Use Distance Map</button>
+      </div>
+    </div>
     <div class="hud-top-center">
       <div class="stability-label">Timeline stability</div>
       <div class="stability-bar"><div id="stability-fill"></div></div>
@@ -107,6 +114,7 @@
       <p class="kicker" id="tut-kicker">How to play</p>
       <h3 id="tut-title" class="title-font"></h3>
       <div id="tut-body"></div>
+      <p id="tut-hint-reminder" class="tutorial-hint-reminder hidden"><kbd>N</kbd> Optional distance hint: press N to show or hide the blue distance map. <kbd>H</kbd> repeats the current instructions.</p>
       <p id="tutorial-card-instruction" class="dialogue-instruction hidden">Press Enter / Click to continue</p>
       <p id="tutorial-card-reminder" class="dialogue-reminder hidden">Press Enter / Click to continue</p>
       <button class="dialogue-continue" type="button">Continue</button>
@@ -116,7 +124,7 @@
     <div id="dash-meter" class="hidden"><kbd>Shift</kbd><div class="dash-fill"></div><span>Run</span></div>
     <div id="minimap-frame"><span class="minimap-n">N</span></div>
     <div class="hud-keys">
-      <span><kbd>H</kbd> help</span><span><kbd>J</kbd> journal</span><span><kbd>M</kbd> map</span><span><kbd>V</kbd> view</span><span><kbd>Esc</kbd> pause</span>
+      <span><kbd>H</kbd> help</span><span><kbd>N</kbd> hint</span><span><kbd>J</kbd> journal</span><span><kbd>M</kbd> map</span><span><kbd>V</kbd> view</span><span><kbd>Esc</kbd> pause</span>
     </div>
   </div>
 
@@ -264,7 +272,8 @@
         <dt><kbd>M</kbd></dt><dd>Toggle minimap</dd>
         <dt><kbd>J</kbd></dt><dd>Field journal (clues you have found)</dd>
         <dt><kbd>H</kbd></dt><dd>Help — show the current instructions again</dd>
-        <dt>◆ marker</dt><dd>Your next goal (with distance); the checklist top-left tracks your progress</dd>
+        <dt><kbd>N</kbd></dt><dd>Optional distance hint — press N to show or hide the blue distance badge for the next clue. Starts OFF in every level. You can also click Hint → Use Distance Map, then Hint Off.</dd>
+        <dt>◆ marker</dt><dd>Optional distance to your next goal (appears only when the hint is on); the checklist top-left still tracks your progress</dd>
         <dt>↓ nearby clue</dt><dd>Other clues use easy invisible E circles. Exception: Archive ink requires the flashlight beam to shine on the wall mark first.</dd>
         <dt><kbd>X</kbd></dt><dd>Skip the current cinematic</dd>
         <dt><kbd>Esc</kbd></dt><dd>Pause</dd>
@@ -363,6 +372,6 @@
   </div>
 
   <noscript>This game needs JavaScript and WebGL (Chrome recommended).</noscript>
-  <script type="module" src="./src/main.js?v=power-grid-v5"></script>
+  <script type="module" src="./src/main.js?v=n-hint-verified-20261020"></script>
 </body>
 </html>

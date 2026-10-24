@@ -7,9 +7,9 @@ import { JourneyStore, SAVE_VERSION, validateSave } from './core/save.js';
 import { assets } from './core/assets.js';
 import { createRunStats, countPuzzles } from './core/stats.js';
 import { ERA_CARDS } from './story.js';
-import * as ancientRuins from './levels/ancientRuins.js';
-import * as modernLab from './levels/modernLab.js';
-import * as neonFuture from './levels/neonFuture.js';
+import * as ancientRuins from './levels/ancientRuins.js?v=n-hint-verified-20261020';
+import * as modernLab from './levels/modernLab.js?v=n-hint-verified-20261020';
+import * as neonFuture from './levels/neonFuture.js?v=n-hint-verified-20261020';
 
 export const LEVELS = [ancientRuins, modernLab, neonFuture];
 
@@ -279,6 +279,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     postfx.setEra(i);
     minimap.setAccent(meta.accent);
     ui.setEra(i, meta.name);
+    ui.setDistanceMapEnabled(false); // New level: hints are opt-in again.
     ui.setObjective(meta.objective);
     ui.setHint('');
     stabilityMax = meta.stability;

@@ -39,9 +39,9 @@ export const meta = {
   fallPenalty: 15,
   introCard: {
     kicker: 'The Past · Your goal', title: 'Find the Ancient Core in this temple',
-    html: '<ul><li>The <b>blue badge</b> shows how far the next clue is, but does not point towards it. Explore to find clues.</li>'
+    html: '<ul><li><b>Optional distance hint:</b> Press <kbd>N</kbd> to show or hide the blue distance badge. It starts OFF. Or click <b>Hint</b> → <b>Use Distance Map</b>; click <b>Hint Off</b> to hide it. It gives distance only, never a direction.</li>'
       + '<li>The <b>checklist</b> (top-left) tracks every step of the temple’s puzzles.</li>'
-      + '<li>Step within a few metres of any clue. An <b>E</b> prompt appears automatically; you do not need to aim at the clue. <kbd>J</kbd> opens your journal; <kbd>H</kbd> shows help again.</li>'
+      + '<li>Step within a few metres of any clue. An <b>E</b> prompt appears automatically; you do not need to aim at the clue. <kbd>J</kbd> opens your journal; <kbd>H</kbd> shows these instructions again.</li>'
       + '<li>Keep an eye on <b>Timeline stability</b> (top) — if it runs out, the era collapses and you rewind.</li></ul>',
   },
 };

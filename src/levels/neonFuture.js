@@ -45,7 +45,7 @@ export const meta = {
     html: '<ul><li><b>NORMAL FORWARD JUMP:</b> Hold <kbd>W</kbd> or <kbd>↑</kbd>, then press <kbd>Space</kbd>.</li>'
       + '<li><b>VERY BIG FORWARD JUMP:</b> Hold <kbd>Shift</kbd> + <kbd>W</kbd> or <kbd>Shift</kbd> + <kbd>↑</kbd>, then press <kbd>Space</kbd>.</li>'
       + '<li><b>Order:</b> hold Shift, hold W or ↑, then tap Space once. Aim toward the other platform. <b>BIG JUMP!</b> confirms it worked.</li>'
-      + '<li>Falling costs stability, but you restart from the last <b>checkpoint</b>. The blue badge shows distance only; search the platforms yourself.</li>'
+      + '<li>Falling costs stability, but you restart from the last <b>checkpoint</b>. Press <kbd>N</kbd> to show or hide the optional blue distance badge (OFF by default), or click <b>Hint</b> → <b>Use Distance Map</b> and <b>Hint Off</b> to hide it. It shows distance only; search the platforms yourself.</li>'
       + '<li>The core is sealed — break the small <b>sequence lock</b> at the end to take it.</li></ul>',
   },
 };

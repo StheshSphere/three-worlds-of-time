@@ -462,3 +462,18 @@ body.reading #future-lock-guide { visibility: hidden; }
   .rank-badge { width: 52px; height: 52px; font-size: 1.7rem; }
   .js-numeral { width: 2rem; font-size: 1.5rem; }
 }
+
+/* Optional clue-distance hint (independent of the M minimap). */
+#distance-hint-control { position: absolute; top: 137px; right: 26px; z-index: 5; pointer-events: auto;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+#distance-hint-toggle, #distance-hint-action { font: inherit; cursor: pointer; font-size: .92rem;
+  font-weight: 700; padding: 7px 13px; color: #b3e9ff; background: rgba(4, 12, 22, .92);
+  border: 1px solid rgba(111, 211, 255, .55); border-radius: 9px; box-shadow: 0 0 14px rgba(0, 0, 0, .45); }
+#distance-hint-toggle:hover, #distance-hint-action:hover { background: rgba(20, 65, 85, .95); }
+#distance-hint-menu { pointer-events: auto; }
+body.reading #distance-hint-control { visibility: hidden; }
+@media (max-width: 760px) { #distance-hint-control { right: 12px; top: 137px; } }
+
+/* Small hint reminder on intermediate tutorial cards; level introductions explain it fully. */
+#tutorial-card .tutorial-hint-reminder { margin: .6rem 0; padding: .5rem .65rem;
+  border-left: 2px solid var(--gold); color: var(--muted); font-size: .88em; line-height: 1.35; }

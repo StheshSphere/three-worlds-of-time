@@ -43,7 +43,7 @@ export const meta = {
   introCard: {
     kicker: 'The Present · Your goal', title: 'Investigate the lab and recover the Lab Core',
     html: '<ul><li>This era is about <b>finding information</b>: read laptops, notes and boards (<kbd>E</kbd>).</li>'
-      + '<li>Every clue goes into your <b>journal</b> (<kbd>J</kbd>). The <b>checklist</b> shows your next task. The blue clue badge gives distance only. Step close to a clue until Press E appears — no precise aiming needed.</li>'
+      + '<li>Every clue goes into your <b>journal</b> (<kbd>J</kbd>). The <b>checklist</b> shows your next task. The optional blue clue badge gives distance only. Press <kbd>N</kbd> to show/hide it (OFF by default), or click <b>Hint</b> → <b>Use Distance Map</b> and <b>Hint Off</b> to hide it. Step close to a clue until Press E appears — no precise aiming needed.</li>'
       + '<li>Start with the <b>laptop on the east workbench</b>, near the windows.</li></ul>',
   },
 };
@@ -1106,6 +1106,8 @@ export function build(kit, api, { save = null } = {}) {
   kit.update((dt, t) => dust.update(t));
 
   let markerStep = -1;
+  let markerInk = -1;
+  let markerField = -1;
   const _m = new THREE.Vector3();
   const CARD = {
     flashlight: { kicker: 'New tool · Flashlight', title: 'The flashlight reveals hidden ink',
@@ -1168,10 +1170,24 @@ export function build(kit, api, { save = null } = {}) {
     else if (!state.doorOpen) step = 3;
     else if (!state.power) step = 4;
     else if (!state.coreTaken) step = 5;
-    if (step !== markerStep) {
+    // Advance the distance badge and map marker to the next uncollected
+    // ink mark, then to each remaining task as it is completed.
+    const nextInk = step === 2 ? marks.findIndex(m => !state.marks[m.pos]) : -1;
+    const vaultPhase = step === 5 && state.fieldDown ? 1 : 0;
+    if (step !== markerStep || nextInk !== markerInk || vaultPhase !== markerField) {
       markerStep = step;
+      markerInk = nextInk;
+      markerField = vaultPhase;
       const spots = [[10.5, 6.6], [-19.5, -3.7], [0, -21], [2.2, -29.6], [0, -45], [18, 0]];
-      api.setMarker(step < 6 ? _m.set(spots[step][0], 0, spots[step][1]) : null, 0x6fd3ff);
+      if (step === 2 && nextInk >= 0) {
+        const ink = marks[nextInk].mesh.position;
+        api.setMarker(_m.set(ink.x, 0, ink.z), 0x6fd3ff);
+      } else if (step === 5) {
+        const vaultTarget = state.fieldDown ? core.position : consoleScreen.position;
+        api.setMarker(_m.set(vaultTarget.x, 0, vaultTarget.z), 0x6fd3ff);
+      } else {
+        api.setMarker(step < 6 ? _m.set(spots[step][0], 0, spots[step][1]) : null, 0x6fd3ff);
+      }
     }
   });
 
