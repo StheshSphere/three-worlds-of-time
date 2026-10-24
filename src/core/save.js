@@ -1,3 +1,5 @@
+import { isTabletLayout } from '../levels/tabletPuzzle.js';
+
 /** Browser-local journey storage. Settings have a separate key. No server needed. */
 export const SAVE_KEY = 'three-worlds-journey-v1';
 export const SAVE_VERSION = 1;
@@ -29,6 +31,7 @@ function puzzleValid(p, era) {
     list(s.plates, 2, bool) && list(s.tablets, 3, bool) &&
     list(p.blocks, 2, b => list(b, 2, v => integer(v, 0, 7)) && b[1] < 7) &&
     list(p.mirrors, 4, v => integer(v, 0, 3)) && list(p.drums, 3, v => integer(v, 0, 5)) &&
+    ((p.code === undefined && p.tabletOrder === undefined) || isTabletLayout(p)) &&
     flags(p, ['enteredCourt', 'inSunCourt', 'checkpointBridge']) &&
     (!s.crystalLit || s.gateOpen) && (!s.bridgeBuilt || s.crystalLit) && (!s.coreTaken || s.dialsSolved);
   if (era === 1) return flags(s, ['readIncident', 'inOffice', 'flashlight', 'doorOpen', 'inPower', 'power', 'vaultOpen', 'fieldDown', 'coreTaken']) &&
@@ -81,6 +84,10 @@ export function validateSave(s) {
 
 export class JourneyStore {
   constructor(storage = () => globalThis.localStorage) { this.storage = storage; }
+  clear() {
+    try { this.storage().removeItem(SAVE_KEY); return { ok: true }; }
+    catch { return { ok: false, reason: 'Browser storage is unavailable. The old saved journey could not be removed.' }; }
+  }
   read() {
     try {
       const raw = this.storage().getItem(SAVE_KEY);

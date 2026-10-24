@@ -3,13 +3,14 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { createKit } from './core/kit.js';
 import { createSky } from './shaders/sky.js';
 import { settings } from './core/settings.js';
-import { JourneyStore, SAVE_VERSION, validateSave } from './core/save.js';
+import { JourneyStore, SAVE_VERSION, validateSave } from './core/save.js?v=restart-era-journal-fix-20261024-r3';
 import { assets } from './core/assets.js';
 import { createRunStats, countPuzzles } from './core/stats.js';
 import { ERA_CARDS } from './story.js';
-import * as ancientRuins from './levels/ancientRuins.js?v=n-hint-verified-20261020';
-import * as modernLab from './levels/modernLab.js?v=n-hint-verified-20261020';
-import * as neonFuture from './levels/neonFuture.js?v=n-hint-verified-20261020';
+import * as ancientRuins from './levels/ancientRuins.js?v=restart-era-journal-fix-20261024-r3';
+import * as modernLab from './levels/modernLab.js?v=restart-era-journal-fix-20261024-r3';
+import * as neonFuture from './levels/neonFuture.js?v=restart-era-journal-fix-20261024-r3';
+import { journalTablets } from './levels/tabletPuzzle.js';
 
 export const LEVELS = [ancientRuins, modernLab, neonFuture];
 
@@ -40,6 +41,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
 
   const store = new JourneyStore();
   let eraProgress = [null, null, null];
+  let previousTabletCode = null;
   let runActive = false, restoring = false, dirty = false, warming = false;
   let saveClock = 0, dirtyAt = 0, lastSaved = -10, unsafeFor = 0, mountToken = 0;
   const requestSave = () => { if (runActive && !restoring) { if (!dirty) dirtyAt = saveClock; dirty = true; } };
@@ -214,7 +216,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     return level;
   }
 
-  function mount(mod, levelMeta, i, { title = false, cutscene = false, variant, saved = null } = {}) {
+  function mount(mod, levelMeta, i, { title = false, cutscene = false, variant, saved = null, previousTabletCode = null, journal = ui.journal } = {}) {
     unload();
     index = i;
     meta = levelMeta;
@@ -253,7 +255,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     }
 
     const kit = createKit({ renderer, quality: q, api });
-    level = mod.build(kit, api, { variant, save: saved?.puzzle });
+    level = mod.build(kit, api, { variant, save: saved?.puzzle, journal, previousTabletCode });
     for (const o of level.objects) levelGroup.add(o);
     for (const l of level.lights) levelGroup.add(l);
 
@@ -400,11 +402,40 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     postfx.u.uFlash.value = 0;
     postfx.u.uWarp.value = 0;
     timeMachine.setWarp(0);
+    // Level 1 has no earlier era's clues to retain. Clear the entire journal,
+    // including entries from older saves that may use different clue keys.
+    // Its fresh puzzle and empty journal are saved together below.
+    const oldCode = index === 0 ? level.snapshot().code : null;
+    if (index === 0) ui.resetJournal();
     // Cores earned in this era are lost; earlier eras keep theirs.
-    load(index);
+    eraProgress[index] = null;
+    load(index, { previousTabletCode: oldCode });
+    requestSave();
+    saveGame({ silent: true });
+  }
+
+  /** Commit the confirmed new-journey choice before the opening movie. */
+  function beginNewJourney() {
+    const saved = store.read().save;
+    let savedCode = saved?.eras[0]?.puzzle?.code;
+    if (!savedCode && saved) {
+      const clues = journalTablets(saved.journal);
+      const code = [0, 1, 2].map(hour => clues.find(clue => clue.hour === hour)?.glyph);
+      if (code.every(Boolean)) savedCode = code;
+    }
+    previousTabletCode = state !== 'title' && index === 0 && level?.snapshot
+      ? level.snapshot().code : savedCode;
+    previousTabletCode = previousTabletCode ? [...previousTabletCode] : null;
+    runActive = false; dirty = false; eraProgress = [null, null, null];
+    ui.resetJournal();
+    const result = store.clear();
+    if (!result.ok) ui.savedNotice(result.reason, true);
   }
 
   function restartRun(opts = {}) {
+    if (!previousTabletCode && state !== 'title' && index === 0 && level?.snapshot) {
+      previousTabletCode = level.snapshot().code;
+    }
     eraProgress = [null, null, null]; runActive = true; dirty = false;
     if (!opts.cutscene) ui.dialogue.resetJourney();
     timeMachine.reset();
@@ -417,7 +448,8 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     player.frozen = false;
     postfx.u.uFlash.value = 0;
     postfx.u.uWarp.value = 0;
-    load(0, opts);
+    load(0, { ...opts, previousTabletCode });
+    previousTabletCode = null;
     requestSave();
     if (!opts.cutscene) player.mode = settings.get('thirdPerson') ? 'third' : 'first';
   }
@@ -617,7 +649,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
     postfx.u.uFlash.value = postfx.u.uWarp.value = postfx.u.uGlitch.value = 0;
     timeMachine.setWarp(0);
     const saved = eraProgress[target];
-    load(target, { cutscene: true, saved });
+    load(target, { cutscene: true, saved, journal: save.journal });
     ui.journal = save.journal.map(j => ({ ...j })); ui._renderJournal();
     player.frozen = false;
     scene.updateMatrixWorld(true);
@@ -652,6 +684,7 @@ export function createLevelManager({ scene, renderer, camera, player, timeMachin
       level?.applyQuality?.(q);
     },
     load,
+    beginNewJourney,
     loadSet,
     startPlay,
     retryEra,

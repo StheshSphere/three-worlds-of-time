@@ -3,12 +3,12 @@ import { settings, records, DEFAULTS } from './core/settings.js';
 import { assets } from './core/assets.js';
 import { AudioManager } from './core/audio.js';
 import { PostFX } from './core/postfx.js';
-import { UI } from './core/ui.js?v=n-hint-verified-20261020';
+import { UI } from './core/ui.js?v=restart-era-journal-fix-20261024-r3';
 import { Minimap } from './core/minimap.js';
 import { Player } from './player.js';
 import { interactionPrompt, interactionPoint } from './core/interaction.js';
 import { createTimeMachine } from './timeMachine.js';
-import { createLevelManager } from './levelManager.js?v=n-hint-verified-20261020';
+import { createLevelManager } from './levelManager.js?v=restart-era-journal-fix-20261024-r3';
 import { Cutscene } from './core/cutscene.js';
 import { Cinematic } from './core/cinematic.js';
 import { StoryCam } from './core/storyCam.js';
@@ -81,6 +81,7 @@ const storyCam = new StoryCam({ camera, player, levels, ui });
 const storyCtx = (set) => ({ levels, player, timeMachine, audio, postfx, ui, cs: cutscene, set });
 let creditsTimer = null;
 let pendingStats = null;
+let finalJourneySummary = null;
 
 /* =====================================================================
    Player events → audio / UI
@@ -165,7 +166,7 @@ function showTitle() {
   ui.rollCredits(false);
   ui.endCard(false);
   player.unlock();
-  for (const id of ['hud', 'pause-screen', 'fail-screen', 'win-screen']) ui.hide(id);
+  for (const id of ['hud', 'pause-screen', 'fail-screen', 'win-screen', 'journey-stats-screen']) ui.hide(id);
   ui.closeAllPanels();
   timeMachine.reset();
   ui.setCores(0);
@@ -183,6 +184,11 @@ function showTitle() {
 
 /* Story flow: prologue (lab, 03:07) → wake-up in the Past → play. */
 function startGame() {
+  // The restart is committed now, so exiting during the intro cannot revive
+  // the previous journey or its journal through Continue.
+  levels.beginNewJourney();
+  pendingStats = null;
+  finalJourneySummary = null;
   audio.unlock();
   ui.hide('title-screen');
   ui.hide('hud');
@@ -242,7 +248,8 @@ function endCredits() {
   // The measured journey record comes after the ending story and credits,
   // before the existing win screen — never after levels 1 or 2.
   mode = 'stats';
-  ui.showJourneyStats(summarizeJourney(levels.runStats), () => showWinScreen(pendingStats || levels.stats));
+  finalJourneySummary = structuredClone(summarizeJourney(levels.runStats));
+  ui.showJourneyStats(finalJourneySummary, () => showWinScreen(pendingStats || levels.stats));
 }
 
 levels.callbacks.onFail = (reason) => {
@@ -260,6 +267,7 @@ levels.callbacks.onEraArrive = (i) => {
 function showWinScreen(stats) {
   mode = 'won';
   ui.hide('hud');
+  finalJourneySummary ??= structuredClone(summarizeJourney(levels.runStats));
   const isBest = records.submit(Math.round(stats.runTime));
   ui.showWin([
     ['Journey time', formatTime(stats.runTime) + (isBest ? '  ★ new best' : '')],
@@ -268,6 +276,19 @@ function showWinScreen(stats) {
     ['Eras rewound', String(stats.rewinds)],
   ]);
   audio.play('win', { volume: 0.9 });
+}
+
+function reviewJourneyStats() {
+  if (mode !== 'won' || !finalJourneySummary) return;
+  ui.hide('win-screen');
+  mode = 'stats';
+  ui.showJourneyStats(finalJourneySummary, () => {
+    // Return to the existing result. Do not submit the time again or replace
+    // its original "new best" label just because the player reviewed stats.
+    mode = 'won';
+    ui.show('win-screen');
+    document.getElementById('win-stats-button').focus({ preventScroll: true });
+  }, { review: true });
 }
 
 function newJourney(action = startGame) {
@@ -284,6 +305,7 @@ function continueGame() {
   ui.dialogue.setPaused('game', false);
   const result = levels.continueJourney(save.save);
   if (!result) { ui.savedNotice('The saved journey could not be loaded.', true); return; }
+  finalJourneySummary = null;
   ui.hide('title-screen'); ui.hide('pause-screen'); ui.closeAllPanels();
   if (result.completed) { showWinScreen(levels.stats); return; }
   mode = 'playing'; ui.show('hud'); player.lock();
@@ -315,11 +337,14 @@ document.getElementById('continue-button').addEventListener('click', continueGam
 document.getElementById('save-button').addEventListener('click', saveManually);
 document.getElementById('skip-cinematic').addEventListener('click', skipCinematic);
 document.getElementById('resume-button').addEventListener('click', resume);
-document.getElementById('retry-era-button').addEventListener('click', () => ui.confirm('Rewind this era?', 'This resets puzzles in this era. Cores from earlier eras are kept.', retryEra, 'Rewind era'));
+document.getElementById('retry-era-button').addEventListener('click', () => ui.confirm('Rewind this era?', levels.index === 0
+  ? 'This clears your journal and resets every clue and puzzle in Level 1. You will need to collect the tablets again.'
+  : 'This resets puzzles in this era. Cores from earlier eras are kept.', retryEra, 'Rewind era'));
 document.getElementById('restart-button').addEventListener('click', () => newJourney(() => { ui.hide('pause-screen'); startGame(); }));
 document.getElementById('quit-button').addEventListener('click', returnToTitle);
 document.getElementById('fail-retry-button').addEventListener('click', retryEra);
 document.getElementById('fail-quit-button').addEventListener('click', showTitle);
+document.getElementById('win-stats-button').addEventListener('click', reviewJourneyStats);
 document.getElementById('win-restart-button').addEventListener('click', () => newJourney(() => { ui.hide('win-screen'); startGame(); }));
 document.getElementById('win-quit-button').addEventListener('click', showTitle);
 window.addEventListener('pagehide', () => levels.saveGame({ silent: true }));

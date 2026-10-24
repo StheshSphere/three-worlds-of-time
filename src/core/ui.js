@@ -2,6 +2,7 @@ import { settings } from './settings.js';
 import { Dialogue } from './dialogue.js';
 import { Voice } from './voice.js';
 import { rankFor, LEVEL_TITLES, OVERALL_TITLES, PAR_TIMES } from './stats.js';
+import { journalTablets } from '../levels/tabletPuzzle.js';
 
 /**
  * DOM UI controller: screens, HUD, overlays. The 3D game never touches the
@@ -277,9 +278,17 @@ export class UI {
   /* ----------------------------- journal ---------------------------- */
   resetJournal() { this.journal = []; this._renderJournal(); }
 
+  removeJournalEntries(keys) {
+    const removed = new Set(keys);
+    this.journal = this.journal.filter(entry => !removed.has(entry.key));
+    this._renderJournal();
+  }
+
   addJournal(html, key) {
-    if (key && this.journal.some((j) => j.key === key)) return;
-    this.journal.push({ html, key });
+    const existing = key && this.journal.find(entry => entry.key === key);
+    if (existing?.html === html) return;
+    if (existing) existing.html = html;
+    else this.journal.push({ html, key });
     this._renderJournal();
     this.audio.play('page', { volume: 0.7 });
   }
@@ -294,7 +303,14 @@ export class UI {
       list.appendChild(li);
       return;
     }
-    for (const j of this.journal) {
+    // Display tablet clues in altar order (I, II, III), even when the player
+    // discovers III before II. Keep the saved entries themselves unchanged.
+    const hours = new Map(journalTablets(this.journal).map(clue => [`tablet-${clue.spot}`, clue.hour]));
+    const tablets = this.journal.filter(entry => hours.has(entry.key))
+      .sort((a, b) => hours.get(a.key) - hours.get(b.key));
+    let tabletIndex = 0;
+    const entries = this.journal.map(entry => hours.has(entry.key) ? tablets[tabletIndex++] : entry);
+    for (const j of entries) {
       const li = document.createElement('li');
       li.innerHTML = j.html;
       list.appendChild(li);
@@ -461,18 +477,27 @@ export class UI {
   _bindJourneyStats() {
     const advance = () => this._advanceJourneyStats();
     window.addEventListener('keydown', (e) => {
-      if (!this.isOpen('journey-stats-screen') || e.repeat) return;
+      if (!this.isOpen('journey-stats-screen') || e.repeat || this._statsFlow?.review) return;
       if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space') { e.preventDefault(); advance(); }
     });
-    $('journey-stats-screen').addEventListener('click', advance);
+    $('journey-stats-screen').addEventListener('click', () => {
+      if (!this._statsFlow?.review) advance();
+    });
     // The button stops the bubble so a click cannot advance twice.
-    $('journey-stats-continue').addEventListener('click', (e) => { e.stopPropagation(); advance(); });
+    $('journey-stats-continue').addEventListener('click', (e) => {
+      e.stopPropagation(); this._advanceJourneyStats({ explicit: true });
+    });
   }
 
-  showJourneyStats(summary, onDone) {
+  showJourneyStats(summary, onDone, { review = false } = {}) {
+    clearTimeout(this._statsRevealTimer);
     const body = $('journey-stats-body');
     body.innerHTML = '';
     $('journey-stats-continue').classList.add('hidden');
+    $('journey-stats-continue').textContent = review ? 'Back to results' : 'Continue';
+    $('journey-stats-hint').textContent = review
+      ? 'Scroll to review all your statistics and badges. Select Back to results when you are finished.'
+      : 'Press Enter / Click to continue';
     const meta = [
       ['I', 'The Past', 'Temple of the First Hour'],
       ['II', 'The Present', 'Blackout at the Facility'],
@@ -482,15 +507,28 @@ export class UI {
     summary.levels.forEach((rec, i) => sections.push(this._statsLevelSection(i, meta[i], rec, summary.scores[i])));
     sections.push(this._statsOverallSection(summary));
     for (const s of sections) { s.classList.add('hidden'); body.appendChild(s); }
-    this._statsFlow = { sections, index: -1, onDone, last: 0 };
+    this._statsFlow = { sections, index: -1, onDone, last: 0, review };
     this.show('journey-stats-screen');
-    // Reveal the first era immediately; each Enter/click then shows the next.
-    setTimeout(() => this._advanceJourneyStats(), 150);
+    body.parentElement.scrollTop = 0;
+    if (review) {
+      // All previously seen sections are readable at once. Background clicks
+      // do nothing; only the explicit return button closes the review.
+      this._statsFlow.index = sections.length - 1;
+      sections.forEach((section, i) => this._revealStatsSection(section, i === sections.length - 1));
+      $('journey-stats-continue').classList.remove('hidden');
+      $('journey-stats-continue').focus({ preventScroll: true });
+    } else {
+      // Reveal the first era immediately; each Enter/click shows the next.
+      const flow = this._statsFlow;
+      this._statsRevealTimer = setTimeout(() => {
+        if (this._statsFlow === flow) this._advanceJourneyStats();
+      }, 150);
+    }
   }
 
-  _advanceJourneyStats() {
+  _advanceJourneyStats({ explicit = false } = {}) {
     const flow = this._statsFlow;
-    if (!flow || !this.isOpen('journey-stats-screen')) return;
+    if (!flow || !this.isOpen('journey-stats-screen') || (flow.review && !explicit)) return;
     const now = performance.now();
     if (now - flow.last < 260) return;          // one reveal per acknowledgement
     flow.last = now;

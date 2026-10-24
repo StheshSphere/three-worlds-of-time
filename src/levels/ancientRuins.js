@@ -1,10 +1,11 @@
 import * as THREE from 'three';
-import { createRandom } from '../core/save.js';
+import { createRandom } from '../core/save.js?v=restart-era-journal-fix-20261024-r3';
 import { SimplexNoise } from 'three/addons/math/SimplexNoise.js';
 import { createGrass } from '../shaders/grass.js';
 import { createWater } from '../shaders/water.js';
 import { createFlame, createParticles, createBeam } from '../shaders/effects.js';
 import { GLYPHS, NUMERALS, drawGlyph, glyphDataURL, stoneBackground } from './glyphs.js';
+import { createTabletLayout, restoreTabletLayout, tabletCodeMatches } from './tabletPuzzle.js';
 
 /**
  * LEVEL 1 — THE PAST: "Temple of the First Hour".  Verb: SOLVE.
@@ -21,7 +22,7 @@ import { GLYPHS, NUMERALS, drawGlyph, glyphDataURL, stoneBackground } from './gl
  *   Sanctum — set the three rune drums to the tablets' symbols     z  −68 … −96
  * Three rune tablets are hidden: by the pool, in the courtyard, in the Sun
  * Court. Each shows a glyph and a numeral (its position in the code). The
- * code is randomised every time the era loads (replay value).
+ * code changes on a restart; Continue restores the exact saved tablets.
  */
 export const meta = {
   name: 'The Past',
@@ -52,7 +53,7 @@ const ROWS = 7;
 const tileX = (c) => -7 + c * TILE;
 const tileZ = (r) => -19 - r * TILE;
 
-export function build(kit, api, { save = null } = {}) {
+export function build(kit, api, { save = null, journal = [], previousTabletCode = null } = {}) {
   const random = createRandom(save?.seed);
   const q = api.quality;
   const scene = api.scene;
@@ -734,10 +735,12 @@ export function build(kit, api, { save = null } = {}) {
   mural.position.set(0, 3.6, -89.75);
   kit.add(mural);
 
-  // The code — random each load.
-  const pool = [...GLYPHS].sort(() => random() - 0.5);
-  const code = pool.slice(0, 3);              // code[i] = glyph for hour i
-  const tabletOrder = [0, 1, 2].sort(() => random() - 0.5); // which tablet holds which hour
+  // Keep legacy seed generation only for pre-fix saves; new saves explicitly
+  // retain the symbols and hour assignment, independently of random scenery.
+  const generated = save && !save.code
+    ? { code: [...GLYPHS].sort(() => random() - 0.5).slice(0, 3), tabletOrder: [0, 1, 2].sort(() => random() - 0.5) }
+    : createTabletLayout(random, previousTabletCode);
+  const { code, tabletOrder } = restoreTabletLayout(generated, save, journal);
 
   // Altar + drums.
   kit.box({ size: [4.2, 1.2, 2], pos: [0, 1.95, -82.6], mat: M.dressed, tile: 1.5, surface: 'stone' });
@@ -765,9 +768,11 @@ export function build(kit, api, { save = null } = {}) {
     const drum = { mesh: d, idx, angle: drumAngle(idx) };
     d.rotation.x = drum.angle;
     kit.add(d);
-    kit.interact(d, () => (state.dialsSolved ? null : `Turn the ${NUMERALS[i]} drum`), () => {
+    kit.interact(d, () => (state.dialsSolved ? null : `Turn drum ${NUMERALS[i]} — showing ${GLYPHS[drum.idx]}`), () => {
+      if (state.dialsSolved) return;
       drum.idx = (drum.idx + 1) % 6;
       api.sound('stone-slide', { volume: 0.7, rate: 1.3 });
+      api.progress();
       checkDrums();
     });
     drums.push(drum);
@@ -784,7 +789,7 @@ export function build(kit, api, { save = null } = {}) {
 
   function checkDrums() {
     if (state.dialsSolved) return;
-    const ok = drums.every((d, i) => GLYPHS[d.idx] === code[i]);
+    const ok = tabletCodeMatches(drums.map(d => d.idx), code);
     if (!ok) return;
     if (!state.tablets.every(Boolean)) {
       // Solved by luck/brute force still counts — but nudge the story.
@@ -798,6 +803,7 @@ export function build(kit, api, { save = null } = {}) {
     api.message('The three hours align. The altar splits — the Ancient Core rises!', 3500);
     api.setObjective('Take the Ancient Core');
     coreRise = 0.0001;
+    api.progress();
   }
 
   // The Ancient Core.
@@ -876,6 +882,9 @@ export function build(kit, api, { save = null } = {}) {
       } else {
         api.message(`The ${glyph}, hour ${NUMERALS[hour]}.`, 2000);
       }
+      // The starting drums (or a resumed unsolved save) can already match.
+      // Reading the last clue must unlock that combination without extra turns.
+      if (state.tablets.every(Boolean)) checkDrums();
       return 'read';
     }, { kind: 'clue', label: 'Carved tablet', radius: 3.6, guideRadius: 8,
       point: [0, 0, 0.2], pending: () => !state.tablets[i] });
@@ -1100,7 +1109,7 @@ export function build(kit, api, { save = null } = {}) {
   // QA shortcuts (window.__game.levels.debug) for automated play-throughs.
   const debug = {
     state,
-    code,
+    code, tabletOrder,
     solveBlocks() { blocks[0].c = 2; blocks[0].r = 6; blocks[1].c = 5; blocks[1].r = 6; blocks.forEach((b) => { b.mesh.position.set(tileX(b.c), 0.9, tileZ(b.r)); kit.refreshSolid(b.mesh); }); checkPlates(); },
     alignMirrors() { [2, 0, 2].forEach((o, i) => { mirrors[i].o = o; mirrors[i].target = mirrorAngle(o); }); traceBeam(); },
     readTablets() { tabletMeshes.forEach((t) => t.userData.onInteract()); },
@@ -1109,7 +1118,8 @@ export function build(kit, api, { save = null } = {}) {
   };
 
   function snapshot() {
-    return { seed: random.seed, state: { ...state, plates: [...state.plates], tablets: [...state.tablets] },
+    return { seed: random.seed, code: [...code], tabletOrder: [...tabletOrder],
+      state: { ...state, plates: [...state.plates], tablets: [...state.tablets] },
       blocks: blocks.map(b => [b.c, b.r]), mirrors: mirrors.map(m => m.o), drums: drums.map(d => d.idx),
       enteredCourt, inSunCourt, checkpointBridge };
   }
@@ -1138,6 +1148,7 @@ export function build(kit, api, { save = null } = {}) {
     core.visible = coreBeam.mesh.visible = state.dialsSolved && !state.coreTaken;
     core.position.y = 4; coreLight.intensity = core.visible ? 25 : 0;
     tabletMeshes.forEach((mesh, i) => { mesh.children[1].material.emissiveIntensity = state.tablets[i] ? .9 : .05; });
+    if (!state.dialsSolved && state.tablets.every(Boolean)) checkDrums();
   }
   return kit.result({
     snapshot, restore,
