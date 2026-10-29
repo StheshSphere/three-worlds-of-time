@@ -293,12 +293,15 @@ export function build(kit, api, { save = null, journal = [], previousTabletCode 
      =================================================================== */
   kit.box({ size: [18, 0.1, 19], pos: [0, 0.05, -24.5], mat: M.floor, tile: TILE, solid: false, surface: 'stone' });
   // Walls (south wall has the entrance, north wall holds the Sun Gate).
-  wall(-16, -15, -2.2, -15, 5.5, 1.4);
-  wall(2.2, -15, 16, -15, 5.5, 1.4);
+  // Walls stop at the arch piers' outer face (2.2 + 1.3). Ending them at the
+  // opening put the wall's end face in the same plane as the pier's inner face,
+  // which z-fought into flickering stripes.
+  wall(-16, -15, -3.5, -15, 5.5, 1.4);
+  wall(3.5, -15, 16, -15, 5.5, 1.4);
   wall(-9.6, -15, -9.6, -34, 5.5, 1.2);
   wall(9.6, -15, 9.6, -34, 5.5, 1.2);
-  wall(-16, -34.6, -2.2, -34.6, 6, 1.4);
-  wall(2.2, -34.6, 16, -34.6, 6, 1.4);
+  wall(-16, -34.6, -3.5, -34.6, 6, 1.4);
+  wall(3.5, -34.6, 16, -34.6, 6, 1.4);
   arch(0, -15, 4.4, 4.2, 1.6);
   arch(0, -34.6, 4.4, 4.2, 1.6);
   for (const z of [-19, -25, -31]) { column(-8.4, z, 5.4, 0.4); column(8.4, z, 5.4, 0.4); }
