@@ -463,7 +463,8 @@ export function build(kit, api, { save = null, journal = [], previousTabletCode 
     if (!state.gateOpen || gateLift >= 1) return;
     gateLift = Math.min(1, gateLift + dt / 2.6);
     gate.position.y = -gateLift * 4.3;   // sinks into a slot in the floor
-    if (gateLift > 0.5) kit.removeCollider(gateProxy);
+    // Keep the full doorway solid until the opening animation has finished.
+    if (gateLift === 1) kit.removeCollider(gateProxy);
   });
 
   /* ===================================================================
@@ -1062,8 +1063,8 @@ export function build(kit, api, { save = null, journal = [], previousTabletCode 
     if (enteredCourt && !state.gateOpen) {
       api.say('court', [['Ari', 'Two glowing plates by that gate… and two heavy carved blocks. If I push the blocks onto the plates, maybe the gate will open.', 5.5]]);
     }
-    if (state.gateOpen) api.say('gate', [['Ari', 'It worked — the gate is open! There’s sunlight pouring into the next court.', 4]]);
-    if (state.gateOpen && !inSunCourt && p.z < -36) {
+    if (gateLift === 1) api.say('gate', [['Ari', 'It worked — the gate is open! There’s sunlight pouring into the next court.', 4]]);
+    if (gateLift === 1 && !inSunCourt && p.z < -36) {
       inSunCourt = true;
       api.setObjective('Light the sun crystal');
       api.tutorial('sun', CARD.sun, 16);

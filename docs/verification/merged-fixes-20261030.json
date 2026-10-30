@@ -1,0 +1,487 @@
+{
+  "date": "2026-10-30",
+  "status": "PASS",
+  "automatedSuites": {
+    "test-integration": {
+      "passed": 38,
+      "failed": 0
+    },
+    "test-interactions": {
+      "passed": 48,
+      "failed": 0
+    },
+    "test-audio": {
+      "passed": 4,
+      "failed": 0
+    },
+    "test-dialogue": {
+      "passed": 21,
+      "failed": 0
+    },
+    "test-jump-controls": {
+      "passed": 15,
+      "failed": 0
+    },
+    "tablet-puzzle": {
+      "passed": 13,
+      "failed": 0
+    }
+  },
+  "totalChecks": 139,
+  "tabletInteractionCases": 4320,
+  "browser": {
+    "status": "PASS",
+    "errors": [],
+    "layouts": [
+      {
+        "width": 1366,
+        "height": 768,
+        "bounds": {
+          "x": 95.609375,
+          "y": 23.046875,
+          "bottom": 744.953125,
+          "right": 735.609375
+        },
+        "scrollbarWidth": "none",
+        "webkitScrollbar": "none",
+        "contentHeight": 728,
+        "visibleHeight": 722,
+        "canScroll": true,
+        "buttons": [
+          {
+            "text": "New Journey",
+            "left": 95.609375,
+            "right": 355.609375,
+            "top": 386.796875,
+            "bottom": 426.796875
+          },
+          {
+            "text": "Continue Journey",
+            "left": 95.609375,
+            "right": 355.609375,
+            "top": 431.59375,
+            "bottom": 471.59375
+          },
+          {
+            "text": "Controls",
+            "left": 95.609375,
+            "right": 355.609375,
+            "top": 476.390625,
+            "bottom": 516.390625
+          },
+          {
+            "text": "Options",
+            "left": 95.609375,
+            "right": 355.609375,
+            "top": 521.1875,
+            "bottom": 561.1875
+          },
+          {
+            "text": "Credits",
+            "left": 95.609375,
+            "right": 355.609375,
+            "top": 565.984375,
+            "bottom": 605.984375
+          }
+        ],
+        "documentWidth": 1366
+      },
+      {
+        "width": 1280,
+        "height": 720,
+        "bounds": {
+          "x": 89.59375,
+          "y": 39.078125,
+          "bottom": 680.90625,
+          "right": 729.59375
+        },
+        "scrollbarWidth": "none",
+        "webkitScrollbar": "none",
+        "contentHeight": 642,
+        "visibleHeight": 642,
+        "canScroll": false,
+        "buttons": [
+          {
+            "text": "New Journey",
+            "left": 89.59375,
+            "right": 349.59375,
+            "top": 343.84375,
+            "bottom": 383.84375
+          },
+          {
+            "text": "Continue Journey",
+            "left": 89.59375,
+            "right": 349.59375,
+            "top": 388.640625,
+            "bottom": 428.640625
+          },
+          {
+            "text": "Controls",
+            "left": 89.59375,
+            "right": 349.59375,
+            "top": 433.4375,
+            "bottom": 473.4375
+          },
+          {
+            "text": "Options",
+            "left": 89.59375,
+            "right": 349.59375,
+            "top": 478.234375,
+            "bottom": 518.234375
+          },
+          {
+            "text": "Credits",
+            "left": 89.59375,
+            "right": 349.59375,
+            "top": 523.03125,
+            "bottom": 563.03125
+          }
+        ],
+        "documentWidth": 1280
+      },
+      {
+        "width": 1024,
+        "height": 600,
+        "bounds": {
+          "x": 71.671875,
+          "y": 22.90625,
+          "bottom": 577.09375,
+          "right": 656.515625
+        },
+        "scrollbarWidth": "none",
+        "webkitScrollbar": "none",
+        "contentHeight": 554,
+        "visibleHeight": 554,
+        "canScroll": false,
+        "buttons": [
+          {
+            "text": "New Journey",
+            "left": 71.671875,
+            "right": 331.671875,
+            "top": 240.03125,
+            "bottom": 280.03125
+          },
+          {
+            "text": "Continue Journey",
+            "left": 71.671875,
+            "right": 331.671875,
+            "top": 284.828125,
+            "bottom": 324.828125
+          },
+          {
+            "text": "Controls",
+            "left": 71.671875,
+            "right": 331.671875,
+            "top": 329.625,
+            "bottom": 369.625
+          },
+          {
+            "text": "Options",
+            "left": 71.671875,
+            "right": 331.671875,
+            "top": 374.421875,
+            "bottom": 414.421875
+          },
+          {
+            "text": "Credits",
+            "left": 71.671875,
+            "right": 331.671875,
+            "top": 419.21875,
+            "bottom": 459.21875
+          }
+        ],
+        "documentWidth": 1024
+      },
+      {
+        "width": 800,
+        "height": 600,
+        "bounds": {
+          "x": 56,
+          "y": 30.53125,
+          "bottom": 569.46875,
+          "right": 582.09375
+        },
+        "scrollbarWidth": "none",
+        "webkitScrollbar": "none",
+        "contentHeight": 539,
+        "visibleHeight": 539,
+        "canScroll": false,
+        "buttons": [
+          {
+            "text": "New Journey",
+            "left": 56,
+            "right": 316,
+            "top": 232.40625,
+            "bottom": 272.40625
+          },
+          {
+            "text": "Continue Journey",
+            "left": 56,
+            "right": 316,
+            "top": 277.203125,
+            "bottom": 317.203125
+          },
+          {
+            "text": "Controls",
+            "left": 56,
+            "right": 316,
+            "top": 322,
+            "bottom": 362
+          },
+          {
+            "text": "Options",
+            "left": 56,
+            "right": 316,
+            "top": 366.796875,
+            "bottom": 406.796875
+          },
+          {
+            "text": "Credits",
+            "left": 56,
+            "right": 316,
+            "top": 411.59375,
+            "bottom": 451.59375
+          }
+        ],
+        "documentWidth": 800
+      },
+      {
+        "width": 690,
+        "height": 700,
+        "bounds": {
+          "x": 41.390625,
+          "y": 87.75,
+          "bottom": 612.25,
+          "right": 648.578125
+        },
+        "scrollbarWidth": "none",
+        "webkitScrollbar": "none",
+        "contentHeight": 525,
+        "visibleHeight": 525,
+        "canScroll": false,
+        "buttons": [
+          {
+            "text": "New Journey",
+            "left": 41.390625,
+            "right": 301.390625,
+            "top": 275.1875,
+            "bottom": 315.1875
+          },
+          {
+            "text": "Continue Journey",
+            "left": 41.390625,
+            "right": 301.390625,
+            "top": 319.984375,
+            "bottom": 359.984375
+          },
+          {
+            "text": "Controls",
+            "left": 41.390625,
+            "right": 301.390625,
+            "top": 364.78125,
+            "bottom": 404.78125
+          },
+          {
+            "text": "Options",
+            "left": 41.390625,
+            "right": 301.390625,
+            "top": 409.578125,
+            "bottom": 449.578125
+          },
+          {
+            "text": "Credits",
+            "left": 41.390625,
+            "right": 301.390625,
+            "top": 454.375,
+            "bottom": 494.375
+          }
+        ],
+        "documentWidth": 690
+      },
+      {
+        "width": 640,
+        "height": 480,
+        "bounds": {
+          "x": 38.390625,
+          "y": 14.40625,
+          "bottom": 465.59375,
+          "right": 601.578125
+        },
+        "scrollbarWidth": "none",
+        "webkitScrollbar": "none",
+        "contentHeight": 518,
+        "visibleHeight": 451,
+        "canScroll": true,
+        "buttons": [
+          {
+            "text": "New Journey",
+            "left": 38.390625,
+            "right": 298.390625,
+            "top": 195.71875,
+            "bottom": 235.71875
+          },
+          {
+            "text": "Continue Journey",
+            "left": 38.390625,
+            "right": 298.390625,
+            "top": 240.515625,
+            "bottom": 280.515625
+          },
+          {
+            "text": "Controls",
+            "left": 38.390625,
+            "right": 298.390625,
+            "top": 285.3125,
+            "bottom": 325.3125
+          },
+          {
+            "text": "Options",
+            "left": 38.390625,
+            "right": 298.390625,
+            "top": 330.109375,
+            "bottom": 370.109375
+          },
+          {
+            "text": "Credits",
+            "left": 38.390625,
+            "right": 298.390625,
+            "top": 374.90625,
+            "bottom": 414.90625
+          }
+        ],
+        "documentWidth": 640
+      },
+      {
+        "width": 360,
+        "height": 640,
+        "bounds": {
+          "x": 21.59375,
+          "y": 33.046875,
+          "bottom": 606.953125,
+          "right": 338.390625
+        },
+        "scrollbarWidth": "none",
+        "webkitScrollbar": "none",
+        "contentHeight": 574,
+        "visibleHeight": 574,
+        "canScroll": false,
+        "buttons": [
+          {
+            "text": "New Journey",
+            "left": 21.59375,
+            "right": 281.59375,
+            "top": 269.890625,
+            "bottom": 309.890625
+          },
+          {
+            "text": "Continue Journey",
+            "left": 21.59375,
+            "right": 281.59375,
+            "top": 314.6875,
+            "bottom": 354.6875
+          },
+          {
+            "text": "Controls",
+            "left": 21.59375,
+            "right": 281.59375,
+            "top": 359.484375,
+            "bottom": 399.484375
+          },
+          {
+            "text": "Options",
+            "left": 21.59375,
+            "right": 281.59375,
+            "top": 404.28125,
+            "bottom": 444.28125
+          },
+          {
+            "text": "Credits",
+            "left": 21.59375,
+            "right": 281.59375,
+            "top": 449.078125,
+            "bottom": 489.078125
+          }
+        ],
+        "documentWidth": 360
+      },
+      {
+        "width": 320,
+        "height": 400,
+        "bounds": {
+          "x": 19.1875,
+          "y": 12,
+          "bottom": 388,
+          "right": 300.78125
+        },
+        "scrollbarWidth": "none",
+        "webkitScrollbar": "none",
+        "contentHeight": 574,
+        "visibleHeight": 376,
+        "canScroll": true,
+        "buttons": [
+          {
+            "text": "New Journey",
+            "left": 19.1875,
+            "right": 279.1875,
+            "top": 248.84375,
+            "bottom": 288.84375
+          },
+          {
+            "text": "Continue Journey",
+            "left": 19.1875,
+            "right": 279.1875,
+            "top": 293.640625,
+            "bottom": 333.640625
+          },
+          {
+            "text": "Controls",
+            "left": 19.1875,
+            "right": 279.1875,
+            "top": 338.4375,
+            "bottom": 378.4375
+          },
+          {
+            "text": "Options",
+            "left": 19.1875,
+            "right": 279.1875,
+            "top": 383.234375,
+            "bottom": 423.234375
+          },
+          {
+            "text": "Credits",
+            "left": 19.1875,
+            "right": 279.1875,
+            "top": 428.03125,
+            "bottom": 468.03125
+          }
+        ],
+        "documentWidth": 320
+      }
+    ],
+    "gates": [
+      {
+        "view": "first",
+        "blockedThrough": 2.5833333333333335,
+        "nearestBlockedZ": -33.95999998807907,
+        "openZ": -38.7574646346052,
+        "status": "PASS"
+      },
+      {
+        "view": "third",
+        "blockedThrough": 2.5833333333333335,
+        "nearestBlockedZ": -33.95999998807907,
+        "openZ": -38.7574646346052,
+        "status": "PASS"
+      }
+    ]
+  },
+  "lampNestedFolderSmoke": {
+    "status": "PASS",
+    "module": 0,
+    "title": "The Three Worlds of Time \u2014 The Broken Hourglass",
+    "scrollbar": "none",
+    "closedAndOpeningAndFullyOpenGate": "PASS",
+    "errors": []
+  },
+  "runtimeFiles": 222
+}

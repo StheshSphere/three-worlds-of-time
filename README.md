@@ -1,6 +1,16 @@
 # Three Worlds of Time
 
-Complete game source and runtime assets, updated 24 October 2026.
+Complete game source and runtime assets, updated 30 October 2026.
+
+## Latest fixes
+
+This version uses the submitted 24 October game as its base and includes the Ancient Ruins archway wall fix from the supplied GitHub version. The walls now meet the arch piers without overlapping faces that cause flickering.
+
+The title menu adapts its spacing to shorter windows and hides its scrollbar on small displays. Wheel, touch and keyboard focus scrolling remain available when the content needs more room.
+
+The Level 1 Sun Gate now stays solid for its entire 2.6-second opening animation. Players can enter only when it is fully open. Its dialogue and Sun Court entry trigger also wait until the animation has finished. Restart this era restores the closed gate and its collision barrier.
+
+The tablet combinations, journal reset, save/continue, optional hints, dialogue controls and final statistics review from the submitted game are retained.
 
 ## Review the final statistics
 

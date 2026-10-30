@@ -92,6 +92,37 @@ test('Jump lands on a thin floor and moving-platform carry changes player positi
   floor.userData.carryDelta=new THREE.Vector3(.2,0,0); const x=player.position.x; player.update(.016); assert.ok(player.position.x>x+.19);
 });
 for (const view of ['first','third']) {
+  test(`${view}: Sun Gate blocks sprinting and jumping until fully open, then permits passage`, () => {
+    settings.set('thirdPerson', view === 'third');
+    levels.restartRun(); continueDialogue(); player.mode=view;
+    const gate=player.colliders.find(o=>{
+      const b=o.userData.solidBox;
+      return b && Math.abs(b.min.x+2.2)<1e-6 && Math.abs(b.max.x-2.2)<1e-6
+        && Math.abs(b.min.z+34.9)<1e-6 && Math.abs(b.max.z+34.3)<1e-6;
+    });
+    assert.ok(gate, 'Closed gate must have a collision barrier');
+    player.position.set(0,.1,-33.4); player.velocity.set(0,0,0); player.yaw=0;
+    player.keys.forward=true; player.keys.sprint=true;
+    play(.3,true);
+    assert.ok(player.position.z>=-33.96-1e-6, 'Closed gate must block sprinting');
+    levels.debug.solveBlocks();
+    for(let frame=0;frame<155;frame++) {
+      // Repeatedly jump into the doorway during the full opening animation.
+      if(frame%30===0) { player._jumpBuffer=.1; player._attemptBufferedJump(); }
+      play(1/60,true);
+      assert.ok(player.colliders.includes(gate), `Barrier removed early at frame ${frame}`);
+      assert.ok(player.position.z>=-33.96-1e-6, `Passed through opening gate at frame ${frame}`);
+    }
+    play(.04,true);
+    assert.equal(player.colliders.includes(gate),false,'Finished animation must remove the barrier');
+    play(.65,true);
+    assert.ok(player.position.z<-36, `Fully open gate must permit passage: z=${player.position.z}`);
+    levels.retryEra(); continueDialogue();
+    assert.equal(levels.debug.state.gateOpen,false,'Restart this era must close the gate again');
+    player.position.set(0,.1,-33.4); player.velocity.set(0,0,0); player.yaw=0;
+    player.keys.forward=true; player.keys.sprint=true; play(.3,true);
+    assert.ok(player.position.z>=-33.96-1e-6,'Restarted gate must block passage');
+  });
   test(`${view}: Ancient plates, mirrors, tablets and drums unlock core; progress 1/3`, () => {
     settings.set('thirdPerson', view === 'third');
     levels.restartRun(); continueDialogue(); player.mode=view; assert.equal(tm.getCores(),0); assert.equal(player.hasCheckpoint,false);

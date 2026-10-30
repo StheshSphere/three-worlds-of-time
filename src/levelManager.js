@@ -7,7 +7,7 @@ import { JourneyStore, SAVE_VERSION, validateSave } from './core/save.js?v=resta
 import { assets } from './core/assets.js';
 import { createRunStats, countPuzzles } from './core/stats.js';
 import { ERA_CARDS } from './story.js';
-import * as ancientRuins from './levels/ancientRuins.js?v=restart-era-journal-fix-20261024-r3';
+import * as ancientRuins from './levels/ancientRuins.js?v=arch-wall-gate-fix-20261030';
 import * as modernLab from './levels/modernLab.js?v=restart-era-journal-fix-20261024-r3';
 import * as neonFuture from './levels/neonFuture.js?v=restart-era-journal-fix-20261024-r3';
 import { journalTablets } from './levels/tabletPuzzle.js';

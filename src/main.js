@@ -8,7 +8,7 @@ import { Minimap } from './core/minimap.js';
 import { Player } from './player.js';
 import { interactionPrompt, interactionPoint } from './core/interaction.js';
 import { createTimeMachine } from './timeMachine.js';
-import { createLevelManager } from './levelManager.js?v=restart-era-journal-fix-20261024-r3';
+import { createLevelManager } from './levelManager.js?v=merged-gate-display-20261030';
 import { Cutscene } from './core/cutscene.js';
 import { Cinematic } from './core/cinematic.js';
 import { StoryCam } from './core/storyCam.js';

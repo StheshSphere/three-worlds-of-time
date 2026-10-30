@@ -58,6 +58,9 @@ def module(path):
     source = re.sub(r'/\*.*?\*/', '', path.read_text(), flags=re.S)
     source = re.sub(r'^\s*//.*$', '', source, flags=re.M)
     for spec in re.findall(r'(?:^|\n)\s*(?:import|export)\s+(?:[^;]*?\s+from\s+)?[\'"]([^\'"]+)[\'"]', source):
+        # Browser module URLs may carry a cache version; it is not part of
+        # the on-disk filename. Keep the original URL in the shipped source.
+        spec = spec.split('?', 1)[0].split('#', 1)[0]
         if spec.startswith('.'):
             dependency = path.parent / spec
         elif spec in imports:
